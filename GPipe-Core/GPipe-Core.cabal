@@ -1,0 +1,11 @@
+name:           GPipe-Core
+version:        0.1
+cabal-version:  >= 1.2
+build-type:     Simple
+author:         Bexelius
+
+library
+  hs-source-dirs:  src
+  build-depends:   base >= 4
+  ghc-options:     -Wall
+

@@ -1,11 +1,20 @@
 name:           GPipe-Core
 version:        0.1
-cabal-version:  >= 1.2
+cabal-version:  >= 1.8
 build-type:     Simple
-author:         Bexelius
+author:         Tobias Bexelius
 
 library
   hs-source-dirs:  src
-  build-depends:   base >= 4
+  build-depends:   
+                   base >= 4,
+                   transformers,
+                   exception-transformers
   ghc-options:     -Wall
+  exposed-modules: 
+                   Graphics.GPipe.Buffer,
+                   Graphics.GPipe.Context,
+                   Graphics.GPipe.Format,
+                   Graphics.GPipe.FrameBuffer,
+                   Graphics.GPipe.Pipeline
 

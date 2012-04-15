@@ -9,12 +9,14 @@ library
   build-depends:   
                    base >= 4,
                    transformers,
-                   exception-transformers
+                   exception-transformers,
+                   arrows
   ghc-options:     -Wall
   exposed-modules: 
                    Graphics.GPipe.Buffer,
                    Graphics.GPipe.Context,
                    Graphics.GPipe.Format,
                    Graphics.GPipe.FrameBuffer,
-                   Graphics.GPipe.Pipeline
+                   Graphics.GPipe.Pipeline,
+                   Graphics.GPipe.Texture
 

@@ -10,7 +10,8 @@ library
                    base >= 4,
                    transformers,
                    exception-transformers,
-                   arrows
+                   arrows,
+                   containers
   ghc-options:     -Wall
   exposed-modules: 
                    Graphics.GPipe.Buffer,
@@ -18,5 +19,6 @@ library
                    Graphics.GPipe.Format,
                    Graphics.GPipe.FrameBuffer,
                    Graphics.GPipe.Pipeline,
-                   Graphics.GPipe.Texture
+                   Graphics.GPipe.Texture,
+                   Graphics.GPipe.VertexArray
 

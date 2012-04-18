@@ -25,7 +25,7 @@ class BufferFormat f where
 type Offset = Int
 type BufferName = Int
 
-data B a = B BufferName Offset
+data B a = B BufferName Offset | BConst a
 
 type BFloat = B Float
 type BInt32 = B Int32
@@ -45,6 +45,7 @@ instance Storable a => BufferFormat (B a) where
     toBuffer = ToBuffer 
                     (Kleisli $ const static)
                     (Kleisli writer)
+                    BConst
                 where
                     size = sizeOf (undefined :: a)
                     static = do bName <- ask
@@ -94,22 +95,27 @@ bSize b = bElementSize b * bElementCount b
 data ToBuffer a b = ToBuffer
     (Kleisli (ReaderT BufferName (State Offset)) a b)
     (Kleisli (StateT (Ptr ()) IO) a b)
+    (a -> b)
 
 instance Category ToBuffer where
-    id = ToBuffer id id
-    ToBuffer a b . ToBuffer x y = ToBuffer (a.x) (b.y)
+    id = ToBuffer id id id
+    ToBuffer a b c . ToBuffer x y z = ToBuffer (a.x) (b.y) (c.z)
     
 instance Arrow ToBuffer where
-    arr f = ToBuffer (arr f) (arr f)
-    first (ToBuffer a b) = ToBuffer (first a) (first b)
+    arr f = ToBuffer (arr f) (arr f) (arr f)
+    first (ToBuffer a b c) = ToBuffer (first a) (first b) (first c)
 
 
 data FromBuffer b a = FromBuffer 
 
+makeBConst :: forall f. BufferFormat f => HostFormat f -> f
+makeBConst x = 
+    let ToBuffer _ _ c = toBuffer :: ToBuffer (HostFormat f) f
+    in c x
     
 makeBuffer :: forall os f. BufferFormat f => BufferName -> Int -> Buffer os f
 makeBuffer name elementCount =
-    let ToBuffer a b = toBuffer :: ToBuffer (HostFormat f) f
+    let ToBuffer a b _ = toBuffer :: ToBuffer (HostFormat f) f
         (element, elementSize) = runState (runReaderT (runKleisli a (undefined :: HostFormat f)) name) 0
         writer ptr x = void $ runStateT (runKleisli b x) ptr
     in Buffer name elementSize elementCount element writer

@@ -11,7 +11,9 @@ library
                    transformers,
                    exception-transformers,
                    arrows,
-                   containers
+                   containers,
+                   text >= 0.11.2,
+                   Boolean
   ghc-options:     -Wall
   exposed-modules: 
                    Graphics.GPipe.Buffer,
@@ -20,5 +22,8 @@ library
                    Graphics.GPipe.FrameBuffer,
                    Graphics.GPipe.Pipeline,
                    Graphics.GPipe.Texture,
-                   Graphics.GPipe.VertexArray
+                   Graphics.GPipe.VertexArray,
+                   Graphics.GPipe.Shader,
+                   Graphics.GPipe.VertexInput,
+                   Graphics.GPipe.Shader.Operations
 

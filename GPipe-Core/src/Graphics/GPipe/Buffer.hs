@@ -116,6 +116,7 @@ makeBConst x =
 makeBuffer :: forall os f. BufferFormat f => BufferName -> Int -> Buffer os f
 makeBuffer name elementCount =
     let ToBuffer a b _ = toBuffer :: ToBuffer (HostFormat f) f
-        (element, elementSize) = runState (runReaderT (runKleisli a (undefined :: HostFormat f)) name) 0
+        err = error "All output from Graphics.GPipe.Buffer.Buffer.toBuffer must come from other instances of Graphics.GPipe.Buffer.Buffer.toBuffer" :: HostFormat f
+        (element, elementSize) = runState (runReaderT (runKleisli a err) name) 0
         writer ptr x = void $ runStateT (runKleisli b x) ptr
     in Buffer name elementSize elementCount element writer

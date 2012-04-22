@@ -23,52 +23,77 @@ instance Show (S a Word16)
 instance Eq   (S a Word8)
 instance Show (S a Word8)
 
-bin :: String -> S c a -> S c a -> S c a
-bin o (S a) (S b) = S $ '(' : a ++ o ++ b ++ ")"
+bin :: String -> String -> S c x -> S c y -> S c z 
+bin typ o (S a) (S b) = S $ do a' <- a
+                               b' <- b
+                               unS $ scalarS typ $ '(' : a' ++ o ++ b' ++ ")"
 
-fun1 :: String -> S c a -> S c a
-fun1 f (S a) = S $ f ++ '(' : a ++ ")"
-fun2 :: String -> S c a -> S c a -> S c a
-fun2 f (S a) (S b) = S $ f ++ '(' : a ++ ',' : b ++ ")"
-fun3 :: String -> S c a -> S c a -> S c a -> S c a
-fun3 f (S a) (S b) (S c) = S $ f ++ '(' : a ++ ',' : b ++ ',' : c ++")"
+fun1 :: String -> String -> S c x -> S c y
+fun1 typ f (S a) = S $ do a' <- a
+                          unS $ scalarS typ $ f ++ '(' : a' ++ ")"
 
-postop :: String -> S c a -> S c a
-postop f (S a) = S $ '(' : f ++ a ++ ")"
+fun2 :: String -> String -> S c x -> S c y -> S c z
+fun2 typ f (S a) (S b) = S $ do a' <- a
+                                b' <- b
+                                unS $ scalarS typ $ f ++ '(' : a' ++ ',' : b' ++ ")"
 
-preop :: String -> S c a -> S c a
-preop f (S a) = S $ '(' : a ++ f ++ ")"
+fun3 :: String -> String -> S c x -> S c y -> S c z -> S c w
+fun3 typ f (S a) (S b) (S c) = S $ do a' <- a
+                                      b' <- b
+                                      c' <- c
+                                      unS $ scalarS typ $ f ++ '(' : a' ++ ',' : b' ++ ',' : c' ++")"
+
+postop :: String -> String -> S c x -> S c y
+postop typ f (S a) = S $ do a' <- a
+                            unS $ scalarS typ $ '(' : f ++ a' ++ ")"
+                          
+preop :: String -> String -> S c x -> S c y
+preop typ f (S a) = S $ do a' <- a
+                           unS $ scalarS typ $ '(' : a' ++ f ++ ")"
+
+binf :: String -> S c x -> S c y -> S c Float
+binf = bin "float"
+fun1f :: String -> S c x -> S c Float
+fun1f = fun1 "float"
+fun2f :: String -> S c x -> S c y -> S c Float
+fun2f = fun2 "float"
+fun3f :: String -> S c x -> S c y -> S c z -> S c Float
+fun3f = fun3 "float"
+preopf :: String -> S c x -> S c Float
+preopf = preop "float"
+postopf :: String -> S c x -> S c Float
+postopf = postop "float"
 
 instance Num (S a Float) where
-    (+) = bin "+"
-    (-) = bin "-"
-    abs = fun1 "abs"
-    signum = fun1 "sign"
-    (*) = bin "*"
-    fromInteger = S . show
-    negate = preop "-"
+    (+) = binf "+"
+    (-) = binf "-"
+    abs = fun1f "abs"
+    signum = fun1f "sign"
+    (*) = binf "*"
+    fromInteger = S . return . show
+    negate = preopf "-"
 
 instance Fractional (S a Float) where
-  (/)          = bin "/"
-  fromRational = S . show
+  (/)          = binf "/"
+  fromRational = S . return . show
 
 instance Floating (S a Float) where
-  pi    = S $ show (pi :: Float)
-  sqrt  = fun1 "sqrt"
-  exp   = fun1 "exp"
-  log   = fun1 "log"
-  (**)  = fun2 "pow"
-  sin   = fun1 "sin"
-  cos   = fun1 "cos"
-  tan   = fun1 "tan"
-  asin  = fun1 "asin"
-  acos  = fun1 "acos"
-  atan  = fun1 "atan"
-  sinh  = fun1 "sinh"
-  cosh  = fun1 "cosh"
-  asinh = fun1 "asinh"
-  atanh = fun1 "atanh"
-  acosh = fun1 "acosh"
+  pi    = S $ return $ show (pi :: Float)
+  sqrt  = fun1f "sqrt"
+  exp   = fun1f "exp"
+  log   = fun1f "log"
+  (**)  = fun2f "pow"
+  sin   = fun1f "sin"
+  cos   = fun1f "cos"
+  tan   = fun1f "tan"
+  asin  = fun1f "asin"
+  acos  = fun1f "acos"
+  atan  = fun1f "atan"
+  sinh  = fun1f "sinh"
+  cosh  = fun1f "cosh"
+  asinh = fun1f "asinh"
+  atanh = fun1f "atanh"
+  acosh = fun1f "acosh"
 
 -- | This class provides the GPU functions either not found in Prelude's numerical classes, or that has wrong types.
 --   Instances are also provided for normal 'Float's and 'Double's.

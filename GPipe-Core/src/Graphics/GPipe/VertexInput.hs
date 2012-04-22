@@ -6,7 +6,6 @@ import Graphics.GPipe.Buffer
 import Graphics.GPipe.Shader
 import Control.Arrow (Kleisli(..))
 import Control.Monad.IO.Class (liftIO)
-import Data.Functor
 
 class BufferFormat a => VertexInput a where
     type ShaderInput a  
@@ -14,12 +13,12 @@ class BufferFormat a => VertexInput a where
     
 instance VertexInput BFloat where
     type ShaderInput BFloat = VFloat
-    toVertex = Shader (Kleisli shader) (Kleisli setup)
+    toVertex = Shader shader (Kleisli setup)
         where
-            shader _ = do attrId <- getNext
-                          let attr = 'a' : show attrId
-                          tellGlobalDecl $ "attribute float " ++ attr 
-                          toSScalar <$> tellAssignment "float" attr
+            shader _ = S $ do attrId <- getNext
+                              let attr = 'a' : show attrId
+                              tellGlobalDecl $ "attribute float " ++ attr 
+                              return attr
             setup (B name off) =  do attrId <- getNext
                                      liftIO $ glSetAttribute attrId name off
                                      return undefined
@@ -27,5 +26,8 @@ instance VertexInput BFloat where
                                    liftIO $ glSetGenericAttribute attrId a
                                    return undefined
 
+glSetAttribute :: t -> t1 -> t2 -> IO ()
 glSetAttribute _ _ _ = undefined                                       
+
+glSetGenericAttribute :: t -> t1 -> IO ()
 glSetGenericAttribute _ _ = undefined   

@@ -25,5 +25,7 @@ library
                    Graphics.GPipe.VertexArray,
                    Graphics.GPipe.Shader,
                    Graphics.GPipe.VertexInput,
-                   Graphics.GPipe.Shader.Operations
+                   Graphics.GPipe.Shader.Operations,
+                   Graphics.GPipe.Uniform
+  other-modules:   Data.SNMap
 

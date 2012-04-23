@@ -5,7 +5,7 @@
 module Graphics.GPipe.Buffer where
 
 import Prelude hiding ((.), id)
-import Control.Monad.Trans.State.Strict 
+import Control.Monad.Trans.State 
 import Control.Category
 import Control.Arrow
 import Foreign.Storable
@@ -48,10 +48,10 @@ instance Storable a => BufferFormat (B a) where
                     BConst
                 where
                     size = sizeOf (undefined :: a)
-                    static = do bName <- ask
+                    static = do name <- ask
                                 offset <- lift get
                                 lift $ put $ offset + size
-                                return $ B bName offset
+                                return $ B name offset
                     writer a = do ptr <- get
                                   put $ ptr `plusPtr` size
                                   liftIO $ poke (castPtr ptr) a
@@ -82,11 +82,11 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
                 returnA -< (a', b', c', d')
 
 data Buffer os b = Buffer {
-                    bName :: !Int, 
-                    bElementSize :: !Int,
-                    bElementCount :: !Int,
-                    bElement :: !b,
-                    bWriter :: !(Ptr () -> HostFormat b -> IO ())
+                    bName :: Int, 
+                    bElementSize :: Int,
+                    bElementCount :: Int,
+                    bElement :: b,
+                    bWriter :: (Ptr () -> HostFormat b -> IO ())
                     }
 
 bSize :: forall os b. Buffer os b -> Int
@@ -116,7 +116,7 @@ makeBConst x =
 makeBuffer :: forall os f. BufferFormat f => BufferName -> Int -> Buffer os f
 makeBuffer name elementCount =
     let ToBuffer a b _ = toBuffer :: ToBuffer (HostFormat f) f
-        err = error "All output from Graphics.GPipe.Buffer.Buffer.toBuffer must come from other instances of Graphics.GPipe.Buffer.Buffer.toBuffer" :: HostFormat f
-        (element, elementSize) = runState (runReaderT (runKleisli a err) name) 0
+        dontUse = error "All output from Graphics.GPipe.Buffer.Buffer.toBuffer must come from other instances of Graphics.GPipe.Buffer.Buffer.toBuffer" :: HostFormat f
+        (element, elementSize) = runState (runReaderT (runKleisli a dontUse) name) 0
         writer ptr x = void $ runStateT (runKleisli b x) ptr
     in Buffer name elementSize elementCount element writer

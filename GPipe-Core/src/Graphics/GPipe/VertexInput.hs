@@ -13,16 +13,16 @@ class BufferFormat a => VertexInput a where
     
 instance VertexInput BFloat where
     type ShaderInput BFloat = VFloat
-    toVertex = Shader shader (Kleisli setup)
+    toVertex = Shader (Kleisli shader) (Kleisli setup)
         where
-            shader _ = S $ do attrId <- getNext
-                              let attr = 'a' : show attrId
-                              tellGlobalDecl $ "attribute float " ++ attr 
-                              return attr
-            setup (B name off) =  do attrId <- getNext
+            shader _ = do attrId <- getNextGlobal
+                          let attr = 'a' : show attrId
+                          tellGlobalDecl $ "in float " ++ attr 
+                          return $ S $return attr
+            setup (B name off) =  do attrId <- getNextGlobal
                                      liftIO $ glSetAttribute attrId name off
                                      return undefined
-            setup (BConst a) =  do attrId <- getNext
+            setup (BConst a) =  do attrId <- getNextGlobal
                                    liftIO $ glSetGenericAttribute attrId a
                                    return undefined
 

@@ -34,7 +34,18 @@ type ShaderT m = ShaderSetupT (ShaderGenT m)
 
 type ShaderSetupT = StateT NextGlobal  
 
-type UniformBufferMap = Map.IntMap (String, Int) -- Offset to type+name + size
+data SType = STypeFloat | STypeInt | STypeBool | STypeUInt
+
+stypeName :: SType -> String
+stypeName STypeFloat = "float"
+stypeName STypeInt = "int"
+stypeName STypeBool = "bool"
+stypeName STypeUInt = "uint"
+
+stypeSize :: SType -> Int
+stypeSize _ = 4
+
+type UniformBufferMap = (Int, Map.IntMap SType)
     
 type ShaderGenT m = ReaderT (SNMap RValue Int) (WriterT Builder (WriterT Builder (StateT (NextTempVar, [UniformBufferMap]) m)))
 
@@ -85,22 +96,23 @@ getNextVar = do
 getTempVar :: Monad m => ShaderT m Int
 getTempVar = lift $ lift $ lift $ lift $ getNextVar
 
-pushUMap :: Monad m => ShaderT m ()
-pushUMap = lift $ lift $ lift $ lift $ do
+pushUMap :: Monad m => Int -> ShaderT m ()
+pushUMap i = lift $ lift $ lift $ lift $ do
     (s, x) <- get
-    put (s, Map.empty : x)
+    put (s, (i, Map.empty) : x)
 
-popUMap :: Monad m => ShaderT m UniformBufferMap
+popUMap :: Monad m => ShaderT m (Map.IntMap SType)
 popUMap = lift $ lift $ lift $ lift $ do
     (s, x:xs) <- get
     put (s, xs)
-    return x
+    return $ snd x
 
-addToUMap :: Monad m => Int -> String -> Int -> ShaderT m ()
-addToUMap a b c = lift $ lift $ lift $ lift $ do
-    (s, x:xs) <- get
-    let y = Map.insert a (b,c) x
-    put (s, y : xs)
+addToUMap :: Monad m => Int -> SType -> ShaderT m Int
+addToUMap a b = lift $ lift $ lift $ lift $ do
+    (s, (i,x):xs) <- get
+    let y = Map.insert a b x
+    put (s, (i, y) : xs)
+    return i
           
 
 type VarType = String

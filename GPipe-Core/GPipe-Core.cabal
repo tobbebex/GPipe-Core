@@ -10,22 +10,23 @@ library
                    base >= 4,
                    transformers,
                    exception-transformers,
-                   arrows,
                    containers,
                    text >= 0.11.2,
                    Boolean
   ghc-options:     -Wall
   exposed-modules: 
-                   Graphics.GPipe.Buffer,
                    Graphics.GPipe.Context,
+                   Graphics.GPipe.Frame,
+                   Graphics.GPipe.Buffer,
                    Graphics.GPipe.Format,
-                   Graphics.GPipe.FrameBuffer,
-                   Graphics.GPipe.Pipeline,
-                   Graphics.GPipe.Texture,
-                   Graphics.GPipe.VertexArray,
+                   Graphics.GPipe.VertexStream,
                    Graphics.GPipe.Shader,
-                   Graphics.GPipe.VertexInput,
                    Graphics.GPipe.Shader.Operations,
-                   Graphics.GPipe.Uniform
-  other-modules:   Data.SNMap
+                   Graphics.GPipe.Texture,
+                   Graphics.GPipe.Uniform,
+                   Data.SNMap,
+                   Graphics.GPipe.IndexArray,
+                   Graphics.GPipe.VertexArray,
+                   Graphics.GPipe.Stream
+  other-modules:   
 

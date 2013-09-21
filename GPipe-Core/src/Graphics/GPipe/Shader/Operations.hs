@@ -3,66 +3,48 @@
 module Graphics.GPipe.Shader.Operations where
 
 import Graphics.GPipe.Shader
-import Data.Int
-import Data.Word
 import Data.Boolean
 
--- TODO: Delete those when ghc 7.4 is in haskell platform:
-instance Eq   (S a Float)
-instance Show (S a Float)
-instance Eq   (S a Int32)
-instance Show (S a Int32)
-instance Eq   (S a Int16)
-instance Show (S a Int16)
-instance Eq   (S a Int8)
-instance Show (S a Int8)
-instance Eq   (S a Word32)
-instance Show (S a Word32)
-instance Eq   (S a Word16)
-instance Show (S a Word16)
-instance Eq   (S a Word8)
-instance Show (S a Word8)
-
-bin :: String -> String -> S c x -> S c y -> S c z 
+bin :: SType -> String -> S c x -> S c y -> S c z 
 bin typ o (S a) (S b) = S $ do a' <- a
                                b' <- b
-                               unS $ scalarS typ $ '(' : a' ++ o ++ b' ++ ")"
+                               tellAssignment typ $ '(' : a' ++ o ++ b' ++ ")"
 
-fun1 :: String -> String -> S c x -> S c y
+fun1 :: SType -> String -> S c x -> S c y
 fun1 typ f (S a) = S $ do a' <- a
-                          unS $ scalarS typ $ f ++ '(' : a' ++ ")"
+                          tellAssignment typ $ f ++ '(' : a' ++ ")"
 
-fun2 :: String -> String -> S c x -> S c y -> S c z
+fun2 :: SType -> String -> S c x -> S c y -> S c z
 fun2 typ f (S a) (S b) = S $ do a' <- a
                                 b' <- b
-                                unS $ scalarS typ $ f ++ '(' : a' ++ ',' : b' ++ ")"
+                                tellAssignment typ $ f ++ '(' : a' ++ ',' : b' ++ ")"
 
-fun3 :: String -> String -> S c x -> S c y -> S c z -> S c w
+fun3 :: SType -> String -> S c x -> S c y -> S c z -> S c w
 fun3 typ f (S a) (S b) (S c) = S $ do a' <- a
                                       b' <- b
                                       c' <- c
-                                      unS $ scalarS typ $ f ++ '(' : a' ++ ',' : b' ++ ',' : c' ++")"
+                                      tellAssignment typ $ f ++ '(' : a' ++ ',' : b' ++ ',' : c' ++")"
 
-postop :: String -> String -> S c x -> S c y
+postop :: SType -> String -> S c x -> S c y
 postop typ f (S a) = S $ do a' <- a
-                            unS $ scalarS typ $ '(' : f ++ a' ++ ")"
+                            tellAssignment typ $ '(' : f ++ a' ++ ")"
                           
-preop :: String -> String -> S c x -> S c y
+preop :: SType -> String -> S c x -> S c y
 preop typ f (S a) = S $ do a' <- a
-                           unS $ scalarS typ $ '(' : a' ++ f ++ ")"
+                           tellAssignment typ $ '(' : a' ++ f ++ ")"
 
 binf :: String -> S c x -> S c y -> S c Float
-binf = bin "float"
+binf = bin STypeFloat
 fun1f :: String -> S c x -> S c Float
-fun1f = fun1 "float"
+fun1f = fun1 STypeFloat
 fun2f :: String -> S c x -> S c y -> S c Float
-fun2f = fun2 "float"
+fun2f = fun2 STypeFloat
 fun3f :: String -> S c x -> S c y -> S c z -> S c Float
-fun3f = fun3 "float"
+fun3f = fun3 STypeFloat
 preopf :: String -> S c x -> S c Float
-preopf = preop "float"
+preopf = preop STypeFloat
 postopf :: String -> S c x -> S c Float
-postopf = postop "float"
+postopf = postop STypeFloat
 
 instance Num (S a Float) where
     (+) = binf "+"

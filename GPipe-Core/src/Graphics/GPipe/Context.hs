@@ -1,95 +1,66 @@
-{-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, ScopedTypeVariables, TypeFamilies, FlexibleContexts, FlexibleInstances #-}
+{-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, FlexibleContexts, FlexibleInstances, GADTs #-}
 
 module Graphics.GPipe.Context 
 (
-    ContextProvider(..),
+    ContextFactory,
+    ContextFormat(..),
+    ContextHandle(..),
     ContextT(),
     runContextT,
     runSharedContextT,
     liftContextIO,
-    liftAndSwapContextIO,
-    frameBufferSize,
-    newBuffer,
-    storeBuffer
+    swap,
+    frameBufferSize
 )
 where
 
 import Graphics.GPipe.Format
-import Graphics.GPipe.Buffer
 import Control.Monad.Exception (bracket, MonadAsyncException, MonadException)
 import Control.Monad.Trans.Reader 
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Applicative (Applicative)
-import Foreign.Marshal.Alloc (allocaBytes)
-import Foreign.Ptr (plusPtr, Ptr)
-import Control.Monad (foldM_)
 
+type ContextFactory c ds = ContextFormat c ds -> IO ContextHandle
 
-class ContextProvider p where
-    inContext :: p -> IO a -> IO a
-    newContext :: (FramebufferFormat f) => f -> IO p
-    newSharedContext :: (FramebufferFormat f) => f -> p -> IO p
-    deleteContext :: p -> IO ()
-    contextSwap :: p -> IO ()
-    contextFrameBufferSize :: p -> IO (Int, Int)
+data ContextHandle = ContextHandle {
+    newSharedContext :: forall c ds. ContextFormat c ds -> IO ContextHandle,
+    contextDo :: forall a. IO a -> IO a,
+    contextSwap :: IO (),
+    contextFrameBufferSize :: IO (Int, Int),
+    contextDelete :: IO ()
+} 
 
-newtype ContextT p f os m a = ContextT (ReaderT p m a) deriving (Functor, Applicative, Monad, MonadTrans, MonadIO, MonadException, MonadAsyncException)
+newtype ContextT os f m a = 
+    ContextT (ReaderT ContextHandle m a) 
+    deriving (Functor, Applicative, Monad, MonadTrans, MonadIO, MonadException, MonadAsyncException)
+    
 
-liftContextIO :: (ContextProvider p, MonadIO m) => IO a -> ContextT p os f m a
-liftContextIO m = ContextT ask >>= liftIO . flip inContext m
-
-liftAndSwapContextIO :: forall p os f m. (ContextProvider p, MonadIO m) => IO () -> ContextT p os f m ()
-liftAndSwapContextIO m = liftContextIO $ m >> contextSwap (undefined :: p)
-
-frameBufferSize :: (ContextProvider p, MonadIO m) => ContextT p os f m (Int, Int)
-frameBufferSize = ContextT ask >>= liftIO . contextFrameBufferSize
-
-runContextT :: (ContextProvider p, MonadAsyncException m, MonadIO m, FramebufferFormat f) => f -> (forall os. ContextT p f os m a) -> m a
-runContextT f (ContextT m) = 
+runContextT :: (MonadIO m, MonadAsyncException m) => ContextFactory c ds -> ContextFormat c ds -> (forall os. ContextT os (ContextFormat c ds) m a) -> m a
+runContextT cf f (ContextT m) = 
     bracket 
-        (liftIO $ newContext f)
-        (liftIO . deleteContext)
-        (runReaderT m)   
+        (liftIO $ cf f)
+        (liftIO . contextDelete)
+        (runReaderT m)
 
-runSharedContextT :: (ContextProvider p, MonadIO m, MonadAsyncException m, FramebufferFormat f2) => f2 -> ContextT p f2 os (ContextT p f os m) a -> ContextT p f os m a
+runSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFormat c ds -> ContextT os (ContextFormat c ds) (ContextT os f m) a -> ContextT os f m a
 runSharedContextT f (ContextT m) =   
     bracket
-        (ContextT ask >>= liftIO . newSharedContext f)
-        (liftIO . deleteContext)    
-        (runReaderT m)   
+        (ContextT ask >>= liftIO . ($ f) . newSharedContext)
+        (liftIO . contextDelete)
+        (runReaderT m)
 
+liftContextIO :: MonadIO m => IO a -> ContextT os f m a
+liftContextIO m = ContextT ask >>= liftIO . flip contextDo m
+
+swap :: MonadIO m => ContextT os f m ()
+swap = ContextT ask >>= liftIO . contextSwap
+
+frameBufferSize :: (MonadIO m) => ContextT os f m (Int, Int)
+frameBufferSize = ContextT ask >>= liftIO . contextFrameBufferSize
      
 {-# RULES
 "liftContextIO >>= liftContextIO >>= x"    forall m1 m2 x.  liftContextIO m1 >>= (\_ -> liftContextIO m2 >>= x) = liftContextIO (m1 >> m2) >>= x
 "liftContextIO >>= liftContextIO"          forall m1 m2.    liftContextIO m1 >>= (\_ -> liftContextIO m2) = liftContextIO (m1 >> m2)
   #-}
 
-
-
-newBuffer :: (ContextProvider p, MonadIO m, BufferFormat a) => Int -> ContextT p os f m (Buffer os a)
-newBuffer elementCount =
-    liftContextIO $ do name <- genBufferGl
-                       let buffer = makeBuffer name elementCount
-                       setBufferStorageGl name (bSize buffer)
-                       return buffer
-
-storeBuffer :: (ContextProvider p, MonadIO m) => [HostFormat a] -> Int -> Buffer os a -> ContextT p os f m ()
-storeBuffer xs offset buffer = 
-    let len = min (length xs) (max 0 (bElementCount buffer - offset) ) * bElementSize buffer
-        off = offset * bElementSize buffer
-        write ptr x = do bWriter buffer ptr x
-                         return $! ptr `plusPtr` bElementSize buffer
-    in liftContextIO $ allocaBytes len $ \ ptr-> do
-                            foldM_ write ptr xs
-                            glStoreBufferGl (bName buffer) ptr off len
-    
-                       
-glStoreBufferGl :: Int -> Ptr () -> Int -> Int -> IO () 
-glStoreBufferGl = undefined
-                       
-genBufferGl :: IO Int
-genBufferGl = undefined     
-
-setBufferStorageGl :: Int -> Int -> IO ()
-setBufferStorageGl = undefined                  

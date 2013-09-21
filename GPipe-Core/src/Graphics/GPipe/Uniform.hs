@@ -1,80 +1,70 @@
-{-# LANGUAGE TypeFamilies, FlexibleContexts, GADTs, TypeSynonymInstances, ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies, FlexibleContexts, GADTs, TypeSynonymInstances, ScopedTypeVariables, FlexibleInstances, GeneralizedNewtypeDeriving #-}
 
 module Graphics.GPipe.Uniform where
 
 import Graphics.GPipe.Buffer 
+import Graphics.GPipe.Frame
+import Graphics.GPipe.Stream
 import Graphics.GPipe.Shader
 import Control.Arrow
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad (void, when)
-import Data.IntMap (toAscList)
+import Control.Monad.Trans.Writer
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Class (lift)
+import Control.Category hiding ((.))
+import qualified Data.IntMap as Map
 
 class BufferFormat (UniformBufferFormat a) => Uniform a where
     type UniformBufferFormat a
-    --TODO: Add if needed:  uniform :: Shader os (HostFormat (UniformBufferFormat a)) a
-    loadUniform :: Shader os (UniformBufferFormat a) a
+    toUniform :: ToUniform (UniformBufferFormat a) a 
 
-uniformBuffer :: forall os a. Uniform a => Shader os (Buffer os (UniformBufferFormat a)) a
-uniformBuffer = Shader (Kleisli shader) (Kleisli setup)
-        where
-            shader _ = do   blockId <- getNextGlobal
-                            pushUMap blockId
-                            u <- runKleisli shaderLoad (bElement sampleBuffer)
-                            blockMap <- popUMap 
-                            tellGlobal $ "uniform uBlock" ++ show blockId ++ " {\n"
-                            tellUMap 0 (toAscList blockMap) 
-                            tellGlobal $ "} u" ++ show blockId ++ ";\n"
-                            return u                             
-            setup buffer = do
-                               blockId <- getNextGlobal
-                               liftIO $ glBindBufferToBlock (bName buffer) blockId
-                               void $ runKleisli setupLoad (bElement buffer)
-                               return undefined
-            sampleBuffer = makeBuffer undefined undefined :: Buffer os (UniformBufferFormat a)
-            Shader shaderLoad setupLoad = loadUniform :: Shader os (UniformBufferFormat a) a
-            tellUMap _ [] = return ()
-            tellUMap pos ((off,t):xs) = do let pad = off - pos `div` 4
-                                           when (pad > 0) $ do
-                                                v <- getTempVar
-                                                tellGlobalDecl $ "float pad" ++ show v ++ "[" ++ show pad ++ "]"
-                                           tellGlobalDecl $ stypeName t ++ " u" ++ show off
-                                           tellUMap (pos + stypeSize t) xs
+usingUniform :: forall fr os f x a b. Uniform b => Stream fr x a -> (Buffer os (UniformBufferFormat b), Int) -> Frame fr os f (Stream fr x (a, b))
+usingUniform (Stream s) = 
+        let sampleBuffer = makeBuffer undefined undefined :: Buffer os (UniformBufferFormat b)
+            ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform (UniformBufferFormat b) b
+            shaderGen = runReader $ runWriterT $ shaderGenF $ bufBElement sampleBuffer $ BInput 0 0
+            f (a, blockId, x) = 
+                let (u, offToStype) = shaderGen blockId
+                    decl = buildUDecl offToStype
+                in  ((a,u), blockId+1, decl, x)
+            s' = map f s
+        in \(ub, i) ->         
+            let uIO blockId cs = do binding <- getNext 
+                                    -- TODO: What about global GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT??
+                                    lift $ do glBindBufferRange glUNIFORM_ARRAY binding (bufName ub) (i * bufElementSize ub) (bufElementSize ub)                                   
+                                              glUniformBlockBinding (cshaderName cs) (cshaderUniBlockNameToIndex cs Map.! blockId) binding
+                                                   
+                g (a, blockId, decl, PrimitiveStreamData x uBinds) = (a, blockId, PrimitiveStreamData x ((decl, uIO blockId):uBinds))
+                -- TODO: More StreamData types
+            in return $ Stream $ map g s'
 
-type UniformHostFormat a = HostFormat (UniformBufferFormat a)
+buildUDecl = buildUDecl' 0 . Map.assocs 
+    where buildUDecl' p ((off, stype):xs) | off == p = do tellGlobal $ stypeName stype
+                                                          tellGlobal " u"
+                                                          tellGlobalLn $ show off
+                                                          buildUDecl' (p + stypeSize stype) xs
+                                          | off > p = do tellGlobal " float pad"
+                                                         tellGlobalLn $ show p
+                                                         buildUDecl' (p + 4) xs
+                                          | otherwise = error "buildUDecl: Expected all sizes to be multiple of 4"
+          buildUDecl' _ [] = return ()
 
-uniform :: forall os a. Uniform a => Shader os (UniformHostFormat a) a
-uniform = Shader (Kleisli shader) (Kleisli setup)
-    where
-        shader _ = runKleisli shaderLoad (f (error "Hmm, does this work?")) -- TODO: Investigate if this really works
-        setup a = runKleisli setupLoad (f a)
-        Shader shaderLoad setupLoad = loadUniform :: Shader os (UniformBufferFormat a) a
-        ToBuffer _ _ f = toBuffer :: ToBuffer (UniformHostFormat a) (UniformBufferFormat a)
+type OffsetToSType = Map.IntMap SType  
 
-blockUniformName :: Int -> Int -> String
-blockUniformName blockId off = 'u' : show blockId ++ ".u" ++ show off 
-    
+glUniformBlockBinding :: Int -> Int -> Int -> IO ()
+glUniformBlockBinding = undefined
+
+glBindBufferRange :: Int -> Int -> Int -> Int -> Int -> IO ()
+glBindBufferRange = undefined                                
+
+glUNIFORM_ARRAY = 0
+
+newtype ToUniform a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader Int)) a b) deriving (Category, Arrow) 
+
 instance Uniform VFloat where
     type UniformBufferFormat VFloat = BFloat
-    loadUniform = Shader (Kleisli shader) (Kleisli setup)
-        where
-            shader (B _ off) = do
-                          blockId <- addToUMap off STypeFloat                          
-                          return (S $ return $ blockUniformName blockId off)
-            shader (BConst _) = do
-                          uniId <- getNextGlobal
-                          let uni = "uu" ++ show uniId
-                          tellGlobalDecl $ "uniform float " ++ uni                           
-                          return (S $ return uni)                          
-            setup (BConst a) =  do uniId <- getNextGlobal
-                                   let uni = "uu" ++ show uniId
-                                   liftIO $ glLoadUniformFloat uni a
-                                   return undefined
-            setup (B _ _) = error "Shouldnt be able to run setup on uniform value shader on non const B value"                                   
-    
-
-glBindBufferToBlock :: Int -> Int -> IO ()
-glBindBufferToBlock = undefined    
+    toUniform = ToUniform $ Kleisli $ \bIn -> do let offset = bOffset bIn
+                                                 tell $ Map.singleton offset STypeFloat
+                                                 blockId <- lift ask
+                                                 return $ S $ useUniform blockId offset  
 
 
-glLoadUniformFloat :: String -> Float -> IO () 
-glLoadUniformFloat = undefined

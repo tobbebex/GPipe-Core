@@ -5,7 +5,7 @@ module Graphics.GPipe.Uniform where
 import Graphics.GPipe.Buffer 
 import Graphics.GPipe.Frame
 import Graphics.GPipe.Stream
-import Graphics.GPipe.Shader
+import Graphics.GPipe.Shader hiding (lift)
 import Control.Arrow
 import Control.Monad.Trans.Writer
 import Control.Monad.Trans.Reader
@@ -17,11 +17,12 @@ class BufferFormat (UniformBufferFormat a) => Uniform a where
     type UniformBufferFormat a
     toUniform :: ToUniform (UniformBufferFormat a) a 
 
-usingUniform :: forall fr os f x a b. Uniform b => Stream fr x a -> (Buffer os (UniformBufferFormat b), Int) -> Frame fr os f (Stream fr x (a, b))
+usingUniform :: forall fr os f x a b. Uniform b => Stream fr x a -> (Buffer os (BUniform (UniformBufferFormat b)), Int) -> Frame fr os f (Stream fr x (a, b))
 usingUniform (Stream s) = 
-        let sampleBuffer = makeBuffer undefined undefined :: Buffer os (UniformBufferFormat b)
+        let sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform (UniformBufferFormat b) b
-            shaderGen = runReader $ runWriterT $ shaderGenF $ bufBElement sampleBuffer $ BInput 0 0
+            fromBUnifom (BUniform b) = b
+            shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
             f (a, blockId, x) = 
                 let (u, offToStype) = shaderGen blockId
                     decl = buildUDecl offToStype
@@ -29,7 +30,6 @@ usingUniform (Stream s) =
             s' = map f s
         in \(ub, i) ->         
             let uIO blockId cs = do binding <- getNext 
-                                    -- TODO: What about global GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT??
                                     lift $ do glBindBufferRange glUNIFORM_ARRAY binding (bufName ub) (i * bufElementSize ub) (bufElementSize ub)                                   
                                               glUniformBlockBinding (cshaderName cs) (cshaderUniBlockNameToIndex cs Map.! blockId) binding
                                                    

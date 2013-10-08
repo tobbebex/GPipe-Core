@@ -17,30 +17,34 @@ import Control.Monad.Trans.State
 import qualified Data.IntMap as Map
 import Data.Foldable (forM_)
 
-class BufferFormat (VertexInputBufferFormat a) => VertexInput a where
-    type VertexInputBufferFormat a
-    toVertexInput :: ToVertexInput (VertexInputBufferFormat a) a  
+class VertexInput a where
+    type VertexFormat a
+    toVertex :: ToVertex a (VertexFormat a)  
 
-data ToVertexInput a b = ToVertexInput
+data ToVertex a b = ToVertex
     (Kleisli (State Int) a b)
     (Kleisli (Writer [Int -> (IO (), SType)]) a b) -- order of this list is attribname, parameter to func in list is index
-instance Category ToVertexInput where
-    id = ToVertexInput id id
-    ToVertexInput a b . ToVertexInput x y = ToVertexInput (a.x) (b.y)  
-instance Arrow ToVertexInput where
-    arr f = ToVertexInput (arr f) (arr f)
-    first (ToVertexInput a b) = ToVertexInput (first a) (first b)
+instance Category ToVertex where
+    id = ToVertex id id
+    ToVertex a b . ToVertex x y = ToVertex (a.x) (b.y)  
+instance Arrow ToVertex where
+    arr f = ToVertex (arr f) (arr f)
+    first (ToVertex a b) = ToVertex (first a) (first b)
 
--- TODO: Require B2 B3 B4 for those inputs, BFloat will take an own attrib. MAke Shader use globalAgain
-  
-instance VertexInput VFloat where
-    type VertexInputBufferFormat VFloat = BFloat
-    toVertexInput = ToVertexInput (Kleisli $ makeShaderInput id) (Kleisli setupF) where
-                        setupF b = do tell $ (:[]) $ \index -> (
-                                                do glBindBuffer (bName b) glVERTEX_ARRAY
-                                                   glAttribArray index 1 glFLOAT False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)
-                                               , STypeFloat)
-                                      return undefined
+instance VertexInput BFloat where
+    type VertexFormat BFloat = VFloat
+    toVertex = ToVertex (Kleisli $ makeShaderInput id) (Kleisli $ setupF glFLOAT)
+
+instance VertexInput BInt32Norm where
+    type VertexFormat BInt32Norm = VFloat
+    toVertex = ToVertex (Kleisli $ makeShaderInput id) (Kleisli $ setupF glINT32 . (\(BNormalized b)->b)) where
+
+setupF :: Int -> B a -> Writer [Int -> (IO (), SType)] b
+setupF t b = do tell $ (:[]) $ \index -> (
+                        do glBindBuffer (bName b) glVERTEX_ARRAY
+                           glAttribArray index 1 t False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)
+                       , STypeFloat)
+                return undefined
 
 makeShaderInput :: Monad m => (S c a -> b) -> t -> StateT Int m b
 makeShaderInput f _ =
@@ -62,11 +66,11 @@ makeDrawDeclIO drawcall =
 
 toPrimitiveStream :: forall fr a p. (VertexInput a, PrimitiveTopology p) 
     => p 
-    -> VertexArray fr () (VertexInputBufferFormat a) 
-    -> Stream fr p a
+    -> VertexArray fr () a 
+    -> Stream fr p (VertexFormat a)
 toPrimitiveStream =
-    let ToVertexInput (Kleisli makeShader) (Kleisli ioF) = toVertexInput :: ToVertexInput (VertexInputBufferFormat a) a
-        a = evalState (makeShader (undefined :: VertexInputBufferFormat a)) 0
+    let ToVertex (Kleisli makeShader) (Kleisli ioF) = toVertex :: ToVertex a (VertexFormat a)
+        a = evalState (makeShader (undefined :: a)) 0
     in \p ba -> let declIos = execWriter $ ioF $ bArrBFunc ba $ BInput 0 0       
                     drawcall = glDrawArrays (toGLtopology p) 0 (VertexArray.length ba)
                     drawioF = makeDrawDeclIO drawcall . applyMapValueToKeyedList declIos
@@ -74,12 +78,12 @@ toPrimitiveStream =
 
 toIndexedPrimitiveStream :: forall fr i a p. (IndexFormat i, VertexInput a, PrimitiveTopology p) 
     => p
-    -> VertexArray fr () (VertexInputBufferFormat a) 
+    -> VertexArray fr () a 
     -> IndexArray fr i 
-    -> Stream fr p a
+    -> Stream fr p (VertexFormat a)
 toIndexedPrimitiveStream =
-    let ToVertexInput (Kleisli makeShader) (Kleisli ioF) = toVertexInput :: ToVertexInput (VertexInputBufferFormat a) a
-        a = evalState (makeShader (undefined :: VertexInputBufferFormat a)) 0
+    let ToVertex (Kleisli makeShader) (Kleisli ioF) = toVertex :: ToVertex a (VertexFormat a)
+        a = evalState (makeShader (undefined :: a)) 0
     in \p ba iba -> 
                 let declIos = execWriter $ ioF $ bArrBFunc ba $ BInput 0 0
                     drawcall = do forM_ (restart iba) glRestartIndex
@@ -91,12 +95,12 @@ toIndexedPrimitiveStream =
 toInstancedPrimitiveStream :: forall fr a b c p. (VertexInput c, PrimitiveTopology p) 
     => p
     -> VertexArray fr () a 
-    -> (a -> b -> VertexInputBufferFormat c) 
+    -> (a -> b -> c) 
     -> VertexArray fr Instances b 
-    -> Stream fr p c
+    -> Stream fr p (VertexFormat c)
 toInstancedPrimitiveStream =
-    let ToVertexInput (Kleisli makeShader) (Kleisli ioF) = toVertexInput :: ToVertexInput (VertexInputBufferFormat c) c
-        c = evalState (makeShader (undefined :: VertexInputBufferFormat c)) 0
+    let ToVertex (Kleisli makeShader) (Kleisli ioF) = toVertex :: ToVertex c (VertexFormat c)
+        c = evalState (makeShader (undefined :: c)) 0
     in \p va f ina -> 
                 let
                     declIos = execWriter $ ioF $ f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1)
@@ -108,12 +112,12 @@ toInstancedIndexedPrimitiveStream :: forall fr i a b c p .(IndexFormat i, Vertex
     => p
     -> VertexArray fr () a 
     -> IndexArray fr i 
-    -> (a -> b -> VertexInputBufferFormat c) 
+    -> (a -> b -> c) 
     -> VertexArray fr Instances b 
-    -> Stream fr p c
+    -> Stream fr p (VertexFormat c)
 toInstancedIndexedPrimitiveStream =
-    let ToVertexInput (Kleisli makeShader) (Kleisli ioF) = toVertexInput :: ToVertexInput (VertexInputBufferFormat c) c
-        c = evalState (makeShader (undefined :: VertexInputBufferFormat c)) 0
+    let ToVertex (Kleisli makeShader) (Kleisli ioF) = toVertex :: ToVertex c (VertexFormat c)
+        c = evalState (makeShader (undefined :: c)) 0
     in \p va ia f ina -> 
                 let
                     declIos = execWriter $ ioF $ f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1)
@@ -145,6 +149,9 @@ glBindBuffer = undefined
 
 glAttribArray :: Int -> Int -> Int -> Bool -> Int -> Int -> Int -> IO () 
 glAttribArray = undefined                               
+
+glINT32 :: Int                                      
+glINT32 = 0
 
 glFLOAT :: Int
 glFLOAT = 1

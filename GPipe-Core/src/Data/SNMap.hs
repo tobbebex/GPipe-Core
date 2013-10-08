@@ -1,7 +1,9 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Data.SNMap (
     SNMap,
     SNMapReaderT,
+    runSNMapReaderT,
     newSNMap,
     memoize,    
     memoizeM    
@@ -11,28 +13,35 @@ import System.Mem.StableName
 import qualified Data.HashTable as HT 
 import Data.Functor
 import Control.Monad.IO.Class (liftIO, MonadIO)
+import Control.Monad.Trans.Class
 import System.Mem.Weak (addFinalizer)
-import Control.Monad.Trans.Reader (ReaderT, ask)
+import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 
+newtype SNMap m a = SNMap (HT.HashTable (StableName (m a)) a)
 
-newtype SNMap a b = SNMap (HT.HashTable (StableName a) b)
-
-newSNMap :: IO (SNMap a b)
+newSNMap :: IO (SNMap m a)
 newSNMap = SNMap <$> HT.new (==) (fromIntegral . hashStableName)
 
-memoize :: MonadIO m => SNMap key val -> (key -> m val) -> key -> m val
-memoize (SNMap h) f a = do s <- liftIO $ makeStableName $! a
-                           x <- liftIO $ HT.lookup h s
-                           case x of
-                                Just b -> return b
-                                Nothing -> do y <- f a
+memoize :: MonadIO m => SNMap m a -> m a -> m a
+memoize (SNMap h) m = do s <- liftIO $ makeStableName $! m
+                         x <- liftIO $ HT.lookup h s
+                         case x of
+                                Just a -> return a
+                                Nothing -> do a <- m
                                               liftIO $ do
-                                                  HT.insert h s y
-                                                  addFinalizer a (HT.delete h s)
-                                              return y
+                                                  HT.insert h s a
+                                                  addFinalizer m (HT.delete h s)
+                                              return a
 
-type SNMapReaderT a b = ReaderT (SNMap a b)
+newtype SNMapReaderT a m b = SNMapReaderT (ReaderT (SNMap (SNMapReaderT a m) a) m b) deriving (Monad, MonadIO, Functor)
 
-memoizeM :: MonadIO m => (a -> SNMapReaderT a b m b) -> a -> SNMapReaderT a b m b
-memoizeM f a = do h <- ask
-                  memoize h f a
+runSNMapReaderT :: MonadIO m => SNMapReaderT a m b -> m b
+runSNMapReaderT (SNMapReaderT m) = do h <- liftIO newSNMap
+                                      runReaderT m h 
+
+instance MonadTrans (SNMapReaderT a) where
+    lift = SNMapReaderT . lift
+
+memoizeM :: MonadIO m => SNMapReaderT a m a -> SNMapReaderT a m a
+memoizeM m = do h <- SNMapReaderT ask
+                memoize h m

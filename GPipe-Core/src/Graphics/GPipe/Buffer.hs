@@ -8,12 +8,16 @@ module Graphics.GPipe.Buffer
     Buffer(),
     ToBuffer(),
     B(..), B2(..), B3(..), B4(..),
+    toB3B1, toB2B2, toB1B3, toB2B1, toB1B2, toB1B1,
+    BUniform(..), BNormalized(..),
     BInput(..),
     newBuffer,
-    storeBuffer,
+    writeBuffer,
+    readBuffer,
+    copyBuffer,
     BFloat, BInt32, BInt16, BInt8, BWord32, BWord16, BWord8, 
-    BInt32Norm(), BInt16Norm(), BInt8Norm(), BWord32Norm(), BWord16Norm(), BWord8Norm(),
-    bufSize, bufName, bufElementSize, bufElementCount, bufBElement, makeBuffer
+    BInt32Norm, BInt16Norm, BInt8Norm, BWord32Norm, BWord16Norm, BWord8Norm,
+    bufSize, bufName, bufElementSize, bufElementCount, bufBElement, makeBuffer,
 ) where
 
 import Graphics.GPipe.Context
@@ -22,15 +26,15 @@ import Prelude hiding ((.), id)
 import Control.Monad.Trans.State 
 import Control.Category
 import Control.Arrow
-import Control.Monad (void, foldM_)
+import Control.Monad (void)
 import Foreign.Storable
-import Foreign.Marshal.Alloc (allocaBytes)
 import Foreign.Ptr
 import Control.Monad.IO.Class
 import Data.Word
 import Data.Int
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
+import System.Mem.Weak (addFinalizer)
 
 class BufferFormat f where
     type HostFormat f
@@ -56,19 +60,22 @@ data BInput = BInput {bInSkipElems :: Int, bInInstanceDiv :: Int}
 type ToBufferInput = (BufferName, Stride, BInput)
 
 data ToBuffer a b = ToBuffer
-    (Kleisli (StateT Offset (Reader ToBufferInput)) a b)
-    (Kleisli (StateT (Ptr ()) IO) a b)
+    (Kleisli (StateT Offset (Reader ToBufferInput)) a b) -- Normal = packed
+    (Kleisli (StateT (Ptr ()) (ReaderT (Ptr ()) IO)) a b) -- Normal = packed
+    (Kleisli (StateT Offset (Reader ToBufferInput)) a b) -- Aligned
+    (Kleisli (StateT (Ptr ()) (ReaderT (Ptr ()) IO)) a b) -- Aligned
 
 instance Category ToBuffer where
-    id = ToBuffer id id
-    ToBuffer a b . ToBuffer x y = ToBuffer (a.x) (b.y)
+    id = ToBuffer id id id id
+    ToBuffer a b c d . ToBuffer x y z w = ToBuffer (a.x) (b.y) (c.z) (d.w)
     
 instance Arrow ToBuffer where
-    arr f = ToBuffer (arr f) (arr f)
-    first (ToBuffer a b) = ToBuffer (first a) (first b)
+    arr f = ToBuffer (arr f) (arr f) (arr f) (arr f)
+    first (ToBuffer a b c d) = ToBuffer (first a) (first b) (first c) (first d)
     
 data B a = B { bName :: Int, bOffset :: Int, bStride :: Int, bSkipElems :: Int, bInstanceDiv :: Int}
 
+           
 type BFloat = B Float
 type BInt32 = B Int32
 type BInt16 = B Int16
@@ -76,22 +83,43 @@ type BInt8 = B Int8
 type BWord32 = B Word32
 type BWord16 = B Word16
 type BWord8 = B Word8
-newtype BInt32Norm = BInt32Norm BInt32
-newtype BInt16Norm = BInt16Norm BInt16
-newtype BInt8Norm = BInt8Norm BInt8
-newtype BWord32Norm = BWord32Norm BWord32
-newtype BWord16Norm = BWord16Norm BWord16
-newtype BWord8Norm = BWord8Norm BWord8
 
-newtype B2 a = B2 a
-newtype B3 a = B3 a
-newtype B4 a = B4 a
+type BInt32Norm = BNormalized BInt32
+type BInt16Norm = BNormalized BInt16
+type BInt8Norm = BNormalized BInt8
+type BWord32Norm = BNormalized BWord32
+type BWord16Norm = BNormalized BWord16
+type BWord8Norm = BNormalized BWord8
+
+newtype B2 a = B2 a -- Internal
+newtype B3 a = B3 a -- Internal
+newtype B4 a = B4 a -- Internal
+
+toB2B2 :: forall a. Storable a => B4 (B a) -> (B2 (B a), B2 (B a))
+toB3B1 :: forall a. Storable a => B4 (B a) -> (B3 (B a), B a)
+toB1B3 :: forall a. Storable a => B4 (B a) -> (B a, B3 (B a))
+toB2B1 :: forall a. Storable a => B3 (B a) -> (B2 (B a), B a)
+toB1B2 :: forall a. Storable a => B3 (B a) -> (B a, B2 (B a))
+toB1B1 :: forall a. Storable a => B2 (B a) -> (B a, B a)
+
+toB2B2 (B4 b) = (B2 b, B2 $ b { bOffset = bOffset b + 2 * sizeOf (undefined :: a) }) 
+toB3B1 (B4 b) = (B3 b, b { bOffset = bOffset b + 3 * sizeOf (undefined :: a) }) 
+toB1B3 (B4 b) = (b, B3 $ b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
+toB2B1 (B3 b) = (B2 b, b { bOffset = bOffset b + 2 * sizeOf (undefined :: a) }) 
+toB1B2 (B3 b) = (b, B2 $ b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
+toB1B1 (B2 b) = (b, b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
+
+newtype BUniform a = BUniform a
+newtype BNormalized a = BNormalized a
 
 instance Storable a => BufferFormat (B a) where
     type HostFormat (B a) = a
     toBuffer = ToBuffer 
                     (Kleisli $ const static)
                     (Kleisli writer)
+                    (Kleisli $ const static)
+                    (Kleisli writer)
+               . align size
                 where
                     size = sizeOf (undefined :: a)
                     static = do (name, stride, bIn) <- lift ask
@@ -102,40 +130,35 @@ instance Storable a => BufferFormat (B a) where
                                   put $ ptr `plusPtr` size
                                   liftIO $ poke (castPtr ptr) a
                                   return undefined
-                                   
-instance BufferFormat BInt32Norm where
-    type HostFormat BInt32Norm = Int32
-    toBuffer = arr BInt32Norm . toBuffer 
-instance BufferFormat BInt16Norm where
-    type HostFormat BInt16Norm = Int16
-    toBuffer = arr BInt16Norm . toBuffer 
-instance BufferFormat BInt8Norm where
-    type HostFormat BInt8Norm = Int8
-    toBuffer = arr BInt8Norm . toBuffer 
-instance BufferFormat BWord32Norm where
-    type HostFormat BWord32Norm = Word32
-    toBuffer = arr BWord32Norm . toBuffer 
-instance BufferFormat BWord16Norm where
-    type HostFormat BWord16Norm = Word16
-    toBuffer = arr BWord16Norm . toBuffer 
-instance BufferFormat BWord8Norm where
-    type HostFormat BWord8Norm = Word8
-    toBuffer = arr BWord8Norm . toBuffer 
 
-instance BufferFormat (B a) => BufferFormat (B2 (B a)) where
+instance BufferFormat a => BufferFormat (BUniform a) where
+    type HostFormat (BUniform a) = HostFormat a
+    toBuffer = arr BUniform . ToBuffer 
+                    elementBuilderA
+                    writerA
+                    elementBuilderA
+                    writerA
+        where
+            ToBuffer _ _ elementBuilderA writerA = align glUNIFORM_BUFFER_ALIGNMENT . (toBuffer :: ToBuffer (HostFormat a) a)
+    
+instance BufferFormat a => BufferFormat (BNormalized a) where
+    type HostFormat (BNormalized a) = HostFormat a
+    toBuffer = arr BNormalized . toBuffer
+                                   
+instance Storable a => BufferFormat (B2 (B a)) where
     type HostFormat (B2 (B a)) = (a, a)
     toBuffer = proc (a, b) -> do
-            (a', _::B a) <- toBuffer -< (a, b)
+            (a', _::B a) <- toBuffer . align (2 * sizeOf (undefined :: a)) -< (a, b)
             returnA -< B2 a'
-instance BufferFormat (B a) => BufferFormat (B3 (B a)) where
+instance Storable a => BufferFormat (B3 (B a)) where
     type HostFormat (B3 (B a)) = (a, a, a)
     toBuffer = proc (a, b, c) -> do
-            (a', _::B a, _::B a) <- toBuffer -< (a, b, c)
+            (a', _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c)
             returnA -< B3 a'
-instance BufferFormat (B a) => BufferFormat (B4 (B a)) where
+instance Storable a => BufferFormat (B4 (B a)) where
     type HostFormat (B4 (B a)) = (a, a, a, a)
     toBuffer = proc (a, b, c, d) -> do
-            (a', _::B a, _::B a, _::B a) <- toBuffer -< (a, b, c, d)
+            (a', _::B a, _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c, d)
             returnA -< B4 a'
     
 instance (BufferFormat a, BufferFormat b) => BufferFormat (a, b) where
@@ -155,43 +178,102 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
                 ((a', b', c'), d') <- toBuffer -< ((a, b, c), d)
                 returnA -< (a', b', c', d')
 
- 
-
 newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT os f m (Buffer os b)
 newBuffer elementCount =
     liftContextIO $ do name <- genBufferGl
                        let buffer = makeBuffer name elementCount  
                        setBufferStorageGl name (bufSize buffer)
-                       return buffer
+                       liftIO $ addFinalizer buffer $ glDeleteBuffer name
+                       return buffer 
 
+writeBuffer :: MonadIO m => [HostFormat f] -> Int -> Buffer os f -> ContextT os f m ()
+writeBuffer elems offset buffer = 
+    let maxElems = max 0 $ bufElementCount buffer - offset
+        elemSize = bufElementSize buffer
+        off = offset * elemSize
+        writeElem = bufWriter buffer 
+        write ptr 0 _ = return ptr
+        write ptr n (x:xs) = do writeElem ptr x
+                                write (ptr `plusPtr` elemSize) (n-1) xs
+        write ptr _ [] = return ptr
+    in liftContextIO $ do glBindBuffer glCOPY_WRITE_BUFFER (bufName buffer)
+                          ptr <- glMapBufferRange glCOPY_WRITE_BUFFER off (maxElems * elemSize) (glMAP_WRITE_BIT + glMAP_FLUSH_EXPLICIT_BIT)
+                          end <- write ptr maxElems elems
+                          glFlushMappedBufferRange glCOPY_WRITE_BUFFER off (end `minusPtr` ptr) 
+                          glUnmapBuffer glCOPY_WRITE_BUFFER 
+
+readBuffer :: MonadIO m => Int -> Int -> Buffer os f -> ContextT os f m [HostFormat f]
+readBuffer = undefined
+
+copyBuffer :: MonadIO m => Int -> Int -> Buffer os f -> Int -> Buffer os f -> ContextT os f m ()
+copyBuffer len from bFrom to bTo = liftIO $ do glBindBuffer glCOPY_READ_BUFFER (bufName bFrom)
+                                               glBindBuffer glCOPY_WRITE_BUFFER (bufName bTo)
+                                               let elemSize = bufElementSize bFrom -- same as for bTo
+                                               glCopyBufferSubData glCOPY_READ_BUFFER glCOPY_WRITE_BUFFER (from * elemSize) (to * elemSize) (len * elemSize)   
+
+
+--TODO: folds
+
+----------------------------------------------
+
+align :: Int -> ToBuffer a a
+align x = ToBuffer (Kleisli return) (Kleisli return) (Kleisli setElemAlignM) (Kleisli setWriterAlignM) where
+            setElemAlignM a = do offset <- get
+                                 put $ alignedTo x offset
+                                 return a   
+            setWriterAlignM a = do ptr <- get
+                                   basePtr <- lift ask
+                                   let base = ptrToWordPtr basePtr
+                                       p = ptrToWordPtr ptr
+                                   put $ wordPtrToPtr $ base + alignedTo (fromIntegral x) (p - base)
+                                   return a
+            alignedTo a b  = b + a - 1 - ((b - 1) `mod` a)
+            
 makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> Buffer os b
 makeBuffer name elementCount =
-    let ToBuffer a b = toBuffer :: ToBuffer (HostFormat b) b
+    let ToBuffer a b _ _ = toBuffer :: ToBuffer (HostFormat b) b
         elementM = runStateT (runKleisli a (undefined :: HostFormat b)) 0
         elementSize = snd $ runReader elementM (name, undefined, undefined)
         elementF bIn = fst $ runReader elementM (name, elementSize, bIn)
-        writer ptr x = void $ runStateT (runKleisli b x) ptr
+        writer ptr x = void $ runReaderT (runStateT (runKleisli b x) ptr) ptr
     in Buffer name elementSize elementCount elementF writer
 
-
-storeBuffer :: MonadIO m => [HostFormat f] -> Int -> Buffer os f -> ContextT os f m ()
-storeBuffer xs offset buffer = 
-    let len = min (length xs) (max 0 (bufElementCount buffer - offset) ) * bufElementSize buffer
-        off = offset * bufElementSize buffer
-        write ptr x = do bufWriter buffer ptr x
-                         return $! ptr `plusPtr` bufElementSize buffer
-    in liftContextIO $ allocaBytes len $ \ ptr-> do
-                            foldM_ write ptr xs
-                            glStoreBufferGl (bufName buffer) ptr off len
     
+glBindBuffer :: Int -> Int -> IO ()
+glBindBuffer = undefined                                
 
-                       
+glCOPY_READ_BUFFER :: Int
+glCOPY_READ_BUFFER = 0
+
+glCOPY_WRITE_BUFFER :: Int
+glCOPY_WRITE_BUFFER = 0 
+
+glCopyBufferSubData :: Int -> Int -> Int -> Int -> Int -> IO ()
+glCopyBufferSubData = undefined
+
 glStoreBufferGl :: Int -> Ptr () -> Int -> Int -> IO () 
 glStoreBufferGl = undefined
                        
 genBufferGl :: IO Int
-genBufferGl = undefined     
+genBufferGl = undefined
+
+glDeleteBuffer :: Int -> IO ()     
+glDeleteBuffer = undefined
 
 setBufferStorageGl :: Int -> Int -> IO ()
 setBufferStorageGl = undefined                  
+
+glUNIFORM_BUFFER_ALIGNMENT :: Int
+glUNIFORM_BUFFER_ALIGNMENT = 256
+
+glMapBufferRange :: Int -> Int -> Int -> Int -> IO (Ptr()) 
+glMapBufferRange = undefined                          
+glFlushMappedBufferRange :: Int -> Int -> Int -> IO ()
+glFlushMappedBufferRange = undefined
+glUnmapBuffer :: Int -> IO ()
+glUnmapBuffer = undefined
+glMAP_WRITE_BIT :: Int
+glMAP_WRITE_BIT = 0
+glMAP_FLUSH_EXPLICIT_BIT :: Int
+glMAP_FLUSH_EXPLICIT_BIT = 0                          
     

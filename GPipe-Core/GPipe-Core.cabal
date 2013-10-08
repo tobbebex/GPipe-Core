@@ -27,6 +27,7 @@ library
                    Data.SNMap,
                    Graphics.GPipe.IndexArray,
                    Graphics.GPipe.VertexArray,
-                   Graphics.GPipe.Stream
+                   Graphics.GPipe.Stream,
+                   Graphics.GPipe.FragmentStream
   other-modules:   
 

@@ -5,6 +5,9 @@ module Graphics.GPipe.Shader.Operations where
 import Graphics.GPipe.Shader
 import Data.Boolean
 
+--noFun :: String -> a
+--noFun = error . (++ ": No overloading for shader type S")
+
 bin :: SType -> String -> S c x -> S c y -> S c z 
 bin typ o (S a) (S b) = S $ do a' <- a
                                b' <- b
@@ -108,9 +111,8 @@ class (IfB (RealBool a) a, OrdB (RealBool a) a, Floating a) => Real' a where
   mod' x y = x - y* floor' (x/y)
 
 
-  
 
-noFun :: String -> a
-noFun = error . (++ ": No overloading for shader type S")
 
-    
+while :: IfB (S c Bool) a => (a -> S c Bool) -> (a -> a) -> a -> a
+while = undefined
+

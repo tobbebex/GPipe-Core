@@ -1,4 +1,4 @@
-{-# LANGUAGE EmptyDataDecls, NoMonomorphismRestriction, TypeFamilies, GeneralizedNewtypeDeriving, ScopedTypeVariables, FlexibleInstances #-}
+{-# LANGUAGE EmptyDataDecls, NoMonomorphismRestriction, TypeFamilies, GeneralizedNewtypeDeriving, ScopedTypeVariables, FlexibleInstances, RankNTypes, MultiParamTypeClasses, FlexibleContexts #-}
 
 module Graphics.GPipe.Shader where
 
@@ -12,11 +12,13 @@ import Control.Monad (void)
 import Control.Monad.Trans.Writer
 import Control.Monad.Trans.State
 import Control.Monad.Trans.Reader
+import Control.Monad.ST.Safe
 import Data.Monoid (mconcat, mappend)
 import qualified Control.Monad.Trans.Class as T (lift)
 import Data.SNMap
 import qualified Data.IntMap as Map
 import qualified Data.IntSet as Set
+import Data.STRef
 
 type NextTempVar = Int
 type NextGlobal = Int
@@ -131,13 +133,12 @@ tellAssignment :: SType -> RValue -> ShaderM String
 tellAssignment typ val = fmap head . memoizeM $ do
                                  var <- T.lift $ T.lift $ T.lift getNext
                                  let name = 't' : show var
-                                 tellAssignment' typ name val
+                                 T.lift $ T.lift $ tell (fromString $ stypeName typ ++ " ")
+                                 tellAssignment' name val
                                  return [name]
 
-tellAssignment' :: SType -> String -> RValue -> ShaderM ()
-tellAssignment' typ name string = T.lift $ T.lift $ tell $ mconcat [
-                                       fromString $ stypeName typ,
-                                       fromString " ",
+tellAssignment' :: String -> RValue -> ShaderM ()
+tellAssignment' name string = T.lift $ T.lift $ tell $ mconcat [
                                        fromString name,
                                        fromString " = ",
                                        fromString string,
@@ -156,65 +157,115 @@ tellGlobal = tell . fromString
 data CompiledShader = CompiledShader { cshaderName :: Int, cshaderUniBlockNameToIndex :: Map.IntMap Int } 
 
 
-
 -----------------------
 
-class Liftable a where
-    type Lifted a
-    lift :: Lift a (Lifted a)
-    unlift :: Unlift (Lifted a) a
+class ShaderBase a x where
+    shaderbaseDeclare :: x -> a -> WriterT [String] ShaderM a
+    shaderbaseAssign :: x -> a -> StateT [String] ShaderM ()
+    shaderbaseReturn :: x -> a -> ReaderT (ShaderM [String]) (State Int) a 
 
-data L a    
+instance ShaderBase (S c Int) c where
+    shaderbaseDeclare _ _ = do var <- T.lift $ T.lift $ T.lift $ T.lift getNext
+                               let root = 't' : show var
+                               T.lift $ T.lift $ T.lift $ tell $ mconcat [
+                                                           fromString $ stypeName STypeInt,
+                                                           fromString " ",
+                                                           fromString root]
+                               tell [root]
+                               return $ S $ return root
+    shaderbaseAssign _ (S shaderM) = do ul <- T.lift shaderM
+                                        x:xs <- get
+                                        put xs
+                                        T.lift $ tellAssignment' x ul
+                                        return ()
+    shaderbaseReturn _ _ = do i <- T.lift getNext
+                              m <- ask
+                              return $ S $ fmap (!!i) m
 
-type Rooter = WriterT [String] ShaderM
-type UnRooter = StateT [String] ShaderM 
-type Returner = ReaderT (ShaderM [String]) (State Int) 
-data Lift a b = Lift (Kleisli Rooter a b) (Kleisli UnRooter a b) (Kleisli Returner a b)
-newtype Unlift a b = Unlift (a -> b) deriving (Category, Arrow)
-instance Category Lift where
-    id = Lift id id id
-    Lift a b c . Lift x y z = Lift (a.x) (b.y) (c.z)   
-instance Arrow Lift where
-    arr f = Lift (arr f) (arr f) (arr f)
-    first (Lift a b c) = Lift (first a) (first b) (first c)
+instance ShaderBase () x where
+    shaderbaseDeclare _ = return
+    shaderbaseAssign _ _ = return ()
+    shaderbaseReturn _ = return   
     
- 
-instance Liftable (S c Int) where
-    type Lifted (S c Int) = S (L c) Int
-    lift = Lift (Kleisli rooter) (Kleisli unrooter) (Kleisli returner)
-            where rooter (S shaderM) = do ul <- T.lift shaderM
-                                          root <- T.lift $ tellAssignment STypeInt ul
-                                          tell [root]
-                                          return $ S $ return root
-                  unrooter (S shaderM) = do ul <- T.lift shaderM
-                                            x:xs <- get
-                                            put xs
-                                            T.lift $ tellAssignment' STypeInt x ul
-                                            return undefined
-                  returner _ = do i <- T.lift getNext
-                                  m <- ask
-                                  return $ S $ fmap (!!i) m
-    unlift = Unlift $ \(S shaderM) -> S shaderM
+class ShaderBase (ShaderBaseType a) x => ShaderType a x where
+    type ShaderBaseType a
+    toBase :: x -> a -> ShaderBaseType a
+    fromBase :: x -> ShaderBaseType a -> a
+    
+instance ShaderType (S c Int) c where
+    type ShaderBaseType (S c Int) = S c Int
+    toBase _ = id
+    fromBase _ = id
 
-if' :: forall a b x. (Liftable a, Liftable b) => a -> S x Bool -> (Lifted a -> Lifted b) -> (Lifted a -> Lifted b) -> b
-if' = undefined
+instance ShaderType () x where
+    type ShaderBaseType () = ()
+    toBase _ = id
+    fromBase _ = id
 
-while :: forall a x. (Liftable a) => (Lifted a -> S x Bool) -> (Lifted a -> Lifted a) -> a -> a
-while bool loopF a = let Lift (Kleisli rootM) (Kleisli unrootM) (Kleisli returner) = lift :: Lift a (Lifted a)
-                         Unlift unliftF = unlift :: Unlift (Lifted a) a
-                         whileM = memoizeM $ do
-                                   (lifted :: Lifted a, roots) <- runWriterT $ rootM a
-                                   boolStr <- unS $ bool lifted
-                                   boolRoot <- tellAssignment STypeBool boolStr
-                                   T.lift $ T.lift $ tell $ mconcat [
-                                                               fromString "while(",
-                                                               fromString boolRoot,
-                                                               fromString "){\n"
-                                                               ]
-                                   let looped = loopF lifted 
-                                   void $ evalStateT (unrootM $ unliftF looped) roots 
-                                   loopedBoolStr <- unS $ bool looped
-                                   tellAssignment' STypeBool boolRoot loopedBoolStr
-                                   T.lift $ T.lift $ tell $ fromString "}\n"
-                                   return roots
-                     in unliftF $ evalState (runReaderT (returner (undefined :: a)) whileM) 0
+ifThenElse' :: forall a x. (ShaderType a x) => S x Bool -> a -> a -> a
+ifThenElse' b t e = ifThenElse b (const t) (const e) ()
+
+ifThenElse :: forall a b x. (ShaderType a x, ShaderType b x) => S x Bool -> (a -> b) -> (a -> b) -> a -> b
+ifThenElse c t e i = fromBase x $ ifThenElse_ c (toBase x . t . fromBase x) (toBase x . e . fromBase x) (toBase x i)
+    where
+        x = undefined :: x
+        ifThenElse_ :: S x Bool -> (ShaderBaseType a -> ShaderBaseType b) -> (ShaderBaseType a -> ShaderBaseType b) -> ShaderBaseType a -> ShaderBaseType b
+        ifThenElse_ bool thn els a = 
+            let ifM = memoizeM $ do
+                           boolStr <- unS bool
+                           (lifted, aDecls) <- runWriterT $ shaderbaseDeclare x undefined
+                           void $ evalStateT (shaderbaseAssign x a) aDecls
+                           decls <- execWriterT $ shaderbaseDeclare x (undefined :: ShaderBaseType b)
+                           tellIf boolStr                
+                           void $ evalStateT (shaderbaseAssign x $ thn lifted) decls                                    
+                           T.lift $ T.lift $ tell $ fromString "} else {\n"                   
+                           void $ evalStateT (shaderbaseAssign x $ els lifted) decls
+                           T.lift $ T.lift $ tell $ fromString "}\n"                                                 
+                           return decls
+            in evalState (runReaderT (shaderbaseReturn x undefined) ifM) 0
+
+ifThen :: forall a x. (ShaderType a x) => S x Bool -> (a -> a) -> a -> a
+ifThen c t i = fromBase x $ ifThen_ c (toBase x . t . fromBase x) (toBase x i)
+    where
+        x = undefined :: x
+        ifThen_ :: S x Bool -> (ShaderBaseType a -> ShaderBaseType a) -> ShaderBaseType a -> ShaderBaseType a
+        ifThen_ bool thn a = 
+            let ifM = memoizeM $ do
+                           boolStr <- unS bool
+                           (lifted, decls) <- runWriterT $ shaderbaseDeclare x undefined
+                           void $ evalStateT (shaderbaseAssign x a) decls
+                           tellIf boolStr
+                           void $ evalStateT (shaderbaseAssign x $ thn lifted) decls                                    
+                           T.lift $ T.lift $ tell $ fromString "}\n"
+                           return decls
+            in evalState (runReaderT (shaderbaseReturn x undefined) ifM) 0
+    
+
+tellIf :: RValue -> ShaderM ()
+tellIf boolStr = T.lift $ T.lift $ tell $ mconcat [
+                                               fromString "if(",
+                                               fromString boolStr,
+                                               fromString "){\n"
+                                               ]
+while :: forall a x. (ShaderType a x) => (a -> S x Bool) -> (a -> a) -> a -> a
+while c f i = fromBase x $ while_ (c . fromBase x) (toBase x . f . fromBase x) (toBase x i)            
+    where
+        x = undefined :: x
+        while_ :: (ShaderBaseType a -> S x Bool) -> (ShaderBaseType a -> ShaderBaseType a) -> ShaderBaseType a -> ShaderBaseType a                                 
+        while_ bool loopF a = let whileM = memoizeM $ do
+                                           (lifted, decls) <- runWriterT $ shaderbaseDeclare x a
+                                           void $ evalStateT (shaderbaseAssign x a) decls
+                                           boolStr <- unS $ bool a
+                                           boolDecl <- tellAssignment STypeBool boolStr
+                                           T.lift $ T.lift $ tell $ mconcat [
+                                                                       fromString "while(",
+                                                                       fromString boolDecl,
+                                                                       fromString "){\n"
+                                                                       ]
+                                           let looped = loopF lifted                                
+                                           void $ evalStateT (shaderbaseAssign x looped) decls 
+                                           loopedBoolStr <- unS $ bool looped
+                                           tellAssignment' boolDecl loopedBoolStr
+                                           T.lift $ T.lift $ tell $ fromString "}\n"
+                                           return decls
+                             in evalState (runReaderT (shaderbaseReturn x undefined) whileM) 0

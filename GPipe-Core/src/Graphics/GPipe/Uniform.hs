@@ -17,7 +17,7 @@ class BufferFormat (UniformBufferFormat a) => Uniform a where
     type UniformBufferFormat a
     toUniform :: ToUniform (UniformBufferFormat a) a 
 
-usingUniform :: forall fr os f x a b. Uniform b => Stream fr x a -> (Buffer os (BUniform (UniformBufferFormat b)), Int) -> Frame fr os f (Stream fr x (a, b))
+usingUniform :: forall fr os f x a b. Uniform b => Stream fr x a -> (Buffer os (BUniform (UniformBufferFormat b)), Int) -> Stream fr x (a, b)
 usingUniform (Stream s) = 
         let sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform (UniformBufferFormat b) b
@@ -35,7 +35,7 @@ usingUniform (Stream s) =
                                                    
                 g (a, blockId, decl, PrimitiveStreamData x uBinds) = (a, blockId, PrimitiveStreamData x ((decl, uIO blockId):uBinds))
                 -- TODO: More StreamData types
-            in return $ Stream $ map g s'
+            in Stream $ map g s'
 
 buildUDecl = buildUDecl' 0 . Map.assocs 
     where buildUDecl' p ((off, stype):xs) | off == p = do tellGlobal $ stypeName stype

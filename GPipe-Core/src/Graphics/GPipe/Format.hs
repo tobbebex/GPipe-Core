@@ -32,7 +32,7 @@ data RGBAUIntFormat = RGBA8UI | RGBA16UI | RGBA32UI
 
 instance ColorFormat RFloatFormat where
     type Color RFloatFormat = R
-    type ColorElement RFloatFormat = Float 
+    type ColorElement RFloatFormat = Float
 instance ColorFormat RIntFormat where
     type Color RIntFormat = R
     type ColorElement RIntFormat = Int32 

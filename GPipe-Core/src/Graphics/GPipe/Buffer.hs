@@ -1,6 +1,5 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE Arrows, TypeFamilies, GeneralizedNewtypeDeriving,
-  ScopedTypeVariables, FlexibleContexts, TypeSynonymInstances #-}
+{-# LANGUAGE Arrows, TypeFamilies, ScopedTypeVariables,
+  FlexibleContexts, FlexibleInstances , TypeSynonymInstances #-}
 
 module Graphics.GPipe.Buffer 
 (

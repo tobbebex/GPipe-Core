@@ -29,5 +29,5 @@ library
                    Graphics.GPipe.VertexArray,
                    Graphics.GPipe.Stream,
                    Graphics.GPipe.FragmentStream
-  other-modules:   
+  other-modules:   Graphics.GPipe.GeometryStream
 

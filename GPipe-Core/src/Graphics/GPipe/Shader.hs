@@ -18,18 +18,18 @@ import qualified Control.Monad.Trans.Class as T (lift)
 import Data.SNMap
 import qualified Data.IntMap as Map
 import qualified Data.IntSet as Set
-import Data.STRef
 
 type NextTempVar = Int
 type NextGlobal = Int
 
-data SType = STypeFloat | STypeInt | STypeBool | STypeUInt
+data SType = STypeFloat | STypeInt | STypeBool | STypeUInt | STypeDyn String
 
 stypeName :: SType -> String
 stypeName STypeFloat = "float"
 stypeName STypeInt = "int"
 stypeName STypeBool = "bool"
 stypeName STypeUInt = "uint"
+stypeName (STypeDyn s) = s
 
 stypeSize :: SType -> Int
 stypeSize _ = 4
@@ -39,7 +39,7 @@ stypeAlign _ = 4
 
 type ShaderM = SNMapReaderT [String] (StateT ShaderState (WriterT Builder (StateT NextTempVar IO))) -- IO for stable names
 type InputNameToIndex = Map.IntMap Int
-data ShaderState = ShaderState { shaderInputNameToIndex :: InputNameToIndex, shaderUsedUniformBlocks :: Set.IntSet }
+data ShaderState = ShaderState { shaderInputNameToIndex :: InputNameToIndex, shaderUsedUniformBlocks :: Set.IntSet, shaderUsedSamplers :: Set.IntSet }
 
 type ShaderGlobDeclM = Writer Builder
 
@@ -88,6 +88,8 @@ type FBool = S F Bool
 --    put $ s + 1 
 --    return s
 
+-- TODO: Add func to generate shader decl header
+
 
 gDeclInput :: SType -> Int -> ShaderGlobDeclM ()
 gDeclInput stype i =
@@ -117,6 +119,11 @@ useUniform :: Int -> Int -> ShaderM String
 useUniform blockI offset = 
              do T.lift $ modify $ \ s -> s { shaderUsedUniformBlocks = Set.insert blockI $ shaderUsedUniformBlocks s } 
                 return $ 'u':show blockI ++ '.':'u': show offset -- "u8.u4"
+
+useSampler :: Int -> ShaderM String
+useSampler name = 
+             do T.lift $ modify $ \ s -> s { shaderUsedSamplers = Set.insert name $ shaderUsedUniformBlocks s } 
+                return $ 's':show name
 
 getNext :: Monad m => StateT Int m Int
 getNext = do
@@ -154,7 +161,7 @@ tellGlobal :: String -> ShaderGlobDeclM ()
 tellGlobal = tell . fromString
 
 
-data CompiledShader = CompiledShader { cshaderName :: Int, cshaderUniBlockNameToIndex :: Map.IntMap Int } 
+data CompiledShader = CompiledShader { cshaderName :: Int, cshaderUniBlockNameToIndex :: Map.IntMap Int, cshaderSamplerNameToIndex :: Map.IntMap Int } 
 
 
 -----------------------

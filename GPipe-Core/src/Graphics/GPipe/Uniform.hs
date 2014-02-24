@@ -23,18 +23,17 @@ usingUniform (Stream s) =
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform (UniformBufferFormat b) b
             fromBUnifom (BUniform b) = b
             shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
-            f (a, blockId, x) = 
+            f (a, blockId, sampId, x) = 
                 let (u, offToStype) = shaderGen blockId
                     decl = buildUDecl offToStype
-                in  ((a,u), blockId+1, decl, x)
+                in  ((a,u), blockId+1, sampId, gDeclUniformBlock blockId decl, x)
             s' = map f s
         in \(ub, i) ->         
             let uIO blockId cs = do binding <- getNext 
-                                    lift $ do glBindBufferRange glUNIFORM_ARRAY binding (bufName ub) (i * bufElementSize ub) (bufElementSize ub)                                   
+                                    lift $ do glBindBufferRange glUNIFORM_ARRAY binding (bufName ub) (i * bufElementSize ub) (bufElementSize ub) 
                                               glUniformBlockBinding (cshaderName cs) (cshaderUniBlockNameToIndex cs Map.! blockId) binding
-                                                   
-                g (a, blockId, decl, PrimitiveStreamData x uBinds) = (a, blockId, PrimitiveStreamData x ((decl, uIO blockId):uBinds))
-                -- TODO: More StreamData types
+                g (a, blockId, sampId, decl, PrimitiveStreamData x uBinds sBinds) = (a, blockId, sampId, PrimitiveStreamData x ((decl, uIO blockId):uBinds) sBinds)
+                -- TODO: More StreamData types, eg FragmentStreams
             in Stream $ map g s'
 
 buildUDecl = buildUDecl' 0 . Map.assocs 
@@ -66,5 +65,3 @@ instance Uniform VFloat where
                                                  tell $ Map.singleton offset STypeFloat
                                                  blockId <- lift ask
                                                  return $ S $ useUniform blockId offset  
-
-

@@ -13,6 +13,9 @@ data RGBA a = RGBA a a a a
 class ColorFormat a where
     type Color a :: * -> *
     type ColorElement a :: *
+    typePrefix :: a -> Char
+    toColor :: a -> (x,x,x,x) -> Color a x
+    fromColor :: a -> Color a x -> x -> (x,x,x,x)
 
 data RFloatFormat = R8 | R8S | R16 | R16S | R16F | R32F
 data RIntFormat = R8I | R16I | R32I
@@ -33,46 +36,88 @@ data RGBAUIntFormat = RGBA8UI | RGBA16UI | RGBA32UI
 instance ColorFormat RFloatFormat where
     type Color RFloatFormat = R
     type ColorElement RFloatFormat = Float
+    typePrefix _ = ' '    
+    toColor _ (r,g,b,a) = R r
+    fromColor _ (R r) x = (r,x,x,x)
 instance ColorFormat RIntFormat where
     type Color RIntFormat = R
     type ColorElement RIntFormat = Int32 
+    typePrefix _ = 'i'    
+    toColor _ (r,g,b,a) = R r
+    fromColor _ (R r) x = (r,x,x,x)
 instance ColorFormat RUIntFormat where
     type Color RUIntFormat = R
     type ColorElement RUIntFormat = Word32
+    typePrefix _ = 'u'    
+    toColor _ (r,g,b,a) = R r
+    fromColor _ (R r) x = (r,x,x,x)
 instance ColorFormat RGFloatFormat where
     type Color RGFloatFormat = RG
     type ColorElement RGFloatFormat = Float 
+    typePrefix _ = ' '    
+    toColor _ (r,g,b,a) = RG r g
+    fromColor _ (RG r g) x = (r,x,x,x)
 instance ColorFormat RGIntFormat where
     type Color RGIntFormat = RG
     type ColorElement RGIntFormat = Int32 
+    typePrefix _ = 'i'    
+    toColor _ (r,g,b,a) = RG r g
+    fromColor _ (RG r g) x = (r,x,x,x)
 instance ColorFormat RGUIntFormat where
     type Color RGUIntFormat = RG
     type ColorElement RGUIntFormat = Word32
+    typePrefix _ = 'u'    
+    toColor _ (r,g,b,a) = RG r g
+    fromColor _ (RG r g) x = (r,x,x,x)
 instance ColorFormat RGBFloatFormat where
     type Color RGBFloatFormat = RGB    
     type ColorElement RGBFloatFormat = Float 
+    typePrefix _ = ' '    
+    toColor _ (r,g,b,a) = RGB r g b
+    fromColor _ (RGB r g b) x = (r,x,x,x)
 instance ColorFormat RGBIntFormat where
     type Color RGBIntFormat = RGB
     type ColorElement RGBIntFormat = Int32 
+    typePrefix _ = 'i'    
+    toColor _ (r,g,b,a) = RGB r g b
+    fromColor _ (RGB r g b) x = (r,x,x,x)
 instance ColorFormat RGBUIntFormat where
     type Color RGBUIntFormat = RGB
     type ColorElement RGBUIntFormat = Word32
+    typePrefix _ = 'u'    
+    toColor _ (r,g,b,a) = RGB r g b
+    fromColor _ (RGB r g b) x = (r,x,x,x)
 instance ColorFormat RGBAFloatFormat where
-    type Color RGBAFloatFormat = RGB    
+    type Color RGBAFloatFormat = RGBA    
     type ColorElement RGBAFloatFormat = Float 
+    typePrefix _ = ' '    
+    toColor _ (r,g,b,a) = RGBA r g b a
+    fromColor _ (RGBA r g b a) x = (r,x,x,x)
 instance ColorFormat RGBAIntFormat where
     type Color RGBAIntFormat = RGBA
     type ColorElement RGBAIntFormat = Int32 
+    typePrefix _ = 'i'    
+    toColor _ (r,g,b,a) = RGBA r g b a
+    fromColor _ (RGBA r g b a) x = (r,x,x,x)
 instance ColorFormat RGBAUIntFormat where
     type Color RGBAUIntFormat = RGBA
     type ColorElement RGBAUIntFormat = Word32
+    typePrefix _ = 'u'    
+    toColor _ (r,g,b,a) = RGBA r g b a
+    fromColor _ (RGBA r g b a) x = (r,x,x,x)
 
 instance ColorFormat DepthFormat where
     type Color DepthFormat = R    
     type ColorElement DepthFormat = Float 
+    typePrefix _ = ' '    
+    toColor _ (r,g,b,a) = R r
+    fromColor _ (R r) x = (r,x,x,x)
 instance ColorFormat DepthStencilFormat where
     type Color DepthStencilFormat = R    
     type ColorElement DepthStencilFormat = Float 
+    typePrefix _ = ' '    
+    toColor _ (r,g,b,a) = R r
+    fromColor _ (R r) x = (r,x,x,x)
 
 class (RenderBufferFormat c, ColorFormat c) => ColorRenderable c
 instance ColorRenderable RFloatFormat
@@ -88,6 +133,7 @@ instance ColorRenderable RGBAFloatFormat
 instance ColorRenderable RGBAIntFormat 
 instance ColorRenderable RGBAUIntFormat 
 
+-- Do we need this?
 class RenderBufferFormat f where
 instance RenderBufferFormat RFloatFormat
 instance RenderBufferFormat RIntFormat 

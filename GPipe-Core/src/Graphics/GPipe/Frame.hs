@@ -6,6 +6,7 @@ module Graphics.GPipe.Frame (
 
 import Graphics.GPipe.Format
 
+import Graphics.GPipe.Texture
 import Graphics.GPipe.Stream
 import Graphics.GPipe.Shader
 import Graphics.GPipe.Context
@@ -15,9 +16,6 @@ import Control.Monad.Trans.State
 
 data FrameState = FrameState
 
-class Texture os t where
-    type TextureFormat t 
-data Texture2D os b = Texture
 
 newtype Frame fr os f a = Frame (State FrameState a) deriving (Functor, Applicative, Monad)
 
@@ -27,51 +25,37 @@ runFrame = undefined
 type FragColor c = Color c (S F (ColorElement c))
 type FragDepth = FFloat
 
-data DepthStencil os cd where
-    Depth :: DepthRenderable d => RenderTarget os d -> DepthStencil os DepthFormat   
-    Stencil :: StencilRenderable s => RenderTarget os s -> DepthStencil os StencilFormat
-    DepthStencil :: (DepthRenderable d , StencilRenderable s) => RenderTarget os d -> RenderTarget os s -> DepthStencil os DepthStencilFormat   
-    NoDepthStencil :: DepthStencil os ()
 
-drawContextColor :: ColorRenderable c => ColorOption c -> Stream Fragment fr (FragColor c) -> Frame fr os (ContextFormat c ds) ()
+
+drawContextColor :: ColorRenderable c => ColorOption c -> Stream Fragments fr (FragColor c) -> Frame fr os (ContextFormat c ds) ()
 drawContextColor = undefined 
-drawContextColorDepth :: (ColorRenderable c, DepthRenderable ds) => ColorOption c -> DepthOption -> Stream Fragment fr (FragColor c, FragDepth) -> Frame fr os (ContextFormat c ds) ()
+drawContextColorDepth :: (ColorRenderable c, DepthRenderable ds) => ColorOption c -> DepthOption -> Stream Fragments fr (FragColor c, FragDepth) -> Frame fr os (ContextFormat c ds) ()
 drawContextColorDepth = undefined 
-drawContextColorStencil :: (ColorRenderable c, StencilRenderable ds) => ColorOption c -> StencilOption -> Stream Fragment fr (FragColor c) -> Frame fr os (ContextFormat c ds) ()
+drawContextColorStencil :: (ColorRenderable c, StencilRenderable ds) => ColorOption c -> StencilOption -> Stream Fragments fr (FragColor c) -> Frame fr os (ContextFormat c ds) ()
 drawContextColorStencil = undefined
-drawContextColorDepthStencil :: (ColorRenderable c, DepthRenderable ds, StencilRenderable ds) => ColorOption c -> DepthStencilOption -> Stream Fragment fr (FragColor c, FragDepth) -> Frame fr os (ContextFormat c ds) ()
+drawContextColorDepthStencil :: (ColorRenderable c, DepthRenderable ds, StencilRenderable ds) => ColorOption c -> DepthStencilOption -> Stream Fragments fr (FragColor c, FragDepth) -> Frame fr os (ContextFormat c ds) ()
 drawContextColorDepthStencil = undefined
-drawContextDepth :: DepthRenderable ds => DepthOption -> Stream Fragment fr FragDepth -> Frame fr os (ContextFormat c ds) ()
+drawContextDepth :: DepthRenderable ds => DepthOption -> Stream Fragments fr FragDepth -> Frame fr os (ContextFormat c ds) ()
 drawContextDepth = undefined 
-drawContextStencil :: StencilRenderable ds => StencilOption -> Stream Fragment fr () -> Frame fr os (ContextFormat c ds) ()
+drawContextStencil :: StencilRenderable ds => StencilOption -> Stream Fragments fr () -> Frame fr os (ContextFormat c ds) ()
 drawContextStencil = undefined
-drawContextDepthStencil :: (DepthRenderable ds, StencilRenderable ds) => DepthStencilOption -> Stream Fragment fr FragDepth -> Frame fr os (ContextFormat c ds) ()
+drawContextDepthStencil :: (DepthRenderable ds, StencilRenderable ds) => DepthStencilOption -> Stream Fragments fr FragDepth -> Frame fr os (ContextFormat c ds) ()
 drawContextDepthStencil = undefined
 
-drawColors :: [forall c. ColorRenderable c => (a -> (Color c FFloat), RenderTarget os c, ColorOption c)] -> Stream Fragment fr a -> Frame fr os f ()
+drawColors :: [forall c. ColorRenderable c => (a -> (Color c FFloat), RenderTarget os c, ColorOption c)] -> Stream Fragments fr a -> Frame fr os f ()
 drawColors xs = undefined
-drawColorsDepth  :: DepthRenderable ds => [forall c. ColorRenderable c => (a -> (Color c FFloat), RenderTarget os c, ColorOption c)] -> DepthStencil os ds -> DepthOption -> Stream Fragment fr (a, FragDepth) -> Frame fr os f ()
+drawColorsDepth  :: DepthRenderable ds => [forall c. ColorRenderable c => (a -> (Color c FFloat), RenderTarget os c, ColorOption c)] -> DepthStencil os ds -> DepthOption -> Stream Fragments fr (a, FragDepth) -> Frame fr os f ()
 drawColorsDepth xs = undefined
-drawColorsStencil  :: StencilRenderable ds => [forall c. ColorRenderable c => (a -> (Color c FFloat), RenderTarget os c, ColorOption c)] -> DepthStencil os ds -> StencilOption -> Stream Fragment fr a -> Frame fr os f ()
+drawColorsStencil  :: StencilRenderable ds => [forall c. ColorRenderable c => (a -> (Color c FFloat), RenderTarget os c, ColorOption c)] -> DepthStencil os ds -> StencilOption -> Stream Fragments fr a -> Frame fr os f ()
 drawColorsStencil xs = undefined
-drawColorsDepthStencil  :: (DepthRenderable ds, StencilRenderable ds) => [forall c. ColorRenderable c => (a -> (Color c FFloat), RenderTarget os c, ColorOption c)] -> DepthStencil os ds -> DepthOption -> StencilOption -> Stream Fragment fr (a, FragDepth) -> Frame fr os f ()
+drawColorsDepthStencil  :: (DepthRenderable ds, StencilRenderable ds) => [forall c. ColorRenderable c => (a -> (Color c FFloat), RenderTarget os c, ColorOption c)] -> DepthStencil os ds -> DepthOption -> StencilOption -> Stream Fragments fr (a, FragDepth) -> Frame fr os f ()
 drawColorsDepthStencil xs = undefined
-drawDepth  :: DepthRenderable ds => DepthStencil os ds -> DepthOption -> Stream Fragment fr FragDepth -> Frame fr os f ()
+drawDepth  :: DepthRenderable ds => DepthStencil os ds -> DepthOption -> Stream Fragments fr FragDepth -> Frame fr os f ()
 drawDepth = undefined
-drawStencil  :: StencilRenderable ds => DepthStencil os ds -> StencilOption -> Stream Fragment fr () -> Frame fr os f ()
+drawStencil  :: StencilRenderable ds => DepthStencil os ds -> StencilOption -> Stream Fragments fr () -> Frame fr os f ()
 drawStencil = undefined
-drawDepthStencil  :: (DepthRenderable ds, StencilRenderable ds) => DepthStencil os ds -> DepthOption -> StencilOption -> Stream Fragment fr FragDepth -> Frame fr os f ()
+drawDepthStencil  :: (DepthRenderable ds, StencilRenderable ds) => DepthStencil os ds -> DepthOption -> StencilOption -> Stream Fragments fr FragDepth -> Frame fr os f ()
 drawDepthStencil = undefined
-
-
-data RenderTarget os f where
-    RenderBuffer :: RenderBuffer os f -> RenderTarget os f 
-    RenderTexture :: Texture os t => t-> RenderTarget os (TextureFormat f) 
-
-data RenderBuffer os f = RB
-
-newRenderBuffer :: RenderBufferFormat f => f -> ContextT os f2 m (RenderBuffer os f)   
-newRenderBuffer = undefined 
 
 -- --.......................--
 
@@ -95,12 +79,8 @@ data Blending f = NoBlending -- ^ The painted fragment completely overwrites the
               | Blend (FrontBack BlendEquation)
                       (FrontBack (BlendingFactor, BlendingFactor))
                       (Color f Float) -- ^ Use blending equations to combine the fragment with the previous value.
-                                               -- The first 'BlendEquation' and 'BlendingFactor's is used for front faced triangles and other primitives,
-                                               -- and the second for back faced triangles.
               | BlendLogicOp LogicOp -- ^ Use a 'LogicOp' to combine the fragment with the previous value.
 
--- | Sets the tests that should be performed on the stencil value, first for front facing triangles and other primitives, then for back facing triangles.
-data StencilTests = StencilTests StencilTest StencilTest 
 -- | Sets a test that should be performed on the stencil value.
 data StencilTest = StencilTest {
                        stencilComparision :: ComparisonFunction, -- ^ The function used to compare the @stencilReference@ and the stencil buffers value with.

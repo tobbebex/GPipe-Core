@@ -22,7 +22,7 @@ module Graphics.GPipe.Buffer
 import Graphics.GPipe.Context
 
 import Prelude hiding ((.), id)
-import Control.Monad.Trans.State 
+import Control.Monad.Trans.State
 import Control.Category
 import Control.Arrow
 import Control.Monad (void)
@@ -129,6 +129,7 @@ instance Storable a => BufferFormat (B a) where
                                   put $ ptr `plusPtr` size
                                   liftIO $ poke (castPtr ptr) a
                                   return undefined
+                                 
 
 instance BufferFormat a => BufferFormat (BUniform a) where
     type HostFormat (BUniform a) = HostFormat a
@@ -185,7 +186,7 @@ newBuffer elementCount =
                        liftIO $ addFinalizer buffer $ glDeleteBuffer name
                        return buffer 
 
-writeBuffer :: MonadIO m => [HostFormat f] -> Int -> Buffer os f -> ContextT os f m ()
+writeBuffer :: MonadIO m => [HostFormat f] -> Int -> Buffer os f -> ContextT os f2 m ()
 writeBuffer elems offset buffer = 
     let maxElems = max 0 $ bufElementCount buffer - offset
         elemSize = bufElementSize buffer
@@ -201,17 +202,17 @@ writeBuffer elems offset buffer =
                           glFlushMappedBufferRange glCOPY_WRITE_BUFFER off (end `minusPtr` ptr) 
                           glUnmapBuffer glCOPY_WRITE_BUFFER 
 
-readBuffer :: MonadIO m => Int -> Int -> Buffer os f -> ContextT os f m [HostFormat f]
-readBuffer = undefined
+readBufferM :: MonadIO m => Int -> Int -> Buffer os f -> (HostFormat f -> a -> m a) -> a ->  ContextT os f2 m a
+readBufferM = undefined
 
-copyBuffer :: MonadIO m => Int -> Int -> Buffer os f -> Int -> Buffer os f -> ContextT os f m ()
+readBuffer :: MonadIO m => Int -> Int -> Buffer os f -> (HostFormat f -> a -> a) -> a -> ContextT os f2 m a
+readBuffer x y z f = readBufferM x y z (\ a b -> return $ f a b)
+
+copyBuffer :: MonadIO m => Int -> Int -> Buffer os f -> Int -> Buffer os f -> ContextT os f2 m ()
 copyBuffer len from bFrom to bTo = liftIO $ do glBindBuffer glCOPY_READ_BUFFER (bufName bFrom)
                                                glBindBuffer glCOPY_WRITE_BUFFER (bufName bTo)
                                                let elemSize = bufElementSize bFrom -- same as for bTo
                                                glCopyBufferSubData glCOPY_READ_BUFFER glCOPY_WRITE_BUFFER (from * elemSize) (to * elemSize) (len * elemSize)   
-
-
---TODO: folds
 
 ----------------------------------------------
 

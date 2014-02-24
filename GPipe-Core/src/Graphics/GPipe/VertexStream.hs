@@ -74,7 +74,7 @@ toPrimitiveStream =
     in \p ba -> let declIos = execWriter $ ioF $ bArrBFunc ba $ BInput 0 0       
                     drawcall = glDrawArrays (toGLtopology p) 0 (VertexArray.length ba)
                     drawioF = makeDrawDeclIO drawcall . applyMapValueToKeyedList declIos
-                in Stream [(a, 0, PrimitiveStreamData drawioF [])]
+                in Stream [(a, 0, 0, PrimitiveStreamData drawioF [] [])]
 
 toIndexedPrimitiveStream :: forall fr i a p. (IndexFormat i, VertexInput a, PrimitiveTopology p) 
     => p
@@ -90,7 +90,7 @@ toIndexedPrimitiveStream =
                                   glBindBuffer (iArrName iba) glELEMENT_ARRAY
                                   glDrawElements (toGLtopology p) (IndexArray.length iba) (indexType iba) (offset iba)
                     drawioF = makeDrawDeclIO drawcall . applyMapValueToKeyedList declIos
-                in Stream [(a, 0, PrimitiveStreamData drawioF [])]
+                in Stream [(a, 0, 0, PrimitiveStreamData drawioF [] [])]
 
 toInstancedPrimitiveStream :: forall fr a b c p. (VertexInput c, PrimitiveTopology p) 
     => p
@@ -106,7 +106,7 @@ toInstancedPrimitiveStream =
                     declIos = execWriter $ ioF $ f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1)
                     drawcall = glDrawArraysInstanced (toGLtopology p) 0 (VertexArray.length va) (VertexArray.length ina)
                     drawioF = makeDrawDeclIO drawcall . applyMapValueToKeyedList declIos
-                in Stream [(c, 0, PrimitiveStreamData drawioF [])]
+                in Stream [(c, 0, 0, PrimitiveStreamData drawioF [] [])]
     
 toInstancedIndexedPrimitiveStream :: forall fr i a b c p .(IndexFormat i, VertexInput c, PrimitiveTopology p) 
     => p
@@ -125,7 +125,7 @@ toInstancedIndexedPrimitiveStream =
                                   glBindBuffer (iArrName ia) glELEMENT_ARRAY
                                   glDrawElementsInstanced (toGLtopology p) (IndexArray.length ia) (indexType ia) (offset ia) (VertexArray.length ina)
                     drawioF = makeDrawDeclIO drawcall . applyMapValueToKeyedList declIos
-                in Stream [(c, 0, PrimitiveStreamData drawioF [])]
+                in Stream [(c, 0, 0, PrimitiveStreamData drawioF [] [])]
 
 
 glDrawArrays :: Int -> Int -> Int -> IO ()

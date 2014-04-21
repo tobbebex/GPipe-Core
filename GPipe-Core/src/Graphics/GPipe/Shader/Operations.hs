@@ -30,11 +30,11 @@ fun3 typ f (S a) (S b) (S c) = S $ do a' <- a
 
 postop :: SType -> String -> S c x -> S c y
 postop typ f (S a) = S $ do a' <- a
-                            tellAssignment typ $ '(' : f ++ a' ++ ")"
+                            tellAssignment typ $ '(' : a' ++ f ++ ")"
                           
 preop :: SType -> String -> S c x -> S c y
 preop typ f (S a) = S $ do a' <- a
-                           tellAssignment typ $ '(' : a' ++ f ++ ")"
+                           tellAssignment typ $ '(' : f ++ a' ++ ")"
 
 binf :: String -> S c x -> S c y -> S c Float
 binf = bin STypeFloat
@@ -80,11 +80,35 @@ instance Floating (S a Float) where
   atanh = fun1f "atanh"
   acosh = fun1f "acosh"
 
+instance Boolean (S a Bool) where
+  true = S $ return "true"
+  false = S $ return "false"
+  notB  = preop STypeBool "!"
+  (&&*) = bin STypeBool "&&"
+  (||*) = bin STypeBool "||"
+
+type instance BooleanOf (S a x) = S a Bool
+
+instance Eq x => EqB (S a x) where
+  (==*) = bin STypeBool "=="
+  (/=*) = bin STypeBool "!="
+
+instance Ord x => OrdB (S a x) where
+  (<*) = bin STypeBool "<"
+  (<=*) = bin STypeBool "<="
+  (>=*) = bin STypeBool ">="
+  (>*) = bin STypeBool ">"
+
+instance IfB (S a x) where
+        ifB (S c) (S t) (S e) = S $ do c' <- c
+                                       t' <- t
+                                       e' <- e
+                                       tellAssignment STypeBool $ '(' : c' ++ '?' : t' ++ ':' : e' ++")"
+                                       
 -- | This class provides the GPU functions either not found in Prelude's numerical classes, or that has wrong types.
 --   Instances are also provided for normal 'Float's and 'Double's.
 --   Minimal complete definition: 'floor'' and 'ceiling''.
-class (IfB (RealBool a) a, OrdB (RealBool a) a, Floating a) => Real' a where
-  type RealBool a
+class (IfB a, OrdB a, Floating a) => Real' a where
   rsqrt :: a -> a
   exp2 :: a -> a
   log2 :: a -> a
@@ -110,9 +134,4 @@ class (IfB (RealBool a) a, OrdB (RealBool a) a, Floating a) => Real' a where
   fract' x = x - floor' x
   mod' x y = x - y* floor' (x/y)
 
-
-
-
-while :: IfB (S c Bool) a => (a -> S c Bool) -> (a -> a) -> a -> a
-while = undefined
 

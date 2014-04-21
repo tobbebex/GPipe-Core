@@ -83,7 +83,7 @@ instance Floating (S a Float) where
 -- | This class provides the GPU functions either not found in Prelude's numerical classes, or that has wrong types.
 --   Instances are also provided for normal 'Float's and 'Double's.
 --   Minimal complete definition: 'floor'' and 'ceiling''.
-class (IfB (RealBool a) a, OrdB (RealBool a) a, Floating a) => Real' a where
+class (IfB (RealBool a), IfB a, OrdB (RealBool a), OrdB a, Floating a) => Real' a where
   type RealBool a
   rsqrt :: a -> a
   exp2 :: a -> a
@@ -112,7 +112,5 @@ class (IfB (RealBool a) a, OrdB (RealBool a) a, Floating a) => Real' a where
 
 
 
-
-while :: IfB (S c Bool) a => (a -> S c Bool) -> (a -> a) -> a -> a
+while :: (IfB (S c Bool), IfB a) => (a -> S c Bool) -> (a -> a) -> a -> a
 while = undefined
-

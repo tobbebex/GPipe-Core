@@ -225,16 +225,31 @@ instance BufferColorFormat (RGBA a) where
 type BufferPixel f a = BufferColor (Color f a)
 
 usingTexture :: Texture t => Stream fr x a -> (t, Filter, EdgeMode) -> Stream fr x (a, Sampler t fr)
-usingTexture (Stream s) =
+usingTexture =
         let f (a, blockId, sampId, x) = ((a, Sampler sampId), blockId, sampId+1, undefined {- TODO -}, x)
-            s' = map f s
-        in \ (t, f, e)  ->         
+        in \ (Stream s) (_t, _f, _e)  ->         
             let sIO sampId cs = do binding <- getNext
                                    return ()
                                     -- bind texture t to texunit binding and give uniform with name sampId value binding
                                     -- and set f and e to it 
                 g (a, blockId, sampId, decl, PrimitiveStreamData x uBinds sBinds) = (a, blockId, sampId, PrimitiveStreamData x uBinds ((decl, sIO sampId):sBinds))
                 -- TODO: More StreamData types, eg FragmentStreams
-            in Stream $ map g s'
+            in Stream $ map (g . f) s
 
 newtype Sampler t fr = Sampler { samplerName :: Int }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

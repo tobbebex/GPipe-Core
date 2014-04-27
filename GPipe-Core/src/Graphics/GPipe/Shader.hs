@@ -1,18 +1,17 @@
-{-# LANGUAGE EmptyDataDecls, NoMonomorphismRestriction, TypeFamilies, GeneralizedNewtypeDeriving, ScopedTypeVariables, FlexibleInstances, RankNTypes, MultiParamTypeClasses, FlexibleContexts #-}
+{-# LANGUAGE EmptyDataDecls, NoMonomorphismRestriction, TypeFamilies, GeneralizedNewtypeDeriving, ScopedTypeVariables, FlexibleInstances, RankNTypes, MultiParamTypeClasses, FlexibleContexts, OverloadedStrings #-}
 
 module Graphics.GPipe.Shader where
 
 import Prelude hiding ((.), id)
 import Data.Int
 import Data.Word
+import Data.Text.Lazy (Text)
 import Data.Text.Lazy.Builder
-import Control.Arrow
 import Control.Category
 import Control.Monad (void)
 import Control.Monad.Trans.Writer
 import Control.Monad.Trans.State
 import Control.Monad.Trans.Reader
-import Control.Monad.ST.Safe
 import Data.Monoid (mconcat, mappend)
 import qualified Control.Monad.Trans.Class as T (lift)
 import Data.SNMap
@@ -37,9 +36,23 @@ stypeSize _ = 4
 stypeAlign :: SType -> Int
 stypeAlign _ = 4
 
+type ShaderSource = Text
+
 type ShaderM = SNMapReaderT [String] (StateT ShaderState (WriterT Builder (StateT NextTempVar IO))) -- IO for stable names
-type InputNameToIndex = Map.IntMap Int
-data ShaderState = ShaderState { shaderInputNameToIndex :: InputNameToIndex, shaderUsedUniformBlocks :: Set.IntSet, shaderUsedSamplers :: Set.IntSet }
+type InputNameToIndex = Map.IntMap Int -- Tells us what index a specific input has. Eg input name in2 will have index = lookup 2 myMap
+data ShaderState = ShaderState { shaderInputNameToIndex :: InputNameToIndex, shaderUsedVaryings :: Set.IntSet, -- <- These two should really be mutually exclusive! (first for vs, second for fs) 
+                shaderUsedUniformBlocks :: Set.IntSet, shaderUsedSamplers :: Set.IntSet }
+                
+runShaderM :: ShaderM () -> IO (ShaderState, Builder)
+runShaderM m = evalStateT (runWriterT (execStateT (runSNMapReaderT (m :: ShaderM ())) (ShaderState Map.empty Set.empty Set.empty Set.empty))) 0
+
+makeShader :: ShaderGlobDeclM () -> Builder -> Text 
+makeShader m b = toLazyText $ mconcat [
+                        execWriter m,
+                        "main() {",
+                        b,
+                        "}"]
+                         
 
 type ShaderGlobDeclM = Writer Builder
 

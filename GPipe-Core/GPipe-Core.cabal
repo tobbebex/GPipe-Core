@@ -12,22 +12,22 @@ library
                    exception-transformers,
                    containers,
                    text >= 0.11.2,
-                   Boolean
+                   Boolean == 0.2.1
   ghc-options:     -Wall
   exposed-modules: 
-                   Graphics.GPipe.Context,
-                   Graphics.GPipe.Frame,
+                   Data.SNMap,
                    Graphics.GPipe.Buffer,
+                   Graphics.GPipe.Context,
                    Graphics.GPipe.Format,
-                   Graphics.GPipe.VertexStream,
+                   Graphics.GPipe.FragmentStream,
+                   Graphics.GPipe.Frame,
+                   Graphics.GPipe.GeometryStream,
+                   Graphics.GPipe.IndexArray,
                    Graphics.GPipe.Shader,
                    Graphics.GPipe.Shader.Operations,
+                   Graphics.GPipe.Stream,
                    Graphics.GPipe.Texture,
                    Graphics.GPipe.Uniform,
-                   Data.SNMap,
-                   Graphics.GPipe.IndexArray,
                    Graphics.GPipe.VertexArray,
-                   Graphics.GPipe.Stream,
-                   Graphics.GPipe.FragmentStream
-  other-modules:   Graphics.GPipe.GeometryStream
+                   Graphics.GPipe.VertexStream
 

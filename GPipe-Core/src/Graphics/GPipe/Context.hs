@@ -9,6 +9,7 @@ module Graphics.GPipe.Context
     runContextT,
     runSharedContextT,
     liftContextIO,
+    liftContextIOAsync,
     swap,
     frameBufferSize
 )
@@ -25,8 +26,9 @@ type ContextFactory c ds = ContextFormat c ds -> IO ContextHandle
 
 data ContextHandle = ContextHandle {
     newSharedContext :: forall c ds. ContextFormat c ds -> IO ContextHandle,
-    contextDo :: forall a. IO a -> IO a,
-    contextSwap :: IO (),
+    contextDoSync :: forall a. IO a -> IO a,
+    contextDoAsync :: IO () -> IO (),
+    contextSwap :: IO (),   
     contextFrameBufferSize :: IO (Int, Int),
     contextDelete :: IO ()
 } 
@@ -51,14 +53,18 @@ runSharedContextT f (ContextT m) =
         (runReaderT m)
 
 liftContextIO :: MonadIO m => IO a -> ContextT os f m a
-liftContextIO m = ContextT ask >>= liftIO . flip contextDo m
+liftContextIO m = ContextT ask >>= liftIO . flip contextDoSync m
+
+liftContextIOAsync :: MonadIO m => IO () -> ContextT os f m ()
+liftContextIOAsync m = ContextT ask >>= liftIO . flip contextDoAsync m
 
 swap :: MonadIO m => ContextT os f m ()
 swap = ContextT ask >>= liftIO . contextSwap
 
 frameBufferSize :: (MonadIO m) => ContextT os f m (Int, Int)
 frameBufferSize = ContextT ask >>= liftIO . contextFrameBufferSize
-     
+
+-- TODO Add async rules     
 {-# RULES
 "liftContextIO >>= liftContextIO >>= x"    forall m1 m2 x.  liftContextIO m1 >>= (\_ -> liftContextIO m2 >>= x) = liftContextIO (m1 >> m2) >>= x
 "liftContextIO >>= liftContextIO"          forall m1 m2.    liftContextIO m1 >>= (\_ -> liftContextIO m2) = liftContextIO (m1 >> m2)

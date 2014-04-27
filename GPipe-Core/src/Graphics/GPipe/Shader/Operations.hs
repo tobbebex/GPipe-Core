@@ -28,6 +28,13 @@ fun3 typ f (S a) (S b) (S c) = S $ do a' <- a
                                       c' <- c
                                       tellAssignment typ $ f ++ '(' : a' ++ ',' : b' ++ ',' : c' ++")"
 
+fun4 :: SType -> String -> S c x -> S c y -> S c z -> S c w -> S c r
+fun4 typ f (S a) (S b) (S c) (S d) = S $ do a' <- a
+                                            b' <- b
+                                            c' <- c
+                                            d' <- d
+                                            tellAssignment typ $ f ++ '(' : a' ++ ',' : b' ++ ',' : c' ++ ',' : d' ++")"
+
 postop :: SType -> String -> S c x -> S c y
 postop typ f (S a) = S $ do a' <- a
                             tellAssignment typ $ '(' : a' ++ f ++ ")"

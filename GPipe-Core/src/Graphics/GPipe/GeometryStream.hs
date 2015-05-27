@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, ScopedTypeVariables #-}
 
 module Graphics.GPipe.GeometryStream where
+{-
 
 import Prelude hiding (length, id, (.))
 import Graphics.GPipe.Buffer
@@ -27,6 +28,6 @@ nullVertexList = undefined
 consVertex :: PrimitiveTopology p => a -> VertexList p a -> VertexList p a
 consVertex = undefined 
 
-
 toGeometryStream :: PrimitiveTopology p => Stream fr p a -> Stream fr Geometries (Geometry p a)
 toGeometryStream = undefined
+-}

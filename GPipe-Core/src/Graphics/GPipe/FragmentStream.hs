@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances #-}
 module Graphics.GPipe.FragmentStream where
 
+{-
 import Graphics.GPipe.Shader
 import Graphics.GPipe.Stream
 import Graphics.GPipe.GeometryStream
@@ -10,6 +11,7 @@ import qualified Control.Monad.Trans.Class as T (lift)
 import qualified Data.IntSet as Set
 import Data.SNMap (runSNMapReaderT)
 import Data.Text.Lazy.Builder
+import Data.StableFunctor (unStableFunctor, makeStableFunctor)
 
 class FragmentInput a where
     type FragmentFormat a
@@ -42,6 +44,13 @@ type VertexPosition = (VFloat, VFloat, VFloat, VFloat)
 data Side = Front | Back | FrontAndBack
 
 
+vposShader (x,y,z,w) = do x' <- unS x
+                          y' <- unS y
+                          z' <- unS z
+                          w' <- unS w
+                          tellAssignment' "gl_Position" ("vec4(" ++ x' ++ ',' : y' ++ ',' : z' ++ ',' : w' ++")")
+
+
 --TODO: Fix rasterize: (runToFragment on undefined input first for the sake of output, then on real input to get state result)
 rasterize:: forall p a fr. (PrimitiveTopology p, FragmentInput a)
           => Stream fr p (VertexPosition, a) 
@@ -49,16 +58,13 @@ rasterize:: forall p a fr. (PrimitiveTopology p, FragmentInput a)
           -> Stream fr Fragments (FBool {-- TODO make struct of all sorts of stuff --}, FragmentFormat a)
 rasterize = let ToFragment (Kleisli m) = toFragment :: ToFragment a (FragmentFormat a)
                 b = evalState (m (undefined :: a)) []
-            in \(Stream s) side -> 
-                let f (((x,y,z,w), a), u, sa, PrimitiveStreamData inpF uBinds sBinds) = 
-                        let vposShader = do x' <- unS x
-                                            y' <- unS y
-                                            z' <- unS z
-                                            w' <- unS w
-                                            tellAssignment' "gl_Position" ("vec4(" ++ x' ++ ',' : y' ++ ',' : z' ++ ',' : w' ++")")
+            in \(Stream sa sd) side -> 
+                let f (k, u, sa, PrimitiveStreamData inpF uBinds sBinds) =                       
+                        --TODO get a stable name for k and store it in FragmentStreamData for later 
+                        let (vpos, a) = unStableFunctor k
                             g v = let (vShDecl, fShs) = unzip $ selectReversedIndexed v $ execState (m a) []
                                       (vShs, vDecls) = unzip vShDecl
-                                      q = do (st, main) <- runShaderM $ sequence_ vShs >> vposShader
+                                      q = do (st, main) <- runShaderM $ sequence_ vShs >> vposShader vpos
                                              let (inpGlobM, inpIo) = inpF $ shaderInputNameToIndex st
                                                  (vsUDecls, vsUioFs) = unzip $ selectReversedIndexed (shaderUsedUniformBlocks st) uBinds
                                                  (vsSDecls, vsSioFs) = unzip $ selectReversedIndexed (shaderUsedSamplers st) sBinds
@@ -69,45 +75,9 @@ rasterize = let ToFragment (Kleisli m) = toFragment :: ToFragment a (FragmentFor
                                                             runAll vsSioFs cs
                                              return (makeShader vDecl main, io)
                                   in (sequence_ fShs, q) 
-                        in ((undefined, b), u, sa, FragmentStreamData g [] [])
-                in Stream $ map f s
+                        in (makeStableFunctor (undefined, b), u, sa, FragmentStreamData g [] [])
+                in Stream undefined undefined --map f (zip sa sd)
                 
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 -- TODO
 rasterizeGeometries :: (PrimitiveTopology p, FragmentInput a)
@@ -115,3 +85,39 @@ rasterizeGeometries :: (PrimitiveTopology p, FragmentInput a)
           -> Stream fr Geometries (VertexList p (VertexPosition, a))
           -> Stream fr Fragments (FBool, FragmentFormat a)
 rasterizeGeometries = undefined
+        
+-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

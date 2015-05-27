@@ -5,16 +5,17 @@ build-type:     Simple
 author:         Tobias Bexelius
 
 library
-  hs-source-dirs:  src
-  build-depends:   
+  hs-source-dirs:   src
+  build-depends:    
                    base >= 4,
                    transformers,
                    exception-transformers,
                    containers,
                    text >= 0.11.2,
-                   Boolean == 0.2.1
-  ghc-options:     -Wall
-  exposed-modules: 
+                   Boolean >= 0.2.3 && <0.3,
+                   hashtables >= 1.2.0.2 && < 1.3
+  ghc-options:      -Wall
+  exposed-modules:  
                    Data.SNMap,
                    Graphics.GPipe.Buffer,
                    Graphics.GPipe.Context,
@@ -29,5 +30,36 @@ library
                    Graphics.GPipe.Texture,
                    Graphics.GPipe.Uniform,
                    Graphics.GPipe.VertexArray,
-                   Graphics.GPipe.VertexStream
+                   Graphics.GPipe.VertexStream,
+                   Data.StableFunctor
+
+executable GPipe-Core-Test
+  build-depends:   
+                   base >= 4,
+                   transformers,
+                   exception-transformers,
+                   containers,
+                   text >= 0.11.2,
+                   Boolean >= 0.2.3 && <0.3,
+                   hashtables >= 1.2.0.2 && < 1.3
+  hs-source-dirs:  src
+  ghc-options:     -Wall -rtsopts -O2
+  main-is:         Main.hs
+  other-modules:   
+                   Data.SNMap,
+                   Graphics.GPipe.Buffer,
+                   Graphics.GPipe.Context,
+                   Graphics.GPipe.Format,
+                   Graphics.GPipe.FragmentStream,
+                   Graphics.GPipe.Frame,
+                   Graphics.GPipe.GeometryStream,
+                   Graphics.GPipe.IndexArray,
+                   Graphics.GPipe.Shader,
+                   Graphics.GPipe.Shader.Operations,
+                   Graphics.GPipe.Stream,
+                   Graphics.GPipe.Texture,
+                   Graphics.GPipe.Uniform,
+                   Graphics.GPipe.VertexArray,
+                   Graphics.GPipe.VertexStream,
+                   Data.StableFunctor
 

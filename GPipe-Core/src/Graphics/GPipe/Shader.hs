@@ -1,4 +1,6 @@
-{-# LANGUAGE EmptyDataDecls, NoMonomorphismRestriction, TypeFamilies, GeneralizedNewtypeDeriving, ScopedTypeVariables, FlexibleInstances, RankNTypes, MultiParamTypeClasses, FlexibleContexts, OverloadedStrings #-}
+{-# LANGUAGE EmptyDataDecls, NoMonomorphismRestriction,
+  TypeFamilies, ScopedTypeVariables, FlexibleInstances, RankNTypes,
+  MultiParamTypeClasses, FlexibleContexts, OverloadedStrings #-}
 
 module Graphics.GPipe.Shader where
 

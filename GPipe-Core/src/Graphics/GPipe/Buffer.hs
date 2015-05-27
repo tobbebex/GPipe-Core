@@ -240,7 +240,7 @@ makeBuffer name elementCount =
 
     
 glBindBuffer :: Int -> Int -> IO ()
-glBindBuffer = undefined                                
+glBindBuffer _ _ = return ()                                
 
 glCOPY_READ_BUFFER :: Int
 glCOPY_READ_BUFFER = 0
@@ -249,29 +249,30 @@ glCOPY_WRITE_BUFFER :: Int
 glCOPY_WRITE_BUFFER = 0 
 
 glCopyBufferSubData :: Int -> Int -> Int -> Int -> Int -> IO ()
-glCopyBufferSubData = undefined
+glCopyBufferSubData _ _ _ _ _ = return ()
 
 glStoreBufferGl :: Int -> Ptr () -> Int -> Int -> IO () 
-glStoreBufferGl = undefined
+glStoreBufferGl _ _ _ _ = return ()
                        
 genBufferGl :: IO Int
-genBufferGl = undefined
+genBufferGl = do putStrLn "genBuffer"
+                 return 0
 
 glDeleteBuffer :: Int -> IO ()     
-glDeleteBuffer = undefined
+glDeleteBuffer _ = return ()
 
 setBufferStorageGl :: Int -> Int -> IO ()
-setBufferStorageGl = undefined                  
+setBufferStorageGl _ _ = return ()                  
 
 glUNIFORM_BUFFER_ALIGNMENT :: Int
 glUNIFORM_BUFFER_ALIGNMENT = 256
 
 glMapBufferRange :: Int -> Int -> Int -> Int -> IO (Ptr()) 
-glMapBufferRange = undefined                          
+glMapBufferRange _ _ _ _ = return nullPtr                        
 glFlushMappedBufferRange :: Int -> Int -> Int -> IO ()
-glFlushMappedBufferRange = undefined
+glFlushMappedBufferRange _ _ _ = return ()
 glUnmapBuffer :: Int -> IO ()
-glUnmapBuffer = undefined
+glUnmapBuffer _ = return ()
 glMAP_WRITE_BIT :: Int
 glMAP_WRITE_BIT = 0
 glMAP_FLUSH_EXPLICIT_BIT :: Int

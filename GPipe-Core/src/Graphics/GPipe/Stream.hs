@@ -1,6 +1,8 @@
 {-# LANGUAGE TypeFamilies, EmptyDataDecls #-}
 module Graphics.GPipe.Stream where
+{--
 
+import Data.StableFunctor
 import Graphics.GPipe.Shader
 import Control.Monad.Trans.State
 import qualified Data.IntSet as IntSet
@@ -14,6 +16,8 @@ data EdgeMode = Wrap | Mirror | Clamp
               
               
 type SamplerSpec = (Int, Filter, EdgeMode)
+
+
 type UniformStreamBufferBindings = [(ShaderGlobDeclM (), CompiledShader -> StateT Int IO ())] -- Going backwards, ie index 0 is last
 type SamplerStreamBindings = UniformStreamBufferBindings -- Going backwards, ie index 0 is last
 
@@ -25,36 +29,22 @@ selectReversedIndexed s xs = select (IntSet.toAscList s) (reverse xs) 0
             select [] _ p                            = []
             select _ [] p                            = error "selectReversedIndexed: Tried selecting elements outside list"                                    
 
-
 type NextUniformBlock = Int 
 type NextSampler = Int 
 type UsedVaryingIndices = IntSet.IntSet  
 data PrimitiveStreamData = PrimitiveStreamData (InputNameToIndex -> (ShaderGlobDeclM (), IO())) UniformStreamBufferBindings SamplerStreamBindings |
                            FragmentStreamData (UsedVaryingIndices -> (ShaderGlobDeclM (), IO (ShaderSource, CompiledShader -> IO ()))) UniformStreamBufferBindings SamplerStreamBindings 
-data Stream fr t a = Stream [(a, NextUniformBlock, NextSampler, PrimitiveStreamData)] 
-                      -- This ^ has to be invariant to input to frame, or shader will recompile each frame! See uniforms or texture samplers
+--data Stream t a = Stream [(StableFunctor a, NextUniformBlock, NextSampler)] [PrimitiveStreamData] 
 
-class PrimitiveTopology p where
-    data Geometry p :: * -> *
-    toGLtopology :: p -> Int
-    makeGeometry :: [a] -> Geometry p a  
-   
-data Triangles = TriangleStrip | TriangleList
-data TrianglesWithAdjacency = TriangleStripWithAdjacency
-data Lines = LineStrip | LineList
-data LinesWithAdjacency = LinesWithAdjacencyList | LinesWithAdjacencyStrip   
-data Points = PointList
+{--
+data Stream t a = Stream [(a, PrimitiveStreamData)]
 
-instance PrimitiveTopology Triangles where
-    data Geometry Triangles a = Triangle a a a
-instance PrimitiveTopology TrianglesWithAdjacency where
-    data Geometry TrianglesWithAdjacency a = TriangleWithAdjacency a a a a a a
-instance PrimitiveTopology Lines where
-    data Geometry Lines a = Line a a
-instance PrimitiveTopology LinesWithAdjacency where
-    data Geometry LinesWithAdjacency a = LineWithAdjacency a a a a
-instance PrimitiveTopology Points where
-    data Geometry Points a = Point a
+instance Functor (Stream t) where
+        fmap f (Stream xs) = Stream (map (\(a, x)-> (f a, x)) xs)
+--}
+
 
 data Geometries
 data Fragments
+
+--}

@@ -1,12 +1,13 @@
-{-# LANGUAGE TypeFamilies, FlexibleContexts, FlexibleInstances, GADTs, MultiParamTypeClasses, ScopedTypeVariables #-}
-
+{-# LANGUAGE TypeFamilies, FlexibleContexts, FlexibleInstances, GADTs, MultiParamTypeClasses, ScopedTypeVariables, AllowAmbiguousTypes #-}
 module Graphics.GPipe.Texture where
+{--
 
 import Graphics.GPipe.Format
 import Graphics.GPipe.Shader
 import Graphics.GPipe.Shader.Operations
 import Graphics.GPipe.Context
 import Graphics.GPipe.Stream
+import Graphics.GPipe.Frame
 import Graphics.GPipe.Buffer
 import Control.Monad.IO.Class
 import Data.Word
@@ -224,22 +225,34 @@ instance BufferColorFormat (RGBA a) where
 
 type BufferPixel f a = BufferColor (Color f a)
 
-usingTexture :: Texture t => Stream fr x a -> (t, Filter, EdgeMode) -> Stream fr x (a, Sampler t fr)
-usingTexture =
-        let f (a, blockId, sampId, x) = ((a, Sampler sampId), blockId, sampId+1, undefined {- TODO -}, x)
-        in \ (Stream s) (_t, _f, _e)  ->         
+{-# INLINE useTexture #-}
+useTexture :: Texture t => Frame os f (t, Filter, EdgeMode) (Sampler t fr)
+useTexture = dynInStatOut stateM dynF
+    where
+        stateM = do n <- getName
+                    return (n, Sampler n)
+        dynF n (_t, _f, _e) = liftIO do 
+                                    -- load texture _t, filter _f, edgemode _e into name n
+                                    return ()
+
+{--                 
+        let fa (a, blockId, sampId) = (fmap ((,) (Sampler sampId)) a, blockId, sampId+1)
+            mfa = map fa
+            fd (a, blockId, sampId, x) = undefined --(fmap ((,) (Sampler sampId)) a, blockId, sampId+1, undefined {- TODO -}, x)
+        in \ (Stream sa sd) (_t, _f, _e)  ->         
             let sIO sampId cs = do binding <- getNext
                                    return ()
                                     -- bind texture t to texunit binding and give uniform with name sampId value binding
                                     -- and set f and e to it 
                 g (a, blockId, sampId, decl, PrimitiveStreamData x uBinds sBinds) = (a, blockId, sampId, PrimitiveStreamData x uBinds ((decl, sIO sampId):sBinds))
                 -- TODO: More StreamData types, eg FragmentStreams
-            in Stream $ map (g . f) s
+            in Stream (mfa sa) undefined -- (map (g . f) sd)
+--}
 
 newtype Sampler t fr = Sampler { samplerName :: Int }
 
 
-
+--}
 
 
 

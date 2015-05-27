@@ -13,28 +13,34 @@ import Control.Monad.Trans.Class (lift)
 import Control.Category hiding ((.))
 import qualified Data.IntMap as Map
 
+
 class BufferFormat (UniformBufferFormat a) => Uniform a where
     type UniformBufferFormat a
     toUniform :: ToUniform (UniformBufferFormat a) a 
 
-usingUniform :: forall fr os f x a b. Uniform b => Stream fr x a -> (Buffer os (BUniform (UniformBufferFormat b)), Int) -> Stream fr x (a, b)
-usingUniform = 
-        let sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))
+data Proxy a = Proxy
+ 
+{-# NOINLINE usingUniform #-}
+usingUniform :: forall os f b. Uniform b => Frame os f (Buffer os (BUniform (UniformBufferFormat b)), Proxy b, Int) b
+usingUniform = IntFrame $ dynInStatOut $ do 
+                   blockId <- getName
+                   let (u, offToStype) = shaderGen blockId
+                       decl :: ShaderGlobDeclM () 
+                       decl = gDeclUniformBlock blockId $ buildUDecl offToStype 
+                   return (u, 
+                           tellShaderGlobDecl blockId decl,
+                           \(ub, _, i) -> do doForName blockId $ \ p i -> do
+                                             binding <- getNextUniformBinding
+                                             glBindBufferRange glUNIFORM_ARRAY binding (bufName ub) (i * bufElementSize ub) (bufElementSize ub) 
+                                             glUniformBlockBinding p i binding)
+    where
+            sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform (UniformBufferFormat b) b
             fromBUnifom (BUniform b) = b
+            shaderGen :: Int -> (b, OffsetToSType) -- Int is name of uniform block
             shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
-            f (a, blockId, sampId, x) = 
-                let (u, offToStype) = shaderGen blockId
-                    decl = buildUDecl offToStype
-                in  ((a,u), blockId+1, sampId, gDeclUniformBlock blockId decl, x)
-        in \(Stream s) (ub, i) ->         
-            let uIO blockId cs = do binding <- getNext 
-                                    lift $ do glBindBufferRange glUNIFORM_ARRAY binding (bufName ub) (i * bufElementSize ub) (bufElementSize ub) 
-                                              glUniformBlockBinding (cshaderName cs) (cshaderUniBlockNameToIndex cs Map.! blockId) binding
-                g (a, blockId, sampId, decl, PrimitiveStreamData x uBinds sBinds) = (a, blockId, sampId, PrimitiveStreamData x ((decl, uIO blockId):uBinds) sBinds)
-                -- TODO: More StreamData types, eg FragmentStreams
-            in Stream $ map (g . f) s
 
+buildUDecl :: OffsetToSType -> ShaderGlobDeclM ()
 buildUDecl = buildUDecl' 0 . Map.assocs 
     where buildUDecl' p ((off, stype):xs) | off == p = do tellGlobal $ stypeName stype
                                                           tellGlobal " u"

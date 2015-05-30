@@ -1,11 +1,50 @@
-{-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances, GeneralizedNewtypeDeriving #-}
 module Graphics.GPipe.FragmentStream where
 
-{-
+import Control.Category hiding ((.))
+import Control.Arrow 
 import Graphics.GPipe.Shader
+import Graphics.GPipe.VertexStream
+import Control.Monad.Trans.State.Lazy
+
+type VPos = (VFloat,VFloat,VFloat,VFloat)
+type ShaderPos = ShaderM ()
+data FragmentStreamData = FragmentStreamData Side ShaderPos VertexStreamData
+data FragmentStream a = FragmentStream [(a, FragmentStreamData)]
+
+
+newtype ToFragment a b = ToFragment (Kleisli (State Int) a b) deriving (Category, Arrow)
+
+class FragmentInput a where
+    type FragmentFormat a
+    toFragment :: ToFragment a (FragmentFormat a)  
+    
+instance FragmentInput VFloat where
+        type FragmentFormat VFloat = FFloat
+        toFragment = ToFragment $ Kleisli $ \ (S s) -> do n <- get
+                                                          put (n+1)
+                                                          return $ S $ useFInput "vf" STypeFloat n s 
+               
+data Side = Front | Back | FrontAndBack
+
+rasterize:: forall p a. (PrimitiveTopology p, FragmentInput a)
+          => Side 
+          -> VertexStream p (VPos, a)
+          -> FragmentStream (FragmentFormat a) -- FBool {-- TODO make struct of all sorts of stuff --}, 
+rasterize side (VertexStream xs) = 
+    let ToFragment (Kleisli m) = toFragment :: ToFragment a (FragmentFormat a)
+        f ((p, x),s) = (evalState (m x) 0, FragmentStreamData side (makePos p) s)
+        makePos (S x,S y,S z,S w) = do x' <- x
+                                       y' <- y
+                                       z' <- z
+                                       w' <- w
+                                       tellAssignment' "gl_Position" $ "vec4("++x'++',':y'++',':z'++',':w'++")"
+    in FragmentStream $ map f xs
+
+ 
+{-
 import Graphics.GPipe.Stream
 import Graphics.GPipe.GeometryStream
-import Control.Arrow 
 import Control.Monad.Trans.State
 import qualified Control.Monad.Trans.Class as T (lift)
 import qualified Data.IntSet as Set
@@ -38,10 +77,7 @@ instance FragmentInput VInt32 where
                                                        put $ ((assign, decl1), decl2):s
                                                        return $ S $ do T.lift $ modify $ \ st -> st {shaderUsedVaryings = Set.insert i $ shaderUsedVaryings st}                
                                                                        return vName 
-               
-type VertexPosition = (VFloat, VFloat, VFloat, VFloat) 
 
-data Side = Front | Back | FrontAndBack
 
 
 vposShader (x,y,z,w) = do x' <- unS x

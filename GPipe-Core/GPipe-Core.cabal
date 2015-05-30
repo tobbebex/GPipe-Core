@@ -31,7 +31,8 @@ library
                    Graphics.GPipe.Uniform,
                    Graphics.GPipe.VertexArray,
                    Graphics.GPipe.VertexStream,
-                   Data.StableFunctor
+                   Graphics.GPipe.FrameBuffer
+  other-modules:    Graphics.GPipe.ContextState
 
 executable GPipe-Core-Test
   build-depends:   
@@ -61,5 +62,6 @@ executable GPipe-Core-Test
                    Graphics.GPipe.Uniform,
                    Graphics.GPipe.VertexArray,
                    Graphics.GPipe.VertexStream,
-                   Data.StableFunctor
+                   Graphics.GPipe.ContextState,
+                   Graphics.GPipe.FrameBuffer
 

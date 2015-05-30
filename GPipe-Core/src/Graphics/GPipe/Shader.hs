@@ -41,12 +41,14 @@ stypeAlign _ = 4
 type ShaderSource = Text
 
 type ShaderM = SNMapReaderT [String] (StateT ShaderState (WriterT Builder (StateT NextTempVar IO))) -- IO for stable names
-type InputNameToIndex = Map.IntMap Int -- Tells us what index a specific input has. Eg input name in2 will have index = lookup 2 myMap
-data ShaderState = ShaderState { shaderInputNameToIndex :: InputNameToIndex, shaderUsedVaryings :: Set.IntSet, -- <- These two should really be mutually exclusive! (first for vs, second for fs) 
-                shaderUsedUniformBlocks :: Set.IntSet, shaderUsedSamplers :: Set.IntSet }
+data ShaderState = ShaderState { 
+                shaderUsedUniformBlocks :: Map.IntMap (ShaderGlobDeclM ()), 
+                shaderUsedSamplers :: Map.IntMap (ShaderGlobDeclM ()),
+                shaderUsedInput :: Map.IntMap (ShaderGlobDeclM (), (ShaderM (), ShaderGlobDeclM ())) -- For vertex shaders, the shaderM is always undefined and the int is the parameter name, for later shader stages it uses some name local to the transition instead    
+                 }
                 
 runShaderM :: ShaderM () -> IO (ShaderState, Builder)
-runShaderM m = evalStateT (runWriterT (execStateT (runSNMapReaderT (m :: ShaderM ())) (ShaderState Map.empty Set.empty Set.empty Set.empty))) 0
+runShaderM m = evalStateT (runWriterT (execStateT (runSNMapReaderT (m :: ShaderM ())) (ShaderState Map.empty Map.empty Map.empty))) 0
 
 makeShader :: ShaderGlobDeclM () -> Builder -> Text 
 makeShader m b = toLazyText $ mconcat [
@@ -105,40 +107,53 @@ type FBool = S F Bool
 
 -- TODO: Add func to generate shader decl header
 
-
-gDeclInput :: SType -> Int -> ShaderGlobDeclM ()
-gDeclInput stype i =
-             do tellGlobal "in "
-                tellGlobal $ stypeName stype          
-                tellGlobal " in"
-                tellGlobalLn $ show i
-
-gDeclUniformBlock :: Int -> ShaderGlobDeclM () -> ShaderGlobDeclM ()
-gDeclUniformBlock blockI decls =
-    do  let blockStr = show blockI
-        tellGlobal "uniform uBlock"
-        tellGlobal blockStr
-        tellGlobal " {\n"
-        decls
-        tellGlobal "} u"
-        tellGlobalLn blockStr
-
-useInput :: Int -> ShaderM String
-useInput i = 
+useVInput :: SType -> Int -> ShaderM String
+useVInput stype i = 
              do s <- T.lift get
-                let nextIndex = Map.size $ shaderInputNameToIndex s
-                T.lift $ put $ s {shaderInputNameToIndex = Map.insertWith (flip const) i nextIndex $ shaderInputNameToIndex s}                
+                T.lift $ put $ s { shaderUsedInput = Map.insert i (gDeclInput, undefined) $ shaderUsedInput s }                
                 return $ "in" ++ show i
+    where
+        gDeclInput = do tellGlobal "in "
+                        tellGlobal $ stypeName stype          
+                        tellGlobal " in"
+                        tellGlobalLn $ show i
 
-useUniform :: Int -> Int -> ShaderM String
-useUniform blockI offset = 
-             do T.lift $ modify $ \ s -> s { shaderUsedUniformBlocks = Set.insert blockI $ shaderUsedUniformBlocks s } 
+useFInput :: String -> SType -> Int -> ShaderM String -> ShaderM String
+useFInput prefix stype i v =
+             do s <- T.lift get
+                T.lift $ put $ s { shaderUsedInput = Map.insert i (gDecl "in ", (assignOutput, gDecl "out ")) $ shaderUsedInput s }                
+                return $ prefix ++ show i
+    where
+        assignOutput = do val <- v
+                          let name = prefix ++ show i
+                          tellAssignment' name val
+                    
+        gDecl s =    do tellGlobal s
+                        tellGlobal $ stypeName stype          
+                        tellGlobal $ ' ':prefix
+                        tellGlobalLn $ show i
+
+   
+useUniform :: ShaderGlobDeclM () -> Int -> Int -> ShaderM String
+useUniform decls blockI offset = 
+             do T.lift $ modify $ \ s -> s { shaderUsedUniformBlocks = Map.insert blockI (gDeclUniformBlock blockI decls) $ shaderUsedUniformBlocks s } 
                 return $ 'u':show blockI ++ '.':'u': show offset -- "u8.u4"
+    where
+        gDeclUniformBlock blockI decls =
+            do  let blockStr = show blockI
+                tellGlobal "uniform uBlock"
+                tellGlobal blockStr
+                tellGlobal " {\n"
+                decls
+                tellGlobal "} u"
+                tellGlobalLn blockStr
 
 useSampler :: Int -> ShaderM String
 useSampler name = 
-             do T.lift $ modify $ \ s -> s { shaderUsedSamplers = Set.insert name $ shaderUsedUniformBlocks s } 
+             do T.lift $ modify $ \ s -> s { shaderUsedSamplers = Map.insert name (gDeclSampler name) $ shaderUsedUniformBlocks s } 
                 return $ 's':show name
+    where
+        gDeclSampler name = error "gDeclSampler not implemented"                
 
 getNext :: Monad m => StateT Int m Int
 getNext = do

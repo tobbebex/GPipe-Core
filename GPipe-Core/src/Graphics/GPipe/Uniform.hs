@@ -20,24 +20,19 @@ class BufferFormat (UniformBufferFormat a) => Uniform a where
 
 data Proxy a = Proxy
  
-{-# NOINLINE usingUniform #-}
-usingUniform :: forall os f b. Uniform b => Frame os f (Buffer os (BUniform (UniformBufferFormat b)), Proxy b, Int) b
-usingUniform = IntFrame $ dynInStatOut $ do 
+{-# NOINLINE toUniformBlock #-}
+toUniformBlock :: forall os f b. Uniform b => Frame os f (Buffer os (BUniform (UniformBufferFormat b)), Proxy b, Int) b
+toUniformBlock = IntFrame $ dynInStatOut $ do 
                    blockId <- getName
-                   let (u, offToStype) = shaderGen blockId
-                       decl :: ShaderGlobDeclM () 
-                       decl = gDeclUniformBlock blockId $ buildUDecl offToStype 
-                   return (u, 
-                           tellShaderGlobDecl blockId decl,
-                           \(ub, _, i) -> do doForName blockId $ \ p i -> do
-                                             binding <- getNextUniformBinding
-                                             glBindBufferRange glUNIFORM_ARRAY binding (bufName ub) (i * bufElementSize ub) (bufElementSize ub) 
-                                             glUniformBlockBinding p i binding)
+                   let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId) -- TODO: Verify that this tying-the-knot works!
+                   return (u, \(ub, _, i) -> doForName blockId $ \ p ix bind -> do
+                                             glBindBufferRange glUNIFORM_ARRAY bind (bufName ub) (i * bufElementSize ub) (bufElementSize ub) 
+                                             glUniformBlockBinding p ix bind)
     where
             sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform (UniformBufferFormat b) b
             fromBUnifom (BUniform b) = b
-            shaderGen :: Int -> (b, OffsetToSType) -- Int is name of uniform block
+            shaderGen :: (Int -> ShaderM String) -> (b, OffsetToSType) -- Int is name of uniform block
             shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
 
 buildUDecl :: OffsetToSType -> ShaderGlobDeclM ()
@@ -62,11 +57,11 @@ glBindBufferRange = undefined
 
 glUNIFORM_ARRAY = 0
 
-newtype ToUniform a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader Int)) a b) deriving (Category, Arrow) 
+newtype ToUniform a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader (Int -> ShaderM String))) a b) deriving (Category, Arrow) 
 
 instance Uniform VFloat where
     type UniformBufferFormat VFloat = BFloat
     toUniform = ToUniform $ Kleisli $ \bIn -> do let offset = bOffset bIn
                                                  tell $ Map.singleton offset STypeFloat
-                                                 blockId <- lift ask
-                                                 return $ S $ useUniform blockId offset  
+                                                 useF <- lift ask
+                                                 return $ S $ useF offset  

@@ -16,7 +16,6 @@ import Control.Monad.Trans.Writer
 import Control.Monad.Trans.State
 import qualified Data.IntMap as Map
 import Data.Foldable (forM_)
-import Data.StableFunctor (makeStableFunctor)
 
 
 type DrawCallName = Int
@@ -61,20 +60,18 @@ instance VertexInput BFloat where
     type VertexFormat BFloat = VFloat
     toVertex = ToVertex $ dynInStatOut $ do 
                                  n <- getName
-                                 return (S $ useInput n
-                                         , tellShaderGlobDecl n (gDeclInput STypeFloat n)
-                                         ,\b -> do setupForName n $ \ _ _ -> glBindBuffer (bName b) glVERTEX_ARRAY
-                                                   doForName n $ \ _ ix -> glAttribArray ix 1 glFLOAT False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)
+                                 return (S $ useVInput STypeFloat n
+                                         ,\b -> do setupForName n $ \ _ _ _ -> glBindBuffer (bName b) glVERTEX_ARRAY
+                                                   doForName n $ \ _ ix _ -> glAttribArray ix 1 glFLOAT False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)
                                          )
 instance VertexInput BInt32Norm where
     type VertexFormat BInt32Norm = VFloat
     toVertex = ToVertex $ dynInStatOut $ do 
                                  n <- getName
-                                 return (S $ useInput n 
-                                        ,tellShaderGlobDecl n (gDeclInput STypeFloat n)
+                                 return (S $ useVInput STypeFloat n 
                                         ,\(BNormalized b) -> do
-                                                setupForName n $ \ _ _ -> glBindBuffer (bName b) glVERTEX_ARRAY
-                                                doForName n $ \ _ ix -> glAttribArray ix 1 glINT32 False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)
+                                                setupForName n $ \ _ _ _ -> glBindBuffer (bName b) glVERTEX_ARRAY
+                                                doForName n $ \ _ ix _ -> glAttribArray ix 1 glINT32 False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)
                                         )
                                                                
 
@@ -88,9 +85,9 @@ toPrimitiveStream = IntFrame $ proc d@(_, ba) -> do
         ToVertex iFrame = toVertex :: ToVertex a (VertexFormat a)
         {-# INLINE drawcall #-}
         drawcall = dynInStatOut $ do n <- getName
-                                     return (n, return (),
+                                     return (n,
                                         \(p, ba) ->
-                                            doForName n $ \ _ _ -> glDrawArrays (toGLtopology p) 0 (VertexArray.length ba)
+                                            doForName n $ \ _ _ _ -> glDrawArrays (toGLtopology p) 0 (VertexArray.length ba)
                                         )
                 
 
@@ -104,9 +101,9 @@ toIndexedPrimitiveStream = IntFrame $ proc (p, ba, iba) -> do
         ToVertex iFrame = toVertex :: ToVertex a (VertexFormat a)
         {-# INLINE drawcall #-}
         drawcall = dynInStatOut $ do n <- getName
-                                     return (n, return (),
+                                     return (n,
                                         \(p, iba) ->
-                                            doForName n $ \ _ _ -> do 
+                                            doForName n $ \ _ _ _ -> do 
                                               forM_ (restart iba) glRestartIndex
                                               glBindBuffer (iArrName iba) glELEMENT_ARRAY
                                               glDrawElements (toGLtopology p) (IndexArray.length iba) (indexType iba) (offset iba)
@@ -124,9 +121,9 @@ toInstancedPrimitiveStream = IntFrame $ proc (p, va, f, ina) -> do
         ToVertex iFrame = toVertex :: ToVertex c (VertexFormat c)
         {-# INLINE drawcall #-}
         drawcall = dynInStatOut $ do n <- getName
-                                     return (n, return (),
+                                     return (n,
                                         \(p, va, ina) ->
-                                            doForName n $ \ _ _ -> glDrawArraysInstanced (toGLtopology p) 0 (VertexArray.length va) (VertexArray.length ina)
+                                            doForName n $ \ _ _ _ -> glDrawArraysInstanced (toGLtopology p) 0 (VertexArray.length va) (VertexArray.length ina)
                                         )
 
    
@@ -134,15 +131,15 @@ toInstancedIndexedPrimitiveStream :: forall os f i a b c p .(IndexFormat i, Vert
     => Frame os f (p, VertexArray () a, IndexArray i, a -> b -> c, VertexArray Instances b) (VertexStream p (VertexFormat c))
 toInstancedIndexedPrimitiveStream = IntFrame $ proc (p, va, ia, f, ina) -> do
                         b <- iFrame -< f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1)
-                        name <- drawcall -< (p, va, ia, ina)
+                        name <- drawcall -< (p, ia, ina)
                         returnA -< VertexStream [(b, VertexStreamData  name)]
     where 
         ToVertex iFrame = toVertex :: ToVertex c (VertexFormat c)
         {-# INLINE drawcall #-}
         drawcall = dynInStatOut $ do n <- getName
-                                     return (n, return (),
-                                        \(p, va, ia, ina) ->
-                                            doForName n $ \ _ _ -> do 
+                                     return (n,
+                                        \(p, ia, ina) ->
+                                            doForName n $ \ _ _ _ -> do 
                                               forM_ (restart ia) glRestartIndex
                                               glBindBuffer (iArrName ia) glELEMENT_ARRAY
                                               glDrawElementsInstanced (toGLtopology p) (IndexArray.length ia) (indexType ia) (offset ia) (VertexArray.length ina)

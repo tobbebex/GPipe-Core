@@ -17,6 +17,7 @@ import Control.Monad.Trans.Class
 import System.Mem.Weak (addFinalizer)
 import Control.Monad.Trans.Reader (ReaderT, ask, runReaderT)
 import Control.Applicative (Applicative)
+import Control.Monad.Exception (MonadException, MonadAsyncException)
 
 newtype SNMap m a = SNMap (HT.BasicHashTable (StableName (m a)) a)
 
@@ -34,7 +35,7 @@ memoize (SNMap h) m = do s <- liftIO $ makeStableName $! m
                                                   addFinalizer m (HT.delete h s)
                                               return a
 
-newtype SNMapReaderT a m b = SNMapReaderT (ReaderT (SNMap (SNMapReaderT a m) a) m b) deriving (Monad, MonadIO, Functor, Applicative)
+newtype SNMapReaderT a m b = SNMapReaderT (ReaderT (SNMap (SNMapReaderT a m) a) m b) deriving (Functor, Applicative, Monad, MonadIO, MonadException, MonadAsyncException)
 
 runSNMapReaderT :: MonadIO m => SNMapReaderT a m b -> m b
 runSNMapReaderT (SNMapReaderT m) = do h <- liftIO newSNMap

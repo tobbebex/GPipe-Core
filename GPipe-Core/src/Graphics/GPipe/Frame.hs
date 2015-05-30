@@ -4,14 +4,13 @@ module Graphics.GPipe.Frame (
     Frame(..),
     IntFrame(),
     --runFrame,
-    getNextUniformBinding,
     dynInStatOut,
-    tellShaderGlobDecl,
     statIn,    
     getName,
     setupForName,
-    doForName
-    --debugInFrame  
+    doForName,
+    runFrame,
+    compileFrame
 ) where
 
 import System.Mem.StableName
@@ -23,6 +22,7 @@ import Graphics.GPipe.Format
 import Graphics.GPipe.Stream
 import Graphics.GPipe.Shader
 import Graphics.GPipe.Context
+import Graphics.GPipe.ContextState
 import Control.Applicative (Applicative)
 import Control.Monad.Trans.State 
 import Control.Monad.IO.Class
@@ -32,30 +32,29 @@ import Prelude hiding ((.), id)
 import Control.Monad.Trans.Reader
 import Data.Maybe (fromJust)
 import Data.Functor.Identity (Identity)
+import qualified Data.HashTable.IO as HT
 
-data FrameState = FrameState Int
 
 type AttribNameToIndexMap = Map.IntMap Int
 
+-- All objects doesnt use all of these. Uniform use all, vertex array use only index and texture use the last two(?)
 type ProgramName = Int
 type Index = Int
-type NameToIOforProgAndIndex = Map.IntMap (ProgramName -> Index -> IO ())
+type Binding = Int
 
-getNextUniformBinding :: IO Int
-getNextUniformBinding = return 1 -- HACK : TODO: FIXME
+type NameToIOforProgAndIndex = Map.IntMap (ProgramName -> Index -> Binding -> IO ())
 
-
-type StaticFrameT m = StateT FrameState m
 
 type DynamicFrame = State NameToIOforProgAndIndex
+runDynamicFrame m = execState m Map.empty 
 
-doForName :: Int -> (ProgramName -> Index -> IO ()) -> DynamicFrame () 
+doForName :: Int -> (ProgramName -> Index -> Binding -> IO ()) -> DynamicFrame () 
 doForName n io = modify $ alter (Just . f) n 
     where f Nothing = io
-          f (Just x) = \p i -> x p i >> io p i 
+          f (Just x) = \p i b -> x p i b >> io p i b
 
 -- Warning, setupForName is order dependent, must be run before any doForName  
-setupForName :: Int -> (ProgramName -> Index -> IO ()) -> DynamicFrame ()  
+setupForName :: Int -> (ProgramName -> Index -> Binding -> IO ()) -> DynamicFrame ()  
 setupForName n io = modify $ alter (Just . f) n 
     where f Nothing = io
           f (Just x) = x
@@ -73,13 +72,7 @@ getName = do FrameState n <- get
 --runDynF :: Frame os f () () -> IO ()
 --runDynF (Frame (Kleisli m) _) = m ()
 
-type StaticShaderGlobDeclMap = Map.IntMap (ShaderGlobDeclM ())
-type StaticShaderGlobDeclFrame = State StaticShaderGlobDeclMap
-
-tellShaderGlobDecl :: Int -> ShaderGlobDeclM () -> StaticShaderGlobDeclFrame ()
-tellShaderGlobDecl n decl = modify $ Map.insert n decl 
-
-data IntFrame a b = Frame (Kleisli (StaticFrameT DynamicFrame) a b) (Kleisli (StaticFrameT StaticShaderGlobDeclFrame) a b) -- TODO: Add some kind of shader writer output instead of Identity
+data IntFrame a b = Frame (Kleisli (StaticFrameT DynamicFrame) a b) (Kleisli (StaticFrameT Identity) a b) -- TODO: Add some kind of shader writer output instead of Identity
 
 newtype Frame os f a b = IntFrame (IntFrame a b) deriving (Category, Arrow)
 
@@ -107,31 +100,47 @@ bindShaders (IntFrame (Frame _ s)) = do n <- makeStableName $! s
                                         putStrLn ("Load shaders with id " ++ show (hashStableName n)) --debug 
 
 {-# INLINE dynInStatOut #-}
-dynInStatOut :: (forall m. Monad m => StaticFrameT m (r, StaticShaderGlobDeclFrame (), d -> DynamicFrame ())) -> IntFrame d r
-dynInStatOut m =  Frame (Kleisli $ \a -> do   (r, _ms, md) <- m
+dynInStatOut :: (forall m. Monad m => StaticFrameT m (r, d -> DynamicFrame ())) -> IntFrame d r
+dynInStatOut m =  Frame (Kleisli $ \a -> do   (r, md) <- m
                                               lift $ md a
                                               return r)
-                        (Kleisli $ const $ do (r, ms, _md) <- m
-                                              lift $ ms
+                        (Kleisli $ const $ do (r, _md) <- m
                                               return r)
 
                                                                                          
 {-# INLINE statIn #-}
-statIn :: (a -> StaticFrameT StaticShaderGlobDeclFrame ()) -> IntFrame a ()
-statIn ms = Frame (arr $ const ()) (Kleisli ms)
+statIn :: (a -> Identity ()) -> IntFrame a ()
+statIn ms = Frame (arr $ const ()) (Kleisli (lift . ms))
 
 
-{-
-runFrame :: MonadIO m => (Frame os f () ()) -> ContextT os f m ()
-runFrame fr = liftContextIO $ do bindShaders fr
-                                 runDynF fr
--}
-                                 
-type FragColor c = Color c (S F (ColorElement c))
-type FragDepth = FFloat
+runFrame :: MonadIO m => Frame os f () () -> ContextT os f m ()
+runFrame (IntFrame (Frame (Kleisli dyn) (Kleisli stat))) =    
+    let dynMap = runDynamicFrame (runStaticFrameT (dyn ()))
+    in do state <- getContextState
+          compiledFrame <- getCompiledFrame (stat ()) (shaderCache state)
+          runDynFrame compiledFrame dynMap
 
---debugInFrame :: IO () -> IntFrame f ()
---debugInFrame m = dynInStatOut (return ((),())) (\_ _ -> m)
+compileFrame :: MonadIO m => Frame os f () () -> ContextT os f m Bool
+compileFrame (IntFrame (Frame (Kleisli dyn) (Kleisli stat))) =    
+    do state <- getContextState
+       (_,b) <- getCompiledFrame (stat ()) (shaderCache state)
+       return b
+
+getCompiledFrame m h = do (s, x) <- liftContextIO $ do 
+                                    s <- makeStableName $! m
+                                    x <- HT.lookup h s
+                                    return (s, x)
+                          case x of
+                                Just a -> return (a, True)
+                                Nothing -> do a <- compile m
+                                              liftContextIO $ HT.insert h s a
+                                              return (a, False)
+compile m = do
+    return $ CompiledFrame                                                     
+
+runDynFrame c dynMap = return ()                                 
+
+
 
 {-
 
@@ -167,101 +176,7 @@ drawDepthStencil = undefined
 -}
 -- --.......................--
 
-data ColorOption f = ColorOption (Blending f) (ColorMask f)
 
-data DepthOption = DepthOption DepthFunction DepthMask
-data StencilOption = StencilOption (FrontBack StencilTest) (FrontBack StencilOp) (FrontBack StencilOp)
-data DepthStencilOption = DepthStencilOption DepthOption StencilOption (FrontBack StencilOp)    
-
-data FrontBack a = FrontBack { front :: a, back :: a }
-
--- | 'True' for each color component that should be written to the 'FrameBuffer'.
-type ColorMask f = Color f Bool
--- | 'True' if the depth component should be written to the 'FrameBuffer'.
-type DepthMask = Bool
--- | The function used to compare the fragment's depth and the depth buffers depth with.
-type DepthFunction = ComparisonFunction
-
--- | Sets how the painted colors are blended with the 'FrameBuffer's previous value.
-data Blending f = NoBlending -- ^ The painted fragment completely overwrites the previous value.
-              | Blend (FrontBack BlendEquation)
-                      (FrontBack (BlendingFactor, BlendingFactor))
-                      (Color f Float) -- ^ Use blending equations to combine the fragment with the previous value.
-              | BlendLogicOp LogicOp -- ^ Use a 'LogicOp' to combine the fragment with the previous value.
-
--- | Sets a test that should be performed on the stencil value.
-data StencilTest = StencilTest {
-                       stencilComparision :: ComparisonFunction, -- ^ The function used to compare the @stencilReference@ and the stencil buffers value with.
-                       stencilReference :: Int,--Int32, -- ^ The value to compare with the stencil buffer's value. 
-                       stencilMask :: Int --Word32 -- ^ A bit mask with ones in each position that should be compared and written to the stencil buffer.
-                   } 
-
-data BlendEquation =
-     FuncAdd
-   | FuncSubtract
-   | FuncReverseSubtract
-   | Min
-   | Max
-   | LogicOp
-
-data BlendingFactor =
-     Zero
-   | One
-   | SrcColor
-   | OneMinusSrcColor
-   | DstColor
-   | OneMinusDstColor
-   | SrcAlpha
-   | OneMinusSrcAlpha
-   | DstAlpha
-   | OneMinusDstAlpha
-   | ConstantColor
-   | OneMinusConstantColor
-   | ConstantAlpha
-   | OneMinusConstantAlpha
-   | SrcAlphaSaturate
-
-data LogicOp =
-     Clear
-   | And
-   | AndReverse
-   | Copy
-   | AndInverted
-   | Noop
-   | Xor
-   | Or
-   | Nor
-   | Equiv
-   | Invert
-   | OrReverse
-   | CopyInverted
-   | OrInverted
-   | Nand
-   | Set
-
--- | Sets the operations that should be performed on the 'FrameBuffer's stencil value
-data StencilOp =
-     OpZero
-   | OpKeep
-   | OpReplace
-   | OpIncr
-   | OpIncrWrap
-   | OpDecr
-   | OpDecrWrap
-   | OpInvert
-
-data ComparisonFunction =
-     Never
-   | Less
-   | Equal
-   | Lequal
-   | Greater
-   | Notequal
-   | Gequal
-   | Always
-   deriving ( Eq, Ord, Show )
-   
-   --------------------
 -- Private 
 
 setupFboGl f = undefined

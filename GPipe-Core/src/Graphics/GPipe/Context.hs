@@ -11,16 +11,19 @@ module Graphics.GPipe.Context
     liftContextIO,
     liftContextIOAsync,
     swap,
-    frameBufferSize
+    frameBufferSize,
+    getContextState, -- TODO: Make only visible in package
 )
 where
 
 import Graphics.GPipe.Format
+import Graphics.GPipe.ContextState
 import Control.Monad.Exception (bracket, MonadAsyncException, MonadException)
 import Control.Monad.Trans.Reader 
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Applicative (Applicative)
+import Control.Monad.Trans.State.Lazy
 
 type ContextFactory c ds = ContextFormat c ds -> IO ContextHandle
 
@@ -34,35 +37,44 @@ data ContextHandle = ContextHandle {
 } 
 
 newtype ContextT os f m a = 
-    ContextT (ReaderT ContextHandle m a) 
-    deriving (Functor, Applicative, Monad, MonadTrans, MonadIO, MonadException, MonadAsyncException)
+    ContextT (StateT ContextState (ReaderT ContextHandle m) a) 
+    deriving (Functor, Applicative, Monad, MonadIO, MonadException, MonadAsyncException)
     
+instance MonadTrans (ContextT os f) where
+    lift = ContextT . lift . lift
+
 
 runContextT :: (MonadIO m, MonadAsyncException m) => ContextFactory c ds -> ContextFormat c ds -> (forall os. ContextT os (ContextFormat c ds) m a) -> m a
 runContextT cf f (ContextT m) = 
     bracket 
         (liftIO $ cf f)
         (liftIO . contextDelete)
-        (runReaderT m)
+        (\c -> do s <- liftIO newContextState 
+                  runReaderT (evalStateT m s) c)
 
 runSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFormat c ds -> ContextT os (ContextFormat c ds) (ContextT os f m) a -> ContextT os f m a
 runSharedContextT f (ContextT m) =   
     bracket
-        (ContextT ask >>= liftIO . ($ f) . newSharedContext)
+        (ContextT (lift ask) >>= liftIO . ($ f) . newSharedContext)
         (liftIO . contextDelete)
-        (runReaderT m)
+        (\c -> do s <- liftIO newContextState 
+                  runReaderT (evalStateT m s) c)
 
 liftContextIO :: MonadIO m => IO a -> ContextT os f m a
-liftContextIO m = ContextT ask >>= liftIO . flip contextDoSync m
+liftContextIO m = ContextT (lift ask) >>= liftIO . flip contextDoSync m
 
 liftContextIOAsync :: MonadIO m => IO () -> ContextT os f m ()
-liftContextIOAsync m = ContextT ask >>= liftIO . flip contextDoAsync m
+liftContextIOAsync m = ContextT (lift ask) >>= liftIO . flip contextDoAsync m
 
 swap :: MonadIO m => ContextT os f m ()
-swap = ContextT ask >>= liftIO . contextSwap
+swap = ContextT (lift ask) >>= liftIO . contextSwap
 
 frameBufferSize :: (MonadIO m) => ContextT os f m (Int, Int)
-frameBufferSize = ContextT ask >>= liftIO . contextFrameBufferSize
+frameBufferSize = ContextT (lift ask) >>= liftIO . contextFrameBufferSize
+
+getContextState :: Monad m => ContextT os f m ContextState
+getContextState = ContextT get 
+
 
 -- TODO Add async rules     
 {-# RULES

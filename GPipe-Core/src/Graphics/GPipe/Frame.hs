@@ -1,12 +1,14 @@
-{-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleContexts, RankNTypes, ExistentialQuantification, GeneralizedNewtypeDeriving, FlexibleInstances, ImpredicativeTypes, GADTs, EmptyDataDecls #-}
+{-# LANGUAGE MultiParamTypeClasses, TypeFamilies, FlexibleContexts,
+  RankNTypes, ExistentialQuantification, GeneralizedNewtypeDeriving,
+  FlexibleInstances, ImpredicativeTypes, GADTs #-}
 
 module Graphics.GPipe.Frame (
     Frame(..),
     IntFrame(),
-    --runFrame,
     dynInStatOut,
     statIn,    
     getName,
+    getDrawcall,
     setupForName,
     doForName,
     runFrame,
@@ -17,33 +19,21 @@ import System.Mem.StableName
 import Control.Monad.Trans.Class (lift)
 import Control.Category
 import Control.Arrow 
-import Graphics.GPipe.Format
 
-import Graphics.GPipe.Stream
-import Graphics.GPipe.Shader
+import Graphics.GPipe.FrameCompiler
 import Graphics.GPipe.Context
 import Graphics.GPipe.ContextState
-import Control.Applicative (Applicative)
 import Control.Monad.Trans.State 
 import Control.Monad.IO.Class
 import Data.IntMap as Map
 
 import Prelude hiding ((.), id)
-import Control.Monad.Trans.Reader
-import Data.Maybe (fromJust)
-import Data.Functor.Identity (Identity)
 import qualified Data.HashTable.IO as HT
+import Control.Monad.Trans.Writer.Lazy (execWriter)
+import Control.Monad.Exception (throw, MonadException)
 
 
-type AttribNameToIndexMap = Map.IntMap Int
-
--- All objects doesnt use all of these. Uniform use all, vertex array use only index and texture use the last two(?)
-type ProgramName = Int
-type Index = Int
-type Binding = Int
-
-type NameToIOforProgAndIndex = Map.IntMap (ProgramName -> Index -> Binding -> IO ())
-
+--type AttribNameToIndexMap = Map.IntMap Int
 
 type DynamicFrame = State NameToIOforProgAndIndex
 runDynamicFrame m = execState m Map.empty 
@@ -65,14 +55,20 @@ setupForName n io = modify $ alter (Just . f) n
 
 
 getName :: Monad m => StaticFrameT m Int
-getName = do FrameState n <- get
-             put $ FrameState (n+1)
+getName = do FrameState n d <- get
+             put $ FrameState (n+1) d
              return n
+
+getDrawcall :: Monad m => StaticFrameT m Int
+getDrawcall = do FrameState n d <- get
+                 put $ FrameState n (d+1)
+                 return d
              
 --runDynF :: Frame os f () () -> IO ()
 --runDynF (Frame (Kleisli m) _) = m ()
 
-data IntFrame a b = Frame (Kleisli (StaticFrameT DynamicFrame) a b) (Kleisli (StaticFrameT Identity) a b) -- TODO: Add some kind of shader writer output instead of Identity
+
+data IntFrame a b = Frame (Kleisli (StaticFrameT DynamicFrame) a b) (Kleisli (StaticFrameT StaticFrame) a b) 
 
 newtype Frame os f a b = IntFrame (IntFrame a b) deriving (Category, Arrow)
 
@@ -109,18 +105,21 @@ dynInStatOut m =  Frame (Kleisli $ \a -> do   (r, md) <- m
 
                                                                                          
 {-# INLINE statIn #-}
-statIn :: (a -> Identity ()) -> IntFrame a ()
+statIn :: (a -> StaticFrame ()) -> IntFrame a ()
 statIn ms = Frame (arr $ const ()) (Kleisli (lift . ms))
 
 
-runFrame :: MonadIO m => Frame os f () () -> ContextT os f m ()
+runFrame :: (MonadIO m, MonadException m) => Frame os f () () -> ContextT os f m ()
 runFrame (IntFrame (Frame (Kleisli dyn) (Kleisli stat))) =    
     let dynMap = runDynamicFrame (runStaticFrameT (dyn ()))
     in do state <- getContextState
-          compiledFrame <- getCompiledFrame (stat ()) (shaderCache state)
-          runDynFrame compiledFrame dynMap
+          (compiledFrame, _) <- getCompiledFrame (stat ()) (shaderCache state)
+          let r = compiledFrame dynMap
+          case r of
+            Right io -> liftContextIO io
+            Left e -> throw $ GPipeException e
 
-compileFrame :: MonadIO m => Frame os f () () -> ContextT os f m Bool
+compileFrame :: (MonadIO m, MonadException m) => Frame os f () () -> ContextT os f m Bool
 compileFrame (IntFrame (Frame (Kleisli dyn) (Kleisli stat))) =    
     do state <- getContextState
        (_,b) <- getCompiledFrame (stat ()) (shaderCache state)
@@ -132,13 +131,10 @@ getCompiledFrame m h = do (s, x) <- liftContextIO $ do
                                     return (s, x)
                           case x of
                                 Just a -> return (a, True)
-                                Nothing -> do a <- compile m
+                                Nothing -> do a <- compile (execWriter (runStaticFrameT m))
                                               liftContextIO $ HT.insert h s a
                                               return (a, False)
-compile m = do
-    return $ CompiledFrame                                                     
-
-runDynFrame c dynMap = return ()                                 
+                                               
 
 
 

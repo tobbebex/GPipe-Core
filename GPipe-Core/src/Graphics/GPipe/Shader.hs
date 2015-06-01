@@ -18,7 +18,6 @@ import Data.Monoid (mconcat, mappend)
 import qualified Control.Monad.Trans.Class as T (lift)
 import Data.SNMap
 import qualified Data.IntMap as Map
-import qualified Data.IntSet as Set
 
 type NextTempVar = Int
 type NextGlobal = Int
@@ -47,15 +46,28 @@ data ShaderState = ShaderState {
                 shaderUsedInput :: Map.IntMap (ShaderGlobDeclM (), (ShaderM (), ShaderGlobDeclM ())) -- For vertex shaders, the shaderM is always undefined and the int is the parameter name, for later shader stages it uses some name local to the transition instead    
                  }
                 
-runShaderM :: ShaderM () -> IO (ShaderState, Builder)
-runShaderM m = evalStateT (runWriterT (execStateT (runSNMapReaderT (m :: ShaderM ())) (ShaderState Map.empty Map.empty Map.empty))) 0
-
-makeShader :: ShaderGlobDeclM () -> Builder -> Text 
-makeShader m b = toLazyText $ mconcat [
-                        execWriter m,
-                        "main() {",
-                        b,
-                        "}"]
+runShaderM :: ShaderGlobDeclM () -> ShaderM () -> IO (Text, [Int], [Int], [Int], ShaderGlobDeclM (), ShaderM ())
+runShaderM d m = do
+               (st, body) <- evalStateT (runWriterT (execStateT (runSNMapReaderT (m :: ShaderM ())) (ShaderState Map.empty Map.empty Map.empty))) 0
+               let (unis, uniDecls) = unzip $ Map.toAscList (shaderUsedUniformBlocks st)
+                   (samps, sampDecls) = unzip $ Map.toAscList (shaderUsedSamplers st)
+                   (inps, inpDescs) = unzip $ Map.toAscList (shaderUsedInput st)
+                   (inpDecls, prevDesc) = unzip inpDescs
+                   (prevSs, prevDecls) = unzip prevDesc
+                   decls = do d
+                              sequence_ uniDecls 
+                              sequence_ sampDecls
+                              sequence_ inpDecls
+                   prevDecl = sequence_ prevDecls
+                   prevS    = sequence_ prevSs
+               return (makeShader decls body, unis, samps, inps, prevDecl, prevS)
+    where
+        makeShader :: ShaderGlobDeclM () -> Builder -> Text 
+        makeShader m b = toLazyText $ mconcat [
+                                execWriter m,
+                                "main() {",
+                                b,
+                                "}"]
                          
 
 type ShaderGlobDeclM = Writer Builder

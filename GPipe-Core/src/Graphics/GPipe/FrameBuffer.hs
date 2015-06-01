@@ -1,22 +1,39 @@
-{-# LANGUAGE Arrows #-}
+{-# LANGUAGE Arrows, ScopedTypeVariables #-}
 module Graphics.GPipe.FrameBuffer where
 
+import Graphics.GPipe.ContextState
 import Graphics.GPipe.Shader
-import Graphics.GPipe.VertexStream
 import Graphics.GPipe.FragmentStream
 import Graphics.GPipe.Format
 import Graphics.GPipe.Frame
+import Control.Monad.Trans.Writer.Lazy (tell)
 
-
-drawContextColor :: ColorRenderable c => Frame os (ContextFormat c ds) (ColorOption c, FragmentStream (FragColor c)) ()
-drawContextColor = proc (co, fs) -> do n <- IntFrame md -< co  
-                                       IntFrame (statIn f) -< (n, fs)
+drawContextColor :: forall c os ds. ColorRenderable c => Frame os (ContextFormat c ds) (ColorOption c, FragmentStream (FragColor c)) ()
+drawContextColor = proc (co, fs) -> do ndc <- IntFrame md -< co  
+                                       IntFrame (statIn f) -< (ndc, fs)
     where
         md = dynInStatOut $ do n <- getName
-                               return (n ,\co -> doForName n $ \ _ _ _ -> glBindOutputAndSetColorOptions co)
-        f (n,FragmentStream xs) = mapM_ (g n) xs
-        g n (x, FragmentStreamData side sPos (VertexStreamData drawCallName)) = do return () -- TODO: Make the shader and write the drawcall
-                                                
+                               dc <- getDrawcall 
+                               return ((n, dc) ,\co -> doForName n $ \ _ _ _ -> glBindOutputAndSetColorOptions co)
+        f ((n,dc),FragmentStream xs) = mapM_ (g n dc) xs
+        g n dc (c, fd) = 
+            let (S x, S y, S z, S w) = fromColor (undefined :: c) c (S $ return "1")
+                m =  do x' <- x
+                        y' <- y
+                        z' <- z
+                        w' <- w                       
+                        return ("vec4(" ++ x' ++ ',' : y' ++ ',' : z' ++ ',' : w' ++")")  
+            in tell [DrawCall n (orderth dc ++ " drawcall") m fd]                                       
+
+orderth :: Int -> String
+orderth x = let s = show x 
+            in s ++ case init s of
+                        xs@(_:_) | last xs == '1' -> "th" -- 11th through 19th"
+                        _ -> case last s of
+                                '1' -> "st"  
+                                '2' -> "nd"  
+                                '3' -> "rd"
+                                _ -> "th"  
 
 glBindOutputAndSetColorOptions = undefined
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, FlexibleContexts, FlexibleInstances, GADTs #-}
+{-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, FlexibleContexts, FlexibleInstances, GADTs, DeriveDataTypeable #-}
 
 module Graphics.GPipe.Context 
 (
@@ -6,6 +6,7 @@ module Graphics.GPipe.Context
     ContextFormat(..),
     ContextHandle(..),
     ContextT(),
+    GPipeException(..),
     runContextT,
     runSharedContextT,
     liftContextIO,
@@ -18,12 +19,13 @@ where
 
 import Graphics.GPipe.Format
 import Graphics.GPipe.ContextState
-import Control.Monad.Exception (bracket, MonadAsyncException, MonadException)
+import Control.Monad.Exception (finally, MonadException, Exception)
 import Control.Monad.Trans.Reader 
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Applicative (Applicative)
 import Control.Monad.Trans.State.Lazy
+import Data.Typeable (Typeable)
 
 type ContextFactory c ds = ContextFormat c ds -> IO ContextHandle
 
@@ -38,27 +40,28 @@ data ContextHandle = ContextHandle {
 
 newtype ContextT os f m a = 
     ContextT (StateT ContextState (ReaderT ContextHandle m) a) 
-    deriving (Functor, Applicative, Monad, MonadIO, MonadException, MonadAsyncException)
+    deriving (Functor, Applicative, Monad, MonadIO, MonadException)
     
 instance MonadTrans (ContextT os f) where
     lift = ContextT . lift . lift
 
 
-runContextT :: (MonadIO m, MonadAsyncException m) => ContextFactory c ds -> ContextFormat c ds -> (forall os. ContextT os (ContextFormat c ds) m a) -> m a
-runContextT cf f (ContextT m) = 
-    bracket 
-        (liftIO $ cf f)
-        (liftIO . contextDelete)
-        (\c -> do s <- liftIO newContextState 
-                  runReaderT (evalStateT m s) c)
+runContextT :: (MonadIO m, MonadException m) => ContextFactory c ds -> ContextFormat c ds -> (forall os. ContextT os (ContextFormat c ds) m a) -> m a
+runContextT cf f (ContextT m) = do
+    c <- liftIO $ cf f
+    finally
+        (do s <- liftIO newContextState 
+            runReaderT (evalStateT m s) c)
+        (liftIO $ contextDelete c)
 
-runSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFormat c ds -> ContextT os (ContextFormat c ds) (ContextT os f m) a -> ContextT os f m a
-runSharedContextT f (ContextT m) =   
-    bracket
-        (ContextT (lift ask) >>= liftIO . ($ f) . newSharedContext)
-        (liftIO . contextDelete)
-        (\c -> do s <- liftIO newContextState 
-                  runReaderT (evalStateT m s) c)
+runSharedContextT :: (MonadIO m, MonadException m) => ContextFormat c ds -> ContextT os (ContextFormat c ds) (ContextT os f m) a -> ContextT os f m a
+runSharedContextT f (ContextT m) = do
+    s' <- ContextT (lift ask)
+    c <- liftIO $ ($ f) $ newSharedContext s'   
+    finally
+        (do s <- liftIO newContextState 
+            runReaderT (evalStateT m s) c)
+        (liftIO $ contextDelete c)
 
 liftContextIO :: MonadIO m => IO a -> ContextT os f m a
 liftContextIO m = ContextT (lift ask) >>= liftIO . flip contextDoSync m
@@ -74,6 +77,11 @@ frameBufferSize = ContextT (lift ask) >>= liftIO . contextFrameBufferSize
 
 getContextState :: Monad m => ContextT os f m ContextState
 getContextState = ContextT get 
+
+data GPipeException = GPipeException String
+     deriving (Show, Typeable)
+
+instance Exception GPipeException
 
 
 -- TODO Add async rules     

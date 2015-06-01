@@ -6,24 +6,20 @@ import Prelude hiding (length, id, (.))
 import Graphics.GPipe.Buffer
 import Graphics.GPipe.Shader
 import Graphics.GPipe.Frame
+import Graphics.GPipe.ContextState
 import Graphics.GPipe.VertexArray hiding (length)
 import qualified Graphics.GPipe.VertexArray as VertexArray  (length)
 import Graphics.GPipe.IndexArray hiding (length)
 import qualified Graphics.GPipe.IndexArray as IndexArray (length)
 import Control.Category
 import Control.Arrow
-import Control.Monad.Trans.Writer
-import Control.Monad.Trans.State
-import qualified Data.IntMap as Map
 import Data.Foldable (forM_)
 
 
-type DrawCallName = Int
-data VertexStreamData = VertexStreamData DrawCallName
 data VertexStream t a = VertexStream [(a, VertexStreamData)]
 
 instance Functor (VertexStream t) where
-        fmap f (VertexStream xs) = VertexStream $ map (\(a, x)-> (f a, x)) xs
+        fmap f (VertexStream xs) = VertexStream $ map (first f) xs
 
 class PrimitiveTopology p where
     data Geometry p :: * -> *

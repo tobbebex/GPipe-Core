@@ -5,11 +5,10 @@ import Control.Category hiding ((.))
 import Control.Arrow 
 import Graphics.GPipe.Shader
 import Graphics.GPipe.VertexStream
+import Graphics.GPipe.ContextState
 import Control.Monad.Trans.State.Lazy
 
 type VPos = (VFloat,VFloat,VFloat,VFloat)
-type ShaderPos = ShaderM ()
-data FragmentStreamData = FragmentStreamData Side ShaderPos VertexStreamData
 data FragmentStream a = FragmentStream [(a, FragmentStreamData)]
 
 
@@ -25,7 +24,6 @@ instance FragmentInput VFloat where
                                                           put (n+1)
                                                           return $ S $ useFInput "vf" STypeFloat n s 
                
-data Side = Front | Back | FrontAndBack
 
 rasterize:: forall p a. (PrimitiveTopology p, FragmentInput a)
           => Side 
@@ -41,6 +39,7 @@ rasterize side (VertexStream xs) =
                                        tellAssignment' "gl_Position" $ "vec4("++x'++',':y'++',':z'++',':w'++")"
     in FragmentStream $ map f xs
 
+-- TODO: Add scissor and viewport, make it a Frame arrow
  
 {-
 import Graphics.GPipe.Stream

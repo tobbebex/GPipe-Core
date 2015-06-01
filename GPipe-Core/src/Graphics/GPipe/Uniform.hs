@@ -4,7 +4,6 @@ module Graphics.GPipe.Uniform where
 
 import Graphics.GPipe.Buffer 
 import Graphics.GPipe.Frame
-import Graphics.GPipe.Stream
 import Graphics.GPipe.Shader
 import Control.Arrow
 import Control.Monad.Trans.Writer

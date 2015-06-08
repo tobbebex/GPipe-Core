@@ -26,13 +26,12 @@ library
                    Graphics.GPipe.IndexArray,
                    Graphics.GPipe.Shader,
                    Graphics.GPipe.Shader.Operations,
-                   Graphics.GPipe.Stream,
                    Graphics.GPipe.Texture,
                    Graphics.GPipe.Uniform,
                    Graphics.GPipe.VertexArray,
                    Graphics.GPipe.VertexStream,
                    Graphics.GPipe.FrameBuffer
-  other-modules:    Graphics.GPipe.ContextState
+  other-modules:    Graphics.GPipe.FrameCompiler
 
 executable GPipe-Core-Test
   build-depends:   
@@ -57,11 +56,10 @@ executable GPipe-Core-Test
                    Graphics.GPipe.IndexArray,
                    Graphics.GPipe.Shader,
                    Graphics.GPipe.Shader.Operations,
-                   Graphics.GPipe.Stream,
                    Graphics.GPipe.Texture,
                    Graphics.GPipe.Uniform,
                    Graphics.GPipe.VertexArray,
                    Graphics.GPipe.VertexStream,
-                   Graphics.GPipe.ContextState,
-                   Graphics.GPipe.FrameBuffer
+                   Graphics.GPipe.FrameBuffer,
+                   Graphics.GPipe.FrameCompiler
 

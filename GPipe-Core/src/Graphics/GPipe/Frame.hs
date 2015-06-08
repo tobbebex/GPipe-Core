@@ -76,16 +76,24 @@ getDrawcall = do FrameState n d <- get
 --runDynF :: Frame os f () () -> IO ()
 --runDynF (Frame (Kleisli m) _) = m ()
 
-
 data IntFrame a b = Frame (Kleisli (StaticFrameT DynamicFrame) a b) (Kleisli (StaticFrameT StaticFrame) a b) 
 
-newtype Frame os f a b = IntFrame (IntFrame a b) deriving (Category, Arrow)
+newtype Frame os f a b = IntFrame (IntFrame a b) 
+
+
+instance Category (Frame os f) where
+     IntFrame x . IntFrame y = IntFrame (x . y)    
+     id = IntFrame id
+
+instance Arrow (Frame os f) where
+     arr f = IntFrame (arr f) 
+     first (IntFrame x) = IntFrame (first x) 
 
 -- dyn in : Buffers
 -- stat out: arrays, streams 
 
 instance Category IntFrame where
-     Frame x b . Frame y d = Frame (x . y)  ( b .  d)    
+     Frame x b . Frame y d = Frame (x . y)  (b . d)    
      id = Frame id id
 
 instance Arrow IntFrame where
@@ -108,7 +116,7 @@ data CompiledFrame os f x = CompiledFrame (x -> Either String (IO ()))
 
 compileFrame :: (MonadIO m, MonadException m) => Frame os f x () -> ContextT os f m (CompiledFrame os f x)
 compileFrame (IntFrame (Frame (Kleisli dyn) (Kleisli stat))) =
-    do f <- compile . execWriter . runStaticFrameT . stat $ error "compileFrame: Frame is not fully defined"
+    do f <- compile . execWriter . runStaticFrameT . stat $ error "compileFrame: Frame is not fully defined! Make sure you use lazy patterns in the arrow notation ('proc ~(a,b,c,..) -> do')"
        return (CompiledFrame (f . runDynamicFrame . runStaticFrameT . dyn))
 
 

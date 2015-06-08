@@ -17,13 +17,15 @@ class BufferFormat (UniformBufferFormat a) => Uniform a where
     type UniformBufferFormat a
     toUniform :: ToUniform (UniformBufferFormat a) a 
 
-data Proxy a = Proxy
+type UniformHostFormat x = HostFormat (UniformBufferFormat x)
+
+-- uniformBlock ::  forall os f b. Uniform b => Frame os f (UniformHostFormat b, Proxy b) b
  
-toUniformBlock :: forall os f b. Uniform b => Frame os f (Buffer os (BUniform (UniformBufferFormat b)), Proxy b, Int) b
+toUniformBlock :: forall os f b. Uniform b => Frame os f (Buffer os (BUniform (UniformBufferFormat b)), Int) b
 toUniformBlock = IntFrame $ dynInStatOut $ do 
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId) -- TODO: Verify that this tying-the-knot works!
-                   return (u, \(ub, _, i) -> doForName blockId $ \ p ix bind -> do
+                   return (u, \(ub, i) -> doForName blockId $ \ p ix bind -> do
                                              glBindBufferRange glUNIFORM_ARRAY bind (bufName ub) (i * bufElementSize ub) (bufElementSize ub) 
                                              glUniformBlockBinding p ix bind)
     where

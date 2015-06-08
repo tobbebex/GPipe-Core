@@ -38,8 +38,7 @@ drawContextDepthStencil = undefined
 drawContextColorDepthStencil = undefined 
 
 drawContextColor :: forall c os ds. ColorRenderable c => Frame os (ContextFormat c ds) (ColorOption c, FragmentStream (FragColor c)) ()
-drawContextColor = proc (co, fs) -> do ndc <- IntFrame md -< co  
-                                       IntFrame (statIn f) -< (ndc, fs)
+drawContextColor = dynStatIn md f 
     where
         md = dynInStatOut $ do n <- getName
                                dc <- getDrawcall 

@@ -5,6 +5,8 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Exception (MonadException)
 import Graphics.GPipe.Shader
 import Data.IntMap as Map
+import Prelude hiding (putStr)
+import Data.Text.Lazy.IO (putStr)
 
 data Side = Front | Back | FrontAndBack
 
@@ -27,8 +29,19 @@ type NameToIOforProgAndIndex = Map.IntMap (ProgramName -> Index -> Binding -> IO
 
 compile :: (Monad m, MonadIO m, MonadException m) => [DrawCall] -> ContextT os f m (NameToIOforProgAndIndex -> Either String (IO ())) 
 compile dcs = do
-    liftIO $ putStrLn "compiling!"
+    mapM_ comp dcs   
     return $ (\ x -> Right $ putStrLn $ "dyn is running ")
+ where
+    comp (DrawCall outN errN output (FragmentStreamData side shaderpos (VertexStreamData dcN))) = 
+        do liftContextIO $ do (fsource, funis, fsamps, finps, prevDecls, prevS) <- runShaderM (return ()) output
+                              (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls (prevS >> shaderpos)
+                              putStrLn "-------------"
+                              putStrLn "VERTEXSHADER:"
+                              putStr vsource
+                              putStrLn "-------------"   
+                              putStrLn "FRAGMENTSHADER:"
+                              putStr fsource
+                              putStrLn "-------------"   
       
 
 

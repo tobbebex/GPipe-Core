@@ -65,7 +65,7 @@ runShaderM d m = do
         makeShader :: ShaderGlobDeclM () -> Builder -> Text 
         makeShader m b = toLazyText $ mconcat [
                                 execWriter m,
-                                "main() {",
+                                "main() {\n",
                                 b,
                                 "}"]
                          
@@ -74,16 +74,16 @@ type ShaderGlobDeclM = Writer Builder
 
 newtype S c a = S { unS :: ShaderM String } 
 
-scalarS :: SType -> RValue -> S c a
+scalarS :: SType -> ShaderM RValue -> S c a
 scalarS typ = S . tellAssignment typ 
 
-vec2S :: SType -> RValue -> (S c a, S c a)
+vec2S :: SType -> ShaderM RValue -> (S c a, S c a)
 vec2S typ s = let (x,y,_z,_w) = vec4S typ s
               in (x,y)
-vec3S :: SType -> RValue -> (S c a, S c a, S c a)
+vec3S :: SType -> ShaderM RValue -> (S c a, S c a, S c a)
 vec3S typ s = let (x,y,z,_w) = vec4S typ s
               in (x,y,z)
-vec4S :: SType -> RValue -> (S c a, S c a, S c a, S c a)
+vec4S :: SType -> ShaderM RValue -> (S c a, S c a, S c a, S c a)
 vec4S typ s = let m = tellAssignment typ s
                   f p = S $ fmap (++ p) m
               in (f ".x", f ".y", f".z", f ".w")
@@ -178,8 +178,9 @@ getNext = do
        
 type RValue = String
 
-tellAssignment :: SType -> RValue -> ShaderM String
-tellAssignment typ val = fmap head . memoizeM $ do
+tellAssignment :: SType -> ShaderM RValue -> ShaderM String
+tellAssignment typ m = fmap head . memoizeM $ do
+                                 val <- m
                                  var <- T.lift $ T.lift $ T.lift getNext
                                  let name = 't' : show var
                                  T.lift $ T.lift $ tell (fromString $ stypeName typ ++ " ")
@@ -213,13 +214,43 @@ class ShaderBase a x where
     shaderbaseAssign :: x -> a -> StateT [String] ShaderM ()
     shaderbaseReturn :: x -> a -> ReaderT (ShaderM [String]) (State Int) a 
 
+instance (ShaderBase a x, ShaderBase b x) => ShaderBase (a, b) x where
+    shaderbaseDeclare _ _ = do a' <- shaderbaseDeclare (undefined :: x) (undefined :: a)
+                               b' <- shaderbaseDeclare (undefined :: x) (undefined :: b)
+                               return (a', b')
+    shaderbaseAssign _ (a,b) = do shaderbaseAssign (undefined :: x) a
+                                  shaderbaseAssign (undefined :: x) b    
+    shaderbaseReturn _ _ = do a' <- shaderbaseReturn (undefined :: x) (undefined :: a)
+                              b' <- shaderbaseReturn (undefined :: x) (undefined :: b)
+                              return (a', b')  
+
 instance ShaderBase (S c Int) c where
     shaderbaseDeclare _ _ = do var <- T.lift $ T.lift $ T.lift $ T.lift getNext
                                let root = 't' : show var
                                T.lift $ T.lift $ T.lift $ tell $ mconcat [
                                                            fromString $ stypeName STypeInt,
                                                            fromString " ",
-                                                           fromString root]
+                                                           fromString root,
+                                                           fromString ";\n"]
+                               tell [root]
+                               return $ S $ return root
+    shaderbaseAssign _ (S shaderM) = do ul <- T.lift shaderM
+                                        x:xs <- get
+                                        put xs
+                                        T.lift $ tellAssignment' x ul
+                                        return ()
+    shaderbaseReturn _ _ = do i <- T.lift getNext
+                              m <- ask
+                              return $ S $ fmap (!!i) m
+
+instance ShaderBase (S c Float) c where
+    shaderbaseDeclare _ _ = do var <- T.lift $ T.lift $ T.lift $ T.lift getNext
+                               let root = 't' : show var
+                               T.lift $ T.lift $ T.lift $ tell $ mconcat [
+                                                           fromString $ stypeName STypeFloat,
+                                                           fromString " ",
+                                                           fromString root,
+                                                           fromString ";\n"]
                                tell [root]
                                return $ S $ return root
     shaderbaseAssign _ (S shaderM) = do ul <- T.lift shaderM
@@ -246,11 +277,25 @@ instance ShaderType (S c Int) c where
     toBase _ = id
     fromBase _ = id
 
+instance ShaderType (S c Float) c where
+    type ShaderBaseType (S c Float) = S c Float
+    toBase _ = id
+    fromBase _ = id
+
 instance ShaderType () x where
     type ShaderBaseType () = ()
     toBase _ = id
     fromBase _ = id
 
+instance (ShaderType a x, ShaderType b x) => ShaderType (a,b) x where
+    type ShaderBaseType (a,b) = (ShaderBaseType a, ShaderBaseType b)
+    toBase x (a,b) = (toBase x a, toBase x b)
+    fromBase x (a,b) = (fromBase x a, fromBase x b)
+instance (ShaderType a x, ShaderType b x, ShaderType c x) => ShaderType (a,b,c) x where
+    type ShaderBaseType (a,b,c) = (ShaderBaseType a, (ShaderBaseType b, ShaderBaseType c))
+    toBase x (a,b,c) = (toBase x a, (toBase x b, toBase x c))
+    fromBase x (a,(b,c)) = (fromBase x a, fromBase x b, fromBase x c)
+    
 ifThenElse' :: forall a x. (ShaderType a x) => S x Bool -> a -> a -> a
 ifThenElse' b t e = ifThenElse b (const t) (const e) ()
 
@@ -304,8 +349,7 @@ while c f i = fromBase x $ while_ (c . fromBase x) (toBase x . f . fromBase x) (
         while_ bool loopF a = let whileM = memoizeM $ do
                                            (lifted, decls) <- runWriterT $ shaderbaseDeclare x a
                                            void $ evalStateT (shaderbaseAssign x a) decls
-                                           boolStr <- unS $ bool a
-                                           boolDecl <- tellAssignment STypeBool boolStr
+                                           boolDecl <- tellAssignment STypeBool (unS $ bool a)
                                            T.lift $ T.lift $ tell $ mconcat [
                                                                        fromString "while(",
                                                                        fromString boolDecl,

@@ -9,39 +9,39 @@ import Data.Boolean
 --noFun = error . (++ ": No overloading for shader type S")
 
 bin :: SType -> String -> S c x -> S c y -> S c z 
-bin typ o (S a) (S b) = S $ do a' <- a
-                               b' <- b
-                               tellAssignment typ $ '(' : a' ++ o ++ b' ++ ")"
+bin typ o (S a) (S b) = S $ tellAssignment typ $ do a' <- a
+                                                    b' <- b
+                                                    return $ '(' : a' ++ o ++ b' ++ ")"
 
 fun1 :: SType -> String -> S c x -> S c y
-fun1 typ f (S a) = S $ do a' <- a
-                          tellAssignment typ $ f ++ '(' : a' ++ ")"
+fun1 typ f (S a) = S $ tellAssignment typ $ do a' <- a
+                                               return $ f ++ '(' : a' ++ ")"
 
 fun2 :: SType -> String -> S c x -> S c y -> S c z
-fun2 typ f (S a) (S b) = S $ do a' <- a
-                                b' <- b
-                                tellAssignment typ $ f ++ '(' : a' ++ ',' : b' ++ ")"
+fun2 typ f (S a) (S b) = S $ tellAssignment typ $ do a' <- a
+                                                     b' <- b
+                                                     return $ f ++ '(' : a' ++ ',' : b' ++ ")"
 
 fun3 :: SType -> String -> S c x -> S c y -> S c z -> S c w
-fun3 typ f (S a) (S b) (S c) = S $ do a' <- a
-                                      b' <- b
-                                      c' <- c
-                                      tellAssignment typ $ f ++ '(' : a' ++ ',' : b' ++ ',' : c' ++")"
+fun3 typ f (S a) (S b) (S c) = S $ tellAssignment typ $ do a' <- a
+                                                           b' <- b
+                                                           c' <- c
+                                                           return $ f ++ '(' : a' ++ ',' : b' ++ ',' : c' ++")"
 
 fun4 :: SType -> String -> S c x -> S c y -> S c z -> S c w -> S c r
-fun4 typ f (S a) (S b) (S c) (S d) = S $ do a' <- a
-                                            b' <- b
-                                            c' <- c
-                                            d' <- d
-                                            tellAssignment typ $ f ++ '(' : a' ++ ',' : b' ++ ',' : c' ++ ',' : d' ++")"
+fun4 typ f (S a) (S b) (S c) (S d) = S $ tellAssignment typ $ do a' <- a
+                                                                 b' <- b
+                                                                 c' <- c
+                                                                 d' <- d
+                                                                 return $ f ++ '(' : a' ++ ',' : b' ++ ',' : c' ++ ',' : d' ++")"
 
 postop :: SType -> String -> S c x -> S c y
-postop typ f (S a) = S $ do a' <- a
-                            tellAssignment typ $ '(' : a' ++ f ++ ")"
+postop typ f (S a) = S $ tellAssignment typ $ do a' <- a
+                                                 return $ '(' : a' ++ f ++ ")"
                           
 preop :: SType -> String -> S c x -> S c y
-preop typ f (S a) = S $ do a' <- a
-                           tellAssignment typ $ '(' : f ++ a' ++ ")"
+preop typ f (S a) = S $ tellAssignment typ $ do a' <- a
+                                                return $ '(' : f ++ a' ++ ")"
 
 binf :: String -> S c x -> S c y -> S c Float
 binf = bin STypeFloat
@@ -107,10 +107,10 @@ instance Ord x => OrdB (S a x) where
   (>*) = bin STypeBool ">"
 
 instance IfB (S a x) where
-        ifB (S c) (S t) (S e) = S $ do c' <- c
-                                       t' <- t
-                                       e' <- e
-                                       tellAssignment STypeBool $ '(' : c' ++ '?' : t' ++ ':' : e' ++")"
+        ifB (S c) (S t) (S e) = S $ tellAssignment STypeBool $ do c' <- c
+                                                                  t' <- t
+                                                                  e' <- e
+                                                                  return $ '(' : c' ++ '?' : t' ++ ':' : e' ++")"
                                        
 -- | This class provides the GPU functions either not found in Prelude's numerical classes, or that has wrong types.
 --   Instances are also provided for normal 'Float's and 'Double's.

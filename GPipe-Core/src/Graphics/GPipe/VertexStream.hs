@@ -6,7 +6,7 @@ import Prelude hiding (length, id, (.))
 import Graphics.GPipe.Buffer
 import Graphics.GPipe.Shader
 import Graphics.GPipe.Frame
-import Graphics.GPipe.ContextState
+import Graphics.GPipe.FrameCompiler
 import Graphics.GPipe.VertexArray hiding (length)
 import qualified Graphics.GPipe.VertexArray as VertexArray  (length)
 import Graphics.GPipe.IndexArray hiding (length)
@@ -14,9 +14,9 @@ import qualified Graphics.GPipe.IndexArray as IndexArray (length)
 import Control.Category
 import Control.Arrow
 import Data.Foldable (forM_)
+import Data.Monoid (Monoid)
 
-
-data VertexStream t a = VertexStream [(a, VertexStreamData)]
+newtype VertexStream t a = VertexStream [(a, VertexStreamData)] deriving Monoid
 
 instance Functor (VertexStream t) where
         fmap f (VertexStream xs) = VertexStream $ map (first f) xs
@@ -70,7 +70,6 @@ instance VertexInput BInt32Norm where
                                                 doForName n $ \ _ ix _ -> glAttribArray ix 1 glINT32 False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)
                                         )
                                                                
-
 toPrimitiveStream :: forall os f a p. (VertexInput a, PrimitiveTopology p) 
     => Frame os f (p, VertexArray () a) (VertexStream p (VertexFormat a))
 toPrimitiveStream = IntFrame $ proc d@(_, ba) -> do
@@ -79,14 +78,12 @@ toPrimitiveStream = IntFrame $ proc d@(_, ba) -> do
                         returnA -< VertexStream [(b, VertexStreamData  name)]
     where 
         ToVertex iFrame = toVertex :: ToVertex a (VertexFormat a)
-        {-# INLINE drawcall #-}
         drawcall = dynInStatOut $ do n <- getName
                                      return (n,
                                         \(p, ba) ->
                                             doForName n $ \ _ _ _ -> glDrawArrays (toGLtopology p) 0 (VertexArray.length ba)
                                         )
                 
-
 toIndexedPrimitiveStream :: forall os f i a p. (IndexFormat i, VertexInput a, PrimitiveTopology p) 
     => Frame os f (p, VertexArray () a, IndexArray i) (VertexStream p (VertexFormat a))
 toIndexedPrimitiveStream = IntFrame $ proc (p, ba, iba) -> do
@@ -95,7 +92,6 @@ toIndexedPrimitiveStream = IntFrame $ proc (p, ba, iba) -> do
                         returnA -< VertexStream [(b, VertexStreamData  name)]
     where 
         ToVertex iFrame = toVertex :: ToVertex a (VertexFormat a)
-        {-# INLINE drawcall #-}
         drawcall = dynInStatOut $ do n <- getName
                                      return (n,
                                         \(p, iba) ->
@@ -106,7 +102,6 @@ toIndexedPrimitiveStream = IntFrame $ proc (p, ba, iba) -> do
                                         )
 
 
-
 toInstancedPrimitiveStream :: forall os f a b c p. (VertexInput c, PrimitiveTopology p) 
     => Frame os f (p, VertexArray () a, a -> b -> c, VertexArray Instances b) (VertexStream p (VertexFormat c))
 toInstancedPrimitiveStream = IntFrame $ proc (p, va, f, ina) -> do
@@ -115,7 +110,6 @@ toInstancedPrimitiveStream = IntFrame $ proc (p, va, f, ina) -> do
                         returnA -< VertexStream [(b, VertexStreamData  name)]
     where 
         ToVertex iFrame = toVertex :: ToVertex c (VertexFormat c)
-        {-# INLINE drawcall #-}
         drawcall = dynInStatOut $ do n <- getName
                                      return (n,
                                         \(p, va, ina) ->
@@ -131,7 +125,6 @@ toInstancedIndexedPrimitiveStream = IntFrame $ proc (p, va, ia, f, ina) -> do
                         returnA -< VertexStream [(b, VertexStreamData  name)]
     where 
         ToVertex iFrame = toVertex :: ToVertex c (VertexFormat c)
-        {-# INLINE drawcall #-}
         drawcall = dynInStatOut $ do n <- getName
                                      return (n,
                                         \(p, ia, ina) ->

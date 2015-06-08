@@ -19,7 +19,6 @@ class BufferFormat (UniformBufferFormat a) => Uniform a where
 
 data Proxy a = Proxy
  
-{-# NOINLINE toUniformBlock #-}
 toUniformBlock :: forall os f b. Uniform b => Frame os f (Buffer os (BUniform (UniformBufferFormat b)), Proxy b, Int) b
 toUniformBlock = IntFrame $ dynInStatOut $ do 
                    blockId <- getName

@@ -1,16 +1,21 @@
-{-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances, GeneralizedNewtypeDeriving  #-}
 module Graphics.GPipe.FragmentStream where
 
 import Control.Category hiding ((.))
 import Control.Arrow 
+import Graphics.GPipe.FrameCompiler
 import Graphics.GPipe.Shader
 import Graphics.GPipe.VertexStream
-import Graphics.GPipe.ContextState
 import Control.Monad.Trans.State.Lazy
+import Data.Monoid (Monoid)
 
 type VPos = (VFloat,VFloat,VFloat,VFloat)
-data FragmentStream a = FragmentStream [(a, FragmentStreamData)]
 
+newtype FragmentStream a = FragmentStream [(a, FragmentStreamData)] deriving Monoid
+
+instance Functor FragmentStream where
+        fmap f (FragmentStream xs) = FragmentStream $ map (first f) xs
+ 
 
 newtype ToFragment a b = ToFragment (Kleisli (State Int) a b) deriving (Category, Arrow)
 

@@ -1,15 +1,34 @@
-module Graphics.GPipe.FrameCompiler (compile) where
+module Graphics.GPipe.FrameCompiler where
 
-import Graphics.GPipe.ContextState
 import Graphics.GPipe.Context
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Exception (MonadException)
+import Graphics.GPipe.Shader
+import Data.IntMap as Map
 
-                        
+data Side = Front | Back | FrontAndBack
 
-compile :: (Monad m, MonadIO m, MonadException m) => [DrawCall] -> ContextT os f m CompiledFrame 
+
+type FragOutputName = Int 
+type ErrorName = String 
+type ShaderPos = ShaderM ()
+type DrawCallName = Int
+data VertexStreamData = VertexStreamData DrawCallName
+data FragmentStreamData = FragmentStreamData Side ShaderPos VertexStreamData
+data DrawCall = DrawCall FragOutputName ErrorName (ShaderM ()) (FragmentStreamData) -- the shader is a vec4 return value in a fragment  
+-- All objects doesnt use all of these. Uniform use all, vertex array use only index and texture use the last two(?)
+type ProgramName = Int
+type Index = Int
+type Binding = Int
+
+type NameToIOforProgAndIndex = Map.IntMap (ProgramName -> Index -> Binding -> IO ())
+
+
+
+compile :: (Monad m, MonadIO m, MonadException m) => [DrawCall] -> ContextT os f m (NameToIOforProgAndIndex -> Either String (IO ())) 
 compile dcs = do
-    return $ (\ _ -> Right $ return ())
+    liftIO $ putStrLn "compiling!"
+    return $ (\ x -> Right $ putStrLn $ "dyn is running ")
       
 
 

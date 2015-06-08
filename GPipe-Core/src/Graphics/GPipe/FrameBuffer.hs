@@ -1,12 +1,41 @@
-{-# LANGUAGE Arrows, ScopedTypeVariables #-}
+{-# LANGUAGE Arrows, ScopedTypeVariables, GeneralizedNewtypeDeriving #-}
 module Graphics.GPipe.FrameBuffer where
 
-import Graphics.GPipe.ContextState
 import Graphics.GPipe.Shader
 import Graphics.GPipe.FragmentStream
 import Graphics.GPipe.Format
 import Graphics.GPipe.Frame
+import Graphics.GPipe.FrameCompiler
 import Control.Monad.Trans.Writer.Lazy (tell)
+import Control.Category (Category)
+import Control.Arrow (Arrow)
+
+newtype DrawColors os a b = DrawColors (IntFrame a b) deriving (Category, Arrow)
+
+
+
+drawColor :: forall c os. ColorRenderable c => DrawColors os (Image c, ColorOption c, FragColor c) ()
+drawColor = undefined
+
+drawColorsDepth :: forall a os f d. DepthRenderable d => DrawColors os a () -> Frame os f (Image d, DepthOption, FragmentStream (a, FragDepth)) ()
+drawColorsStencil :: forall a os f s. StencilRenderable s => DrawColors os a () -> Frame os f (Image s, StencilOption, FragmentStream a) ()
+drawColorsDepthStencil :: forall a os f d s. (DepthRenderable d, StencilRenderable s) => DrawColors os a () -> Frame os f (Image d, Image s, DepthStencilOption, FragmentStream (a, FragDepth)) ()
+
+drawColorsDepth = undefined
+drawColorsStencil = undefined
+drawColorsDepthStencil = undefined
+
+drawContextDepth :: forall c os ds. DepthRenderable ds => Frame os (ContextFormat c ds) (DepthOption, FragmentStream FragDepth) ()
+drawContextColorDepth :: forall c os ds. (ColorRenderable c, DepthRenderable ds) => Frame os (ContextFormat c ds) (ColorOption c, DepthOption, FragmentStream (FragColor c, FragDepth)) ()
+drawContextStencil :: forall c os ds. StencilRenderable ds => Frame os (ContextFormat c ds) (StencilOption, FragmentStream ()) ()
+drawContextDepthStencil :: forall c os ds. (DepthRenderable ds, StencilRenderable ds) => Frame os (ContextFormat c ds) (DepthStencilOption, FragmentStream FragDepth) ()
+drawContextColorDepthStencil :: forall c os ds. (ColorRenderable c, DepthRenderable ds, StencilRenderable ds) => Frame os (ContextFormat c ds) (ColorOption c, DepthStencilOption, FragmentStream (FragColor c, FragDepth)) ()
+
+drawContextDepth = undefined
+drawContextColorDepth = undefined
+drawContextStencil = undefined 
+drawContextDepthStencil = undefined
+drawContextColorDepthStencil = undefined 
 
 drawContextColor :: forall c os ds. ColorRenderable c => Frame os (ContextFormat c ds) (ColorOption c, FragmentStream (FragColor c)) ()
 drawContextColor = proc (co, fs) -> do ndc <- IntFrame md -< co  
@@ -16,14 +45,22 @@ drawContextColor = proc (co, fs) -> do ndc <- IntFrame md -< co
                                dc <- getDrawcall 
                                return ((n, dc) ,\co -> doForName n $ \ _ _ _ -> glBindOutputAndSetColorOptions co)
         f ((n,dc),FragmentStream xs) = mapM_ (g n dc) xs
-        g n dc (c, fd) = 
-            let (S x, S y, S z, S w) = fromColor (undefined :: c) c (S $ return "1")
-                m =  do x' <- x
-                        y' <- y
-                        z' <- z
-                        w' <- w                       
-                        return ("vec4(" ++ x' ++ ',' : y' ++ ',' : z' ++ ',' : w' ++")")  
-            in tell [DrawCall n (orderth dc ++ " drawcall") m fd]                                       
+        g n dc (c, fd) = tell [DrawCall n (orderth dc ++ " drawcall") (setColor (undefined :: c) "gl_FragColor" c) fd]                                       
+
+
+dynStatIn :: IntFrame a t -> ((t, t1) -> StaticFrame ()) -> Frame os f (a, t1) ()
+dynStatIn  md f = proc (co, fs) -> do ndc <- IntFrame md -< co  
+                                      IntFrame (statIn f) -< (ndc, fs)
+
+
+setColor :: forall c. ColorFormat c => c -> String -> FragColor c -> ShaderM ()
+setColor ct name c = let (S x, S y, S z, S w) = fromColor ct c (S $ return "1")
+                  in do 
+                    x' <- x
+                    y' <- y
+                    z' <- z
+                    w' <- w
+                    tellAssignment' name ("vec4(" ++ x' ++ ',' : y' ++ ',' : z' ++ ',' : w' ++")")  
 
 orderth :: Int -> String
 orderth x = let s = show x 
@@ -43,9 +80,14 @@ type FragDepth = FFloat
 
 data ColorOption f = ColorOption (Blending f) (ColorMask f)
 
+data Image f = Image
+
 data DepthOption = DepthOption DepthFunction DepthMask
-data StencilOption = StencilOption (FrontBack StencilTest) (FrontBack StencilOp) (FrontBack StencilOp)
-data DepthStencilOption = DepthStencilOption DepthOption StencilOption (FrontBack StencilOp)    
+type StencilOpWhenStencilFail = FrontBack StencilOp
+type StencilOpWhenDepthFail = FrontBack StencilOp
+type StencilOpWhenPass = FrontBack StencilOp
+data StencilOption = StencilOption (FrontBack StencilTest) StencilOpWhenStencilFail StencilOpWhenPass
+data DepthStencilOption = DepthStencilOption StencilOption DepthOption StencilOpWhenDepthFail
 
 data FrontBack a = FrontBack { front :: a, back :: a }
 

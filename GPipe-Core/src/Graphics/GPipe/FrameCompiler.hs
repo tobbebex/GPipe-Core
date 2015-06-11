@@ -4,9 +4,10 @@ import Graphics.GPipe.Context
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Exception (MonadException)
 import Graphics.GPipe.Shader
-import Data.IntMap as Map
-import Prelude hiding (putStr)
+import Data.IntMap as Map hiding (foldl, map)
+import Prelude hiding (putStr, (!))
 import Data.Text.Lazy.IO (putStr)
+import Data.Monoid (mconcat)
 
 data Side = Front | Back | FrontAndBack
 
@@ -19,31 +20,70 @@ data VertexStreamData = VertexStreamData DrawCallName
 data FragmentStreamData = FragmentStreamData Side ShaderPos VertexStreamData
 data DrawCall = DrawCall FragOutputName ErrorName (ShaderM ()) (FragmentStreamData) -- the shader is a vec4 return value in a fragment  
 -- All objects doesnt use all of these. Uniform use all, vertex array use only index and texture use the last two(?)
-type ProgramName = Int
-type Index = Int
-type Binding = Int
+type IndexOrBinding = Int
 
-type NameToIOforProgAndIndex = Map.IntMap (ProgramName -> Index -> Binding -> IO ())
+type NameToIOforProgAndIndex = Map.IntMap (IndexOrBinding -> IO ())
 
 
-
-compile :: (Monad m, MonadIO m, MonadException m) => [DrawCall] -> ContextT os f m (NameToIOforProgAndIndex -> Either String (IO ())) 
+compile :: (Monad m, MonadIO m, MonadException m) => [DrawCall] -> ContextT os f m (NameToIOforProgAndIndex -> IO ()) 
 compile dcs = do
-    mapM_ comp dcs   
-    return $ (\ x -> Right $ putStrLn $ "dyn is running ")
+    drawcalls <- mapM prep dcs
+    let allocatedDrawcalls = allocate drawcalls      
+    fs <- mapM comp allocatedDrawcalls      
+    return $ \x -> foldl (\io f -> io >> f x) (return ()) fs 
  where
-    comp (DrawCall outN errN output (FragmentStreamData side shaderpos (VertexStreamData dcN))) = 
-        do liftContextIO $ do (fsource, funis, fsamps, finps, prevDecls, prevS) <- runShaderM (return ()) output
-                              (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls (prevS >> shaderpos)
+    prep (DrawCall outN errN output (FragmentStreamData side shaderpos (VertexStreamData dcN))) =
+           liftIO $ do (fsource, funis, fsamps, _, prevDecls, prevS) <- runShaderM (return ()) output
+                       (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls (prevS >> shaderpos)
+                       let unis = orderedUnion funis vunis
+                           samps = orderedUnion fsamps vsamps
+                       return (dcN, vsource, fsource, vinps, unis, samps)
+                      
+    comp (dcN, vsource, fsource, inps, unis, samps, ubinds, sbinds) =
+           liftContextIO $ do let inpsi = zip inps [0..] :: [(Int,Int)]
+                                  unisi = zip unis [0..] :: [(Int,Int)]
+                                  sampsi = zip samps [0..] :: [(Int,Int)]
+                                  ubindsi = zip ubinds [0..] :: [(Int,Int)]
+                                  sbindsi = zip sbinds [0..] :: [(Int,Int)]
+                                  unisbinds = zip unis ubinds :: [(Int,Int)]
+                                  sampsbinds = zip samps sbinds :: [(Int,Int)]
+                              
+                              putStrLn "Compiling program"
                               putStrLn "-------------"
                               putStrLn "VERTEXSHADER:"
                               putStr vsource
                               putStrLn "-------------"   
                               putStrLn "FRAGMENTSHADER:"
                               putStr fsource
-                              putStrLn "-------------"   
-      
+                              putStrLn "-------------"
+                              
+                              mapM_ (\(name, ix) -> putStrLn $ "INPUT BindNameToIndex" ++ show name ++ " " ++ show ix) inpsi
+                              mapM_ (\(name, ix) -> putStrLn $ "UNI BindNameToIndex" ++ show name ++ " " ++ show ix) unisi
+                              mapM_ (\(name, ix) -> putStrLn $ "SAMP BindNameToIndex" ++ show name ++ " " ++ show ix) sampsi
+                              
+                              putStrLn "---- LINK ---"
+                              pName <- return 111 -- glGenProg
+                              
+                              mapM_ (\(bind, ix) -> putStrLn $ "glUniformBlockBinding p ix bind " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) ubindsi
+                              mapM_ (\(bind, ix) -> putStrLn $ "samplerBinds " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) sbindsi
+                              
+                              return (\ m -> do putStrLn "Running dynamically:"
+                                                mapM_ (uncurry (m !)) inpsi -- TODO: Make it look up inputs specifically
+                                                mapM_ (uncurry (m !)) unisbinds -- TODO: Make it look up uniforms specifically 
+                                                mapM_ (uncurry (m !)) sampsbinds -- TODO: Make it look up samplers specifically
+                                                putStrLn $ "UseProgram " ++ show pName 
+                                                (m ! dcN) undefined -- TODO: Make it look up drawcalls specifically
+                                     )
 
+allocate = map (\(dcN, q,w,e,r,t) -> (dcN, q,w,e,r,t, map (*1000) r, map (*1000) t)) -- TODO, find bindings for uniforms
+
+      
+orderedUnion :: Ord a => [a] -> [a] -> [a]
+orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys 
+                                   | x < y     = x : orderedUnion xs yys
+                                   | otherwise = y : orderedUnion xxs ys
+orderedUnion xs [] = xs
+orderedUnion [] ys = ys
 
 {-
             in do (fsource, funis, fsamps, finps, prevDecls, prevS) <- runShaderM (return ()) m
@@ -90,10 +130,5 @@ getGlMAX_SAMPLER_BINDINGS = return 5
 
 -}
 
-orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys 
-                                   | x < y     = x : orderedUnion xs yys
-                                   | otherwise = y : orderedUnion xxs ys
-orderedUnion xs [] = xs
-orderedUnion [] ys = ys
-orderedUnion _ _   = []
+
       

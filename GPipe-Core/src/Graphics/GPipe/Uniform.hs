@@ -25,9 +25,8 @@ toUniformBlock :: forall os f b. Uniform b => Frame os f (Buffer os (BUniform (U
 toUniformBlock = IntFrame $ dynInStatOut $ do 
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId) -- TODO: Verify that this tying-the-knot works!
-                   return (u, \(ub, i) -> doForName blockId $ \ p ix bind -> do
-                                             glBindBufferRange glUNIFORM_ARRAY bind (bufName ub) (i * bufElementSize ub) (bufElementSize ub) 
-                                             glUniformBlockBinding p ix bind)
+                   return (u, \(ub, i) -> doForName blockId $ \bind -> do
+                                             glBindBufferRange glUNIFORM_ARRAY bind (bufName ub) (i * bufElementSize ub) (bufElementSize ub))
     where
             sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform (UniformBufferFormat b) b

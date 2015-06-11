@@ -47,13 +47,13 @@ type StaticFrame = Writer [DrawCall]
 type DynamicFrame = State NameToIOforProgAndIndex
 runDynamicFrame m = execState m Map.empty 
 
-doForName :: Int -> (ProgramName -> Index -> Binding -> IO ()) -> DynamicFrame () 
+doForName :: Int -> (IndexOrBinding -> IO ()) -> DynamicFrame () 
 doForName n io = modify $ alter (Just . f) n 
     where f Nothing = io
-          f (Just x) = \p i b -> x p i b >> io p i b
+          f (Just x) = \i -> x i >> io i
 
 -- Warning, setupForName is order dependent, must be run before any doForName  
-setupForName :: Int -> (ProgramName -> Index -> Binding -> IO ()) -> DynamicFrame ()  
+setupForName :: Int -> (IndexOrBinding -> IO ()) -> DynamicFrame ()  
 setupForName n io = modify $ alter (Just . f) n 
     where f Nothing = io
           f (Just x) = x
@@ -112,7 +112,7 @@ dynInStatOut m =  Frame (Kleisli $ \a -> do   (r, md) <- m
 statIn :: (a -> StaticFrame ()) -> IntFrame a ()
 statIn ms = Frame (arr $ const ()) (Kleisli (lift . ms))
 
-data CompiledFrame os f x = CompiledFrame (x -> Either String (IO ()))
+data CompiledFrame os f x = CompiledFrame (x -> IO ())
 
 compileFrame :: (MonadIO m, MonadException m) => Frame os f x () -> ContextT os f m (CompiledFrame os f x)
 compileFrame (IntFrame (Frame (Kleisli dyn) (Kleisli stat))) =
@@ -121,9 +121,7 @@ compileFrame (IntFrame (Frame (Kleisli dyn) (Kleisli stat))) =
 
 
 runFrame :: (MonadIO m, MonadException m) => CompiledFrame os f x -> x -> ContextT os f m ()
-runFrame (CompiledFrame f) x = case f x of
-                                        Right io -> liftContextIO io
-                                        Left e -> throw $ GPipeException e
+runFrame (CompiledFrame f) x = liftContextIO (f x)
 
 
      

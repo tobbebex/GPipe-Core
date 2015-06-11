@@ -57,8 +57,8 @@ instance VertexInput BFloat where
     toVertex = ToVertex $ dynInStatOut $ do 
                                  n <- getName
                                  return (S $ useVInput STypeFloat n
-                                         ,\b -> do setupForName n $ \ _ _ _ -> glBindBuffer (bName b) glVERTEX_ARRAY
-                                                   doForName n $ \ _ ix _ -> glAttribArray ix 1 glFLOAT False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)
+                                         ,\b -> do setupForName n $ \ _ -> glBindBuffer (bName b) glVERTEX_ARRAY
+                                                   doForName n $ \ ix -> glAttribArray ix 1 glFLOAT False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)
                                          )
 instance VertexInput BInt32Norm where
     type VertexFormat BInt32Norm = VFloat
@@ -66,8 +66,8 @@ instance VertexInput BInt32Norm where
                                  n <- getName
                                  return (S $ useVInput STypeFloat n 
                                         ,\(BNormalized b) -> do
-                                                setupForName n $ \ _ _ _ -> glBindBuffer (bName b) glVERTEX_ARRAY
-                                                doForName n $ \ _ ix _ -> glAttribArray ix 1 glINT32 False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)
+                                                setupForName n $ \ _ -> glBindBuffer (bName b) glVERTEX_ARRAY
+                                                doForName n $ \ ix -> glAttribArray ix 1 glINT32 False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)
                                         )
                                                                
 toPrimitiveStream :: forall os f a p. (VertexInput a, PrimitiveTopology p) 
@@ -81,7 +81,7 @@ toPrimitiveStream = IntFrame $ proc d@(_, ba) -> do
         drawcall = dynInStatOut $ do n <- getName
                                      return (n,
                                         \(p, ba) ->
-                                            doForName n $ \ _ _ _ -> glDrawArrays (toGLtopology p) 0 (VertexArray.length ba)
+                                            doForName n $ \ _ -> glDrawArrays (toGLtopology p) 0 (VertexArray.length ba)
                                         )
                 
 toIndexedPrimitiveStream :: forall os f i a p. (IndexFormat i, VertexInput a, PrimitiveTopology p) 
@@ -95,7 +95,7 @@ toIndexedPrimitiveStream = IntFrame $ proc (p, ba, iba) -> do
         drawcall = dynInStatOut $ do n <- getName
                                      return (n,
                                         \(p, iba) ->
-                                            doForName n $ \ _ _ _ -> do 
+                                            doForName n $ \ _ -> do 
                                               forM_ (restart iba) glRestartIndex
                                               glBindBuffer (iArrName iba) glELEMENT_ARRAY
                                               glDrawElements (toGLtopology p) (IndexArray.length iba) (indexType iba) (offset iba)
@@ -113,7 +113,7 @@ toInstancedPrimitiveStream = IntFrame $ proc (p, va, f, ina) -> do
         drawcall = dynInStatOut $ do n <- getName
                                      return (n,
                                         \(p, va, ina) ->
-                                            doForName n $ \ _ _ _ -> glDrawArraysInstanced (toGLtopology p) 0 (VertexArray.length va) (VertexArray.length ina)
+                                            doForName n $ \ _ -> glDrawArraysInstanced (toGLtopology p) 0 (VertexArray.length va) (VertexArray.length ina)
                                         )
 
    
@@ -128,7 +128,7 @@ toInstancedIndexedPrimitiveStream = IntFrame $ proc (p, va, ia, f, ina) -> do
         drawcall = dynInStatOut $ do n <- getName
                                      return (n,
                                         \(p, ia, ina) ->
-                                            doForName n $ \ _ _ _ -> do 
+                                            doForName n $ \ _ -> do 
                                               forM_ (restart ia) glRestartIndex
                                               glBindBuffer (iArrName ia) glELEMENT_ARRAY
                                               glDrawElementsInstanced (toGLtopology p) (IndexArray.length ia) (indexType ia) (offset ia) (VertexArray.length ina)

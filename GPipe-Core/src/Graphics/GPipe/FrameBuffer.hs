@@ -42,7 +42,7 @@ drawContextColor = dynStatIn md f
     where
         md = dynInStatOut $ do n <- getName
                                dc <- getDrawcall 
-                               return ((n, dc) ,\co -> doForName n $ \ _ _ _ -> glBindOutputAndSetColorOptions co)
+                               return ((n, dc) ,\co -> doForName n $ \ _ -> glBindOutputAndSetColorOptions co)
         f ((n,dc),FragmentStream xs) = mapM_ (g n dc) xs
         g n dc (c, fd) = tell [DrawCall n (orderth dc ++ " drawcall") (setColor (undefined :: c) "gl_FragColor" c) fd]                                       
 

@@ -26,15 +26,15 @@ instance IndexFormat BWord8 where
     indexToInt _ = fromIntegral    
     glType _ = glBYTE
     
-data IndexArray b = IndexArray { iArrName :: Int, length:: Int, offset:: Int, restart:: Maybe Int, indexB :: b, indexType :: Int } 
-newIndexArray :: forall os f a. IndexFormat a => Frame os f (Buffer os a, Maybe (HostFormat a)) (IndexArray a)
+data IndexArray = IndexArray { iArrName :: Int, length:: Int, offset:: Int, restart:: Maybe Int, indexType :: Int } 
+newIndexArray :: forall os f a. IndexFormat a => Frame os f (Buffer os a, Maybe (HostFormat a)) IndexArray
 newIndexArray = arr (\(buf, r) ->
-        let a = undefined :: a in IndexArray (bufName buf) (bufElementCount buf) 0 (fmap (indexToInt a) r) (bufBElement buf $ BInput 0 0) (glType a)) 
+        let a = undefined :: a in IndexArray (bufName buf) (bufElementCount buf) 0 (fmap (indexToInt a) r) (glType a)) 
  
-take :: Int -> IndexArray a -> IndexArray a
+take :: Int -> IndexArray -> IndexArray
 take n i = i { length = min n (length i) }
 
-drop :: Int -> IndexArray a -> IndexArray a
+drop :: Int -> IndexArray -> IndexArray
 drop n i = i { length = max (l - n) 0, offset = offset i + n } where l = length i
  
 glINT :: Int

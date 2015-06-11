@@ -5,6 +5,8 @@ import Graphics.GPipe.Buffer
 import Graphics.GPipe.Frame
 import Control.Applicative
 import Control.Arrow (arr)
+import Graphics.GPipe.IndexArray hiding (length)
+import qualified Graphics.GPipe.IndexArray as IndexArray (length)
 
 data VertexArray t a = VertexArray  { length :: Int, bArrBFunc:: BInput -> a }
 
@@ -34,5 +36,7 @@ replicateEach n (VertexArray m f) = VertexArray (n*m) (\x -> f $ x {bInInstanceD
 instance Applicative (VertexArray t) where
     pure = VertexArray maxBound . const
     (VertexArray n f) <*> (VertexArray m g) = VertexArray (min n m) (\x -> f x (g x))
+
+--index :: IndexArray b -> VertexArray a -> 
 
 -- TODO: add zipWithIndex to add gl_VertexId and gl_InstanceId

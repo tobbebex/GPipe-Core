@@ -84,8 +84,8 @@ toPrimitiveStream = IntFrame $ proc d@(_, ba) -> do
                                             doForName n $ \ _ -> glDrawArrays (toGLtopology p) 0 (VertexArray.length ba)
                                         )
                 
-toIndexedPrimitiveStream :: forall os f i a p. (IndexFormat i, VertexInput a, PrimitiveTopology p) 
-    => Frame os f (p, VertexArray () a, IndexArray i) (VertexStream p (VertexFormat a))
+toIndexedPrimitiveStream :: forall os f a p. (VertexInput a, PrimitiveTopology p) 
+    => Frame os f (p, VertexArray () a, IndexArray) (VertexStream p (VertexFormat a))
 toIndexedPrimitiveStream = IntFrame $ proc (p, ba, iba) -> do
                         b <- iFrame -< bArrBFunc ba (BInput 0 0)
                         name <- drawcall -< (p, iba)
@@ -117,8 +117,8 @@ toInstancedPrimitiveStream = IntFrame $ proc (p, va, f, ina) -> do
                                         )
 
    
-toInstancedIndexedPrimitiveStream :: forall os f i a b c p .(IndexFormat i, VertexInput c, PrimitiveTopology p) 
-    => Frame os f (p, VertexArray () a, IndexArray i, a -> b -> c, VertexArray Instances b) (VertexStream p (VertexFormat c))
+toInstancedIndexedPrimitiveStream :: forall os f a b c p .(VertexInput c, PrimitiveTopology p) 
+    => Frame os f (p, VertexArray () a, IndexArray, a -> b -> c, VertexArray Instances b) (VertexStream p (VertexFormat c))
 toInstancedIndexedPrimitiveStream = IntFrame $ proc (p, va, ia, f, ina) -> do
                         b <- iFrame -< f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1)
                         name <- drawcall -< (p, ia, ina)

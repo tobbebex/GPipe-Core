@@ -256,7 +256,7 @@ glStoreBufferGl _ _ _ _ = return ()
                        
 genBufferGl :: IO Int
 genBufferGl = do putStrLn "genBuffer"
-                 return 0
+                 return 987
 
 glDeleteBuffer :: Int -> IO ()     
 glDeleteBuffer _ = return ()

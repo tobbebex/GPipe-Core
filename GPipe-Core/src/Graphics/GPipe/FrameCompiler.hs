@@ -8,6 +8,9 @@ import Data.IntMap as Map hiding (foldl, map)
 import Prelude hiding (putStr, (!))
 import Data.Text.Lazy.IO (putStr)
 import Data.Monoid (mconcat)
+import Data.Text.Lazy (Text)
+import Control.Monad (forM, forM_)
+import Data.List (transpose)
 
 data Side = Front | Back | FrontAndBack
 
@@ -22,14 +25,14 @@ data DrawCall = DrawCall FragOutputName ErrorName (ShaderM ()) (FragmentStreamDa
 -- All objects doesnt use all of these. Uniform use all, vertex array use only index and texture use the last two(?)
 type IndexOrBinding = Int
 
-type NameToIOforProgAndIndex = Map.IntMap (IndexOrBinding -> IO ())
+type NameToIOforProgAndIndex = Map.IntMap [IndexOrBinding -> IO ()]
 
 
 compile :: (Monad m, MonadIO m, MonadException m) => [DrawCall] -> ContextT os f m (NameToIOforProgAndIndex -> IO ()) 
 compile dcs = do
     drawcalls <- mapM prep dcs
     let allocatedDrawcalls = allocate drawcalls      
-    fs <- mapM comp allocatedDrawcalls      
+    fs <- mapM comp $ zip allocatedDrawcalls [111..] -- just to debug program names      
     return $ \x -> foldl (\io f -> io >> f x) (return ()) fs 
  where
     prep (DrawCall outN errN output (FragmentStreamData side shaderpos (VertexStreamData dcN))) =
@@ -38,8 +41,7 @@ compile dcs = do
                        let unis = orderedUnion funis vunis
                            samps = orderedUnion fsamps vsamps
                        return (dcN, vsource, fsource, vinps, unis, samps)
-                      
-    comp (dcN, vsource, fsource, inps, unis, samps, ubinds, sbinds) =
+    comp ((dcN, vsource, fsource, inps, unis, samps, ubinds, sbinds), pN) =
            liftContextIO $ do let inpsi = zip inps [0..] :: [(Int,Int)]
                                   unisi = zip unis [0..] :: [(Int,Int)]
                                   sampsi = zip samps [0..] :: [(Int,Int)]
@@ -48,6 +50,8 @@ compile dcs = do
                                   unisbinds = zip unis ubinds :: [(Int,Int)]
                                   sampsbinds = zip samps sbinds :: [(Int,Int)]
                               
+                              putStrLn "-------------------------------------------------------------------------------------------"
+                              putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "Compiling program"
                               putStrLn "-------------"
                               putStrLn "VERTEXSHADER:"
@@ -57,23 +61,31 @@ compile dcs = do
                               putStr fsource
                               putStrLn "-------------"
                               
-                              mapM_ (\(name, ix) -> putStrLn $ "INPUT BindNameToIndex" ++ show name ++ " " ++ show ix) inpsi
-                              mapM_ (\(name, ix) -> putStrLn $ "UNI BindNameToIndex" ++ show name ++ " " ++ show ix) unisi
-                              mapM_ (\(name, ix) -> putStrLn $ "SAMP BindNameToIndex" ++ show name ++ " " ++ show ix) sampsi
+                              mapM_ (\(name, ix) -> putStrLn $ "INPUT BindNameToIndex in" ++ show name ++ " " ++ show ix) inpsi
+                              mapM_ (\(name, ix) -> putStrLn $ "UNI BindNameToIndex uBlock" ++ show name ++ " " ++ show ix) unisi
+                              mapM_ (\(name, ix) -> putStrLn $ "SAMP BindNameToIndex s" ++ show name ++ " " ++ show ix) sampsi
                               
                               putStrLn "---- LINK ---"
-                              pName <- return 111 -- glGenProg
+                              pName <- return pN -- glGenProg
+                              putStrLn $ "pName = " ++ show pName
                               
                               mapM_ (\(bind, ix) -> putStrLn $ "glUniformBlockBinding p ix bind " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) ubindsi
                               mapM_ (\(bind, ix) -> putStrLn $ "samplerBinds " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) sbindsi
+                              putStrLn "-------------------------------------------------------------------------------------------"
+                              putStrLn "-------------------------------------------------------------------------------------------"
                               
-                              return (\ m -> do putStrLn "Running dynamically:"
-                                                mapM_ (uncurry (m !)) inpsi -- TODO: Make it look up inputs specifically
-                                                mapM_ (uncurry (m !)) unisbinds -- TODO: Make it look up uniforms specifically 
-                                                mapM_ (uncurry (m !)) sampsbinds -- TODO: Make it look up samplers specifically
-                                                putStrLn $ "UseProgram " ++ show pName 
-                                                (m ! dcN) undefined -- TODO: Make it look up drawcalls specifically
-                                     )
+                              return (\m -> do 
+                                           putStrLn "-----------------------------------------"
+                                           putStrLn $ "UseProgram " ++ show pName 
+                                           -- Bind uniforms
+                                           mapM_ (\(n, b) ->  head (m ! n) b) unisbinds -- TODO: Make it look up uniforms specifically 
+                                           mapM_ (\(n, b) ->  head (m ! n) b) sampsbinds -- TODO: Make it look up samplers specifically
+                                           let dcins = zip (m ! dcN) (transpose (map (\(n,ix)-> map ($ix) (m ! n)) inpsi)) 
+                                           forM_ dcins $ \ (a, b) ->
+                                                                do sequence_ b
+                                                                   a undefined
+                                           putStrLn "-----------------------------------------"
+                                           )
 
 allocate = map (\(dcN, q,w,e,r,t) -> (dcN, q,w,e,r,t, map (*1000) r, map (*1000) t)) -- TODO, find bindings for uniforms
 

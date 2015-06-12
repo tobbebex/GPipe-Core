@@ -49,10 +49,10 @@ buildUDecl = buildUDecl' 0 . Map.assocs
 type OffsetToSType = Map.IntMap SType  
 
 glUniformBlockBinding :: Int -> Int -> Int -> IO ()
-glUniformBlockBinding = undefined
+glUniformBlockBinding a b c = putStrLn $ "glUniformBlockBinding " ++ show (a,b,c)
 
 glBindBufferRange :: Int -> Int -> Int -> Int -> Int -> IO ()
-glBindBufferRange = undefined                                
+glBindBufferRange a b c d e = putStrLn $ "glBindBufferRange " ++ show (a,b,c,d,e)                            
 
 glUNIFORM_ARRAY = 0
 

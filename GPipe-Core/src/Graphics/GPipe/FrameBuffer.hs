@@ -71,7 +71,7 @@ orderth x = let s = show x
                                 '3' -> "rd"
                                 _ -> "th"  
 
-glBindOutputAndSetColorOptions = undefined
+glBindOutputAndSetColorOptions _ = putStrLn "glBindOutputAndSetColorOptions x"
 
 type FragColor c = Color c (S F (ColorElement c))
 type FragDepth = FFloat

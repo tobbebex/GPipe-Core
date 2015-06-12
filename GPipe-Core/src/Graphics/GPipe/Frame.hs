@@ -6,11 +6,12 @@ module Graphics.GPipe.Frame (
     Frame(..),
     IntFrame(..),
     StaticFrame,
+    DynamicFrame,
+    FrameState(..),
     dynInStatOut,
     statIn,    
     getName,
     getDrawcall,
-    setupForName,
     doForName,
     runFrame,
     compileFrame
@@ -49,15 +50,8 @@ runDynamicFrame m = execState m Map.empty
 
 doForName :: Int -> (IndexOrBinding -> IO ()) -> DynamicFrame () 
 doForName n io = modify $ alter (Just . f) n 
-    where f Nothing = io
-          f (Just x) = \i -> x i >> io i
-
--- Warning, setupForName is order dependent, must be run before any doForName  
-setupForName :: Int -> (IndexOrBinding -> IO ()) -> DynamicFrame ()  
-setupForName n io = modify $ alter (Just . f) n 
-    where f Nothing = io
-          f (Just x) = x
-
+    where f Nothing = [io]
+          f (Just x) = x ++ [io]
 
 -- index refers to what is used in the final shader. Index space is limited, usually 16
 -- attribname is what was declared, but all might not be used. Attribname share namespace with uniforms and textures and is unlimited(TM)
@@ -121,7 +115,14 @@ compileFrame (IntFrame (Frame (Kleisli dyn) (Kleisli stat))) =
 
 
 runFrame :: (MonadIO m, MonadException m) => CompiledFrame os f x -> x -> ContextT os f m ()
-runFrame (CompiledFrame f) x = liftContextIO (f x)
+runFrame (CompiledFrame f) x = liftContextIO $ do
+                               putStrLn "-------------------------------------------------------------------------------------------"
+                               putStrLn "-------------------------------------------------------------------------------------------"
+                               putStrLn "Running frame"
+                               (f x)
+                               putStrLn "-------------------------------------------------------------------------------------------"
+                               putStrLn "-------------------------------------------------------------------------------------------"
+
 
 
      

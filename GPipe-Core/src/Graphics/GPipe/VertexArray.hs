@@ -37,6 +37,4 @@ instance Applicative (VertexArray t) where
     pure = VertexArray maxBound . const
     (VertexArray n f) <*> (VertexArray m g) = VertexArray (min n m) (\x -> f x (g x))
 
---index :: IndexArray b -> VertexArray a -> 
-
 -- TODO: add zipWithIndex to add gl_VertexId and gl_InstanceId

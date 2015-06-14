@@ -5,14 +5,13 @@ import Graphics.GPipe.Shader
 import Graphics.GPipe.FragmentStream
 import Graphics.GPipe.Format
 import Graphics.GPipe.Frame
+import Graphics.GPipe.VertexStream
 import Graphics.GPipe.FrameCompiler
 import Control.Monad.Trans.Writer.Lazy (tell)
 import Control.Category (Category)
 import Control.Arrow (Arrow)
 
 newtype DrawColors os a b = DrawColors (IntFrame a b) deriving (Category, Arrow)
-
-
 
 drawColor :: forall c os. ColorRenderable c => DrawColors os (Image c, ColorOption c, FragColor c) ()
 drawColor = undefined
@@ -44,8 +43,14 @@ drawContextColor = dynStatIn md f
                                dc <- getDrawcall 
                                return ((n, dc) ,\co -> doForName n $ \ _ -> glBindOutputAndSetColorOptions co)
         f ((n,dc),FragmentStream xs) = mapM_ (g n dc) xs
-        g n dc (c, fd) = tell [DrawCall n (orderth dc ++ " drawcall") (setColor (undefined :: c) "gl_FragColor" c) fd]                                       
+        g n dc (c, fd) = tell [makeDrawcall n (orderth dc ++ " drawcall") (setColor (undefined :: c) "gl_FragColor" c) fd]                                       
 
+makeDrawcall n _err sh (FragmentStreamData side shaderpos (VertexStreamData dcN)) =
+       do (fsource, funis, fsamps, _, prevDecls, prevS) <- runShaderM (return ()) sh
+          (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls (prevS >> shaderpos)
+          let unis = orderedUnion funis vunis
+              samps = orderedUnion fsamps vsamps
+          return $ Drawcall dcN vsource fsource vinps unis samps
 
 dynStatIn :: IntFrame a t -> ((t, t1) -> StaticFrame ()) -> Frame os f (a, t1) ()
 dynStatIn  md f = proc (co, fs) -> do ndc <- IntFrame md -< co  

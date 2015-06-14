@@ -11,6 +11,10 @@ import Data.Monoid (Monoid)
 
 type VPos = (VFloat,VFloat,VFloat,VFloat)
 
+data Side = Front | Back | FrontAndBack
+type ShaderPos = ShaderM ()
+data FragmentStreamData = FragmentStreamData Side ShaderPos VertexStreamData
+
 newtype FragmentStream a = FragmentStream [(a, FragmentStreamData)] deriving Monoid
 
 instance Functor FragmentStream where

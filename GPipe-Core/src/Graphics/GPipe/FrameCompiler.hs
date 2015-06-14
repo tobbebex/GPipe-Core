@@ -10,38 +10,31 @@ import Data.Text.Lazy.IO (putStr)
 import Data.Monoid (mconcat)
 import Data.Text.Lazy (Text)
 import Control.Monad (forM, forM_)
-import Data.List (transpose)
+import Data.List (transpose, zip4)
 
-data Side = Front | Back | FrontAndBack
+data Drawcall = Drawcall {
+                    drawcallName :: Int,
+                    vertexsSource :: Text,
+                    fragmentSource :: Text,
+                    usedInputs :: [Int],
+                    usedUniforms :: [Int],
+                    usedSamplers :: [Int]
+                    }                                      
 
-
-type FragOutputName = Int 
-type ErrorName = String 
-type ShaderPos = ShaderM ()
-type DrawCallName = Int
-data VertexStreamData = VertexStreamData DrawCallName
-data FragmentStreamData = FragmentStreamData Side ShaderPos VertexStreamData
-data DrawCall = DrawCall FragOutputName ErrorName (ShaderM ()) (FragmentStreamData) -- the shader is a vec4 return value in a fragment  
 -- All objects doesnt use all of these. Uniform use all, vertex array use only index and texture use the last two(?)
 type IndexOrBinding = Int
 
 type NameToIOforProgAndIndex = Map.IntMap [IndexOrBinding -> IO ()]
 
-
-compile :: (Monad m, MonadIO m, MonadException m) => [DrawCall] -> ContextT os f m (NameToIOforProgAndIndex -> IO ()) 
+compile :: (Monad m, MonadIO m, MonadException m) => [IO Drawcall] -> ContextT os f m (NameToIOforProgAndIndex -> IO ()) 
 compile dcs = do
-    drawcalls <- mapM prep dcs
-    let allocatedDrawcalls = allocate drawcalls      
-    fs <- mapM comp $ zip allocatedDrawcalls [111..] -- just to debug program names      
+    drawcalls <- liftIO $ sequence dcs
+    let allocatedUniforms = allocate glMAXUniforms (map (usedUniforms) drawcalls)      
+    let allocatedSamplers = allocate glMAXSamplers (map (usedSamplers) drawcalls)      
+    fs <- mapM comp $ zip4 drawcalls allocatedUniforms allocatedSamplers [111..] -- just to debug program names, make zip3 later      
     return $ \x -> foldl (\io f -> io >> f x) (return ()) fs 
  where
-    prep (DrawCall outN errN output (FragmentStreamData side shaderpos (VertexStreamData dcN))) =
-           liftIO $ do (fsource, funis, fsamps, _, prevDecls, prevS) <- runShaderM (return ()) output
-                       (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls (prevS >> shaderpos)
-                       let unis = orderedUnion funis vunis
-                           samps = orderedUnion fsamps vsamps
-                       return (dcN, vsource, fsource, vinps, unis, samps)
-    comp ((dcN, vsource, fsource, inps, unis, samps, ubinds, sbinds), pN) =
+    comp (Drawcall dcN vsource fsource inps unis samps, ubinds, sbinds, pN) =
            liftContextIO $ do let inpsi = zip inps [0..] :: [(Int,Int)]
                                   unisi = zip unis [0..] :: [(Int,Int)]
                                   sampsi = zip samps [0..] :: [(Int,Int)]
@@ -87,8 +80,10 @@ compile dcs = do
                                            putStrLn "-----------------------------------------"
                                            )
 
-allocate = map (\(dcN, q,w,e,r,t) -> (dcN, q,w,e,r,t, map (*1000) r, map (*1000) t)) -- TODO, find bindings for uniforms
+allocate mx xss = xss -- TODO, find bindings 
 
+glMAXUniforms = 3 :: Int
+glMAXSamplers = 3:: Int
       
 orderedUnion :: Ord a => [a] -> [a] -> [a]
 orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys 

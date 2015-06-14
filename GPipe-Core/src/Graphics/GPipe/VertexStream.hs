@@ -86,6 +86,8 @@ toPrimitiveArrayIndexedInstanced :: PrimitiveTopology p => p -> IndexArray -> Ve
 toPrimitiveArrayIndexedInstanced p ia va ina f = PrimitiveArray [PrimitiveArrayIndexedInstanced p ia (VertexArray.length ina) (f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1))]
 
 --------------------
+type DrawCallName = Int
+data VertexStreamData = VertexStreamData DrawCallName
 
 newtype VertexStream t a = VertexStream [(a, VertexStreamData)] deriving Monoid
 

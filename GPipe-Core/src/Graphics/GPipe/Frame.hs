@@ -40,7 +40,7 @@ runStaticFrameT m = evalStateT m (FrameState 0 1)
 
 
 
-type StaticFrame = Writer [DrawCall] 
+type StaticFrame = Writer [IO Drawcall] 
 
 
 --type AttribNameToIndexMap = Map.IntMap Int

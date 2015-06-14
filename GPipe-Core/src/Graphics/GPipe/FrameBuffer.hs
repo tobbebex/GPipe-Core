@@ -10,6 +10,8 @@ import Graphics.GPipe.FrameCompiler
 import Control.Monad.Trans.Writer.Lazy (tell)
 import Control.Category (Category)
 import Control.Arrow (Arrow)
+import Control.Monad.Trans.State.Lazy (modify)
+import Data.IntMap.Lazy (insert)
 
 newtype DrawColors os a b = DrawColors (IntFrame a b) deriving (Category, Arrow)
 
@@ -41,9 +43,13 @@ drawContextColor = dynStatIn md f
     where
         md = dynInStatOut $ do n <- getName
                                dc <- getDrawcall 
-                               return ((n, dc) ,\co -> doForName n $ \ _ -> glBindOutputAndSetColorOptions co)
+                               return ((n, dc) ,\co -> doForDraw n $ glBindOutputAndSetColorOptions co)
         f ((n,dc),FragmentStream xs) = mapM_ (g n dc) xs
         g n dc (c, fd) = tell [makeDrawcall n (orderth dc ++ " drawcall") (setColor (undefined :: c) "gl_FragColor" c) fd]                                       
+
+
+doForDraw :: Int -> (IO()) -> DynamicFrame ()
+doForDraw n io = modify (\s -> s { drawToRenderIOs = insert n io (drawToRenderIOs s) } )
 
 makeDrawcall n _err sh (FragmentStreamData side shaderpos (VertexStreamData dcN)) =
        do (fsource, funis, fsamps, _, prevDecls, prevS) <- runShaderM (return ()) sh

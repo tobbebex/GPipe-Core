@@ -21,12 +21,22 @@ data Drawcall = Drawcall {
                     usedSamplers :: [Int]
                     }                                      
 
--- All objects doesnt use all of these. Uniform use all, vertex array use only index and texture use the last two(?)
-type IndexOrBinding = Int
+type Binding = Int
+-- index/binding refers to what is used in the final shader. Index space is limited, usually 16
+-- attribname is what was declared, but all might not be used. Attribname share namespace with uniforms and textures and is unlimited(TM)
 
-type NameToIOforProgAndIndex = Map.IntMap [IndexOrBinding -> IO ()]
+data RenderIOState = RenderIOState
+    {
+        uniformNameToRenderIO :: Map.IntMap (Binding -> IO ()),
+        samplerNameToRenderIO :: Map.IntMap (Binding -> IO ()),
+        inputArrayToRenderIOs :: Map.IntMap [[Int] -> IO ()],
+        drawToRenderIOs :: Map.IntMap (IO ())
+    }  
 
-compile :: (Monad m, MonadIO m, MonadException m) => [IO Drawcall] -> ContextT os f m (NameToIOforProgAndIndex -> IO ()) 
+newRenderIOState :: RenderIOState
+newRenderIOState = RenderIOState Map.empty Map.empty Map.empty Map.empty
+
+compile :: (Monad m, MonadIO m, MonadException m) => [IO Drawcall] -> ContextT os f m (RenderIOState -> IO ()) 
 compile dcs = do
     drawcalls <- liftIO $ sequence dcs
     let allocatedUniforms = allocate glMAXUniforms (map (usedUniforms) drawcalls)      
@@ -67,16 +77,13 @@ compile dcs = do
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
                               
-                              return (\m -> do 
+                              return (\s -> do 
                                            putStrLn "-----------------------------------------"
                                            putStrLn $ "UseProgram " ++ show pName 
                                            -- Bind uniforms
-                                           mapM_ (\(n, b) ->  head (m ! n) b) unisbinds -- TODO: Make it look up uniforms specifically 
-                                           mapM_ (\(n, b) ->  head (m ! n) b) sampsbinds -- TODO: Make it look up samplers specifically
-                                           let dcins = zip (m ! dcN) (transpose (map (\(n,ix)-> map ($ix) (m ! n)) inpsi)) 
-                                           forM_ dcins $ \ (a, b) ->
-                                                                do sequence_ b
-                                                                   a undefined
+                                           mapM_ (\(n, b) -> (uniformNameToRenderIO s ! n) b) unisbinds
+                                           mapM_ (\(n, b) -> (samplerNameToRenderIO s ! n) b) sampsbinds
+                                           mapM_ ($ inps) (inputArrayToRenderIOs s ! dcN)
                                            putStrLn "-----------------------------------------"
                                            )
 

@@ -12,7 +12,6 @@ module Graphics.GPipe.Frame (
     statIn,    
     getName,
     getDrawcall,
-    doForName,
     runFrame,
     compileFrame
 ) where
@@ -45,17 +44,8 @@ type StaticFrame = Writer [IO Drawcall]
 
 --type AttribNameToIndexMap = Map.IntMap Int
 
-type DynamicFrame = State NameToIOforProgAndIndex
-runDynamicFrame m = execState m Map.empty 
-
-doForName :: Int -> (IndexOrBinding -> IO ()) -> DynamicFrame () 
-doForName n io = modify $ alter (Just . f) n 
-    where f Nothing = [io]
-          f (Just x) = x ++ [io]
-
--- index refers to what is used in the final shader. Index space is limited, usually 16
--- attribname is what was declared, but all might not be used. Attribname share namespace with uniforms and textures and is unlimited(TM)
-
+type DynamicFrame = State RenderIOState
+runDynamicFrame m = execState m newRenderIOState 
 
 getName :: Monad m => StaticFrameT m Int
 getName = do FrameState n d <- get

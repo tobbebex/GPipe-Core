@@ -4,6 +4,7 @@ module Graphics.GPipe.Uniform where
 
 import Graphics.GPipe.Buffer 
 import Graphics.GPipe.Frame
+import Graphics.GPipe.FrameCompiler
 import Graphics.GPipe.Shader
 import Control.Arrow
 import Control.Monad.Trans.Writer
@@ -11,6 +12,8 @@ import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
 import Control.Category hiding ((.))
 import qualified Data.IntMap as Map
+import Control.Monad.Trans.State.Lazy (modify)
+import Data.IntMap.Lazy (insert)
 
 
 class BufferFormat (UniformBufferFormat a) => Uniform a where
@@ -25,7 +28,7 @@ toUniformBlock :: forall os f b. Uniform b => Frame os f (Buffer os (BUniform (U
 toUniformBlock = IntFrame $ dynInStatOut $ do 
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId) -- TODO: Verify that this tying-the-knot works!
-                   return (u, \(ub, i) -> doForName blockId $ \bind -> do
+                   return (u, \(ub, i) -> doForUniform blockId $ \bind -> do
                                              glBindBufferRange glUNIFORM_ARRAY bind (bufName ub) (i * bufElementSize ub) (bufElementSize ub))
     where
             sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))
@@ -33,6 +36,9 @@ toUniformBlock = IntFrame $ dynInStatOut $ do
             fromBUnifom (BUniform b) = b
             shaderGen :: (Int -> ShaderM String) -> (b, OffsetToSType) -- Int is name of uniform block
             shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
+
+            doForUniform :: Int -> (Binding -> IO()) -> DynamicFrame ()
+            doForUniform n io = modify (\s -> s { uniformNameToRenderIO = insert n io (uniformNameToRenderIO s) } )
 
 buildUDecl :: OffsetToSType -> ShaderGlobDeclM ()
 buildUDecl = buildUDecl' 0 . Map.assocs 

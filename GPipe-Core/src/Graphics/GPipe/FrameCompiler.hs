@@ -5,7 +5,8 @@ import Graphics.GPipe.Context
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Exception (MonadException)
 import Graphics.GPipe.Shader
-import Data.IntMap as Map hiding (foldl, map)
+import qualified Data.IntMap as Map
+import Data.IntMap ((!))
 import Prelude hiding (putStr, (!))
 import Data.Text.Lazy.IO (putStr)
 import Data.Monoid (mconcat)
@@ -15,6 +16,7 @@ import Data.List (transpose, zip4)
 import Data.Maybe (isJust)
 
 data Drawcall = Drawcall {
+                    drawcallErrorStr :: String,
                     frameBufferName :: Int,
                     drawcallName :: Int,
                     vertexsSource :: Text,
@@ -28,26 +30,29 @@ type Binding = Int
 -- index/binding refers to what is used in the final shader. Index space is limited, usually 16
 -- attribname is what was declared, but all might not be used. Attribname share namespace with uniforms and textures and is unlimited(TM)
 
-data RenderIOState = RenderIOState
+data RenderIOState s = RenderIOState 
     {
-        uniformNameToRenderIO :: Map.IntMap (Binding -> IO ()),
-        samplerNameToRenderIO :: Map.IntMap (Binding -> IO ()),
-        inputArrayToRenderIOs :: Map.IntMap [[Int] -> IO ()],
-        drawToRenderIOs :: Map.IntMap (IO ())
+        uniformNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()),
+        samplerNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()),
+        inputArrayToRenderIOs :: Map.IntMap (s -> [[Binding] -> IO ()]),
+        drawToRenderIOs :: Map.IntMap (s -> IO ())
     }  
 
-newRenderIOState :: RenderIOState
+newRenderIOState :: RenderIOState s
 newRenderIOState = RenderIOState Map.empty Map.empty Map.empty Map.empty
 
-compile :: (Monad m, MonadIO m, MonadException m) => [IO Drawcall] -> ContextT os f m (RenderIOState -> IO ()) 
+mapRenderIOState :: (s -> s') -> RenderIOState s' -> RenderIOState s -> RenderIOState s
+mapRenderIOState f (RenderIOState a b c d) (RenderIOState i j k l) = let g x = x . f in RenderIOState (Map.union i $ Map.map g a) (Map.union j $ Map.map g b) (Map.union k $ Map.map g c) (Map.union l $ Map.map g d)
+
+compile :: (Monad m, MonadIO m, MonadException m) => [IO Drawcall] -> ContextT os f m (RenderIOState s -> s -> IO ()) 
 compile dcs = do
     drawcalls <- liftIO $ sequence dcs
     let allocatedUniforms = allocate glMAXUniforms (map usedUniforms drawcalls)      
     let allocatedSamplers = allocate glMAXSamplers (map usedSamplers drawcalls)      
     fs <- mapM comp $ zip4 drawcalls allocatedUniforms allocatedSamplers [111..] -- just to debug program names, make zip3 later      
-    return $ \x -> foldl (\io f -> io >> f x) (return ()) fs 
+    return $ \s x -> foldl (\io f -> io >> f s x) (return ()) fs 
  where
-    comp (Drawcall fbN dcN vsource fsource inps unis samps, ubinds, sbinds, pN) =
+    comp (Drawcall err fbN dcN vsource fsource inps unis samps, ubinds, sbinds, pN) =
            liftContextIO $ do putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "Compiling program"
@@ -64,6 +69,7 @@ compile dcs = do
                               mapM_ (\(name, ix) -> putStrLn $ "SAMP BindNameToIndex s" ++ show name ++ " " ++ show ix) $ zip samps [0..]
                               
                               putStrLn "---- LINK ---"
+                              putStrLn $ "If errors, blame it on " ++ err
                               pName <- return pN -- glGenProg
                               putStrLn $ "pName = " ++ show pName
                               
@@ -72,14 +78,14 @@ compile dcs = do
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
                               
-                              return (\s -> do 
+                              return (\s x -> do 
                                            putStrLn "-----------------------------------------"
                                            putStrLn $ "UseProgram " ++ show pName 
                                            -- Bind uniforms
-                                           mapM_ (uncurry (uniformNameToRenderIO s !)) $ zip unis ubinds -- TODO: Dont bind already bound
-                                           mapM_ (uncurry (samplerNameToRenderIO s !)) $ zip samps sbinds -- TODO: Dont bind already bound                                          
-                                           drawToRenderIOs s ! fbN  -- TODO: Dont bind already bound
-                                           mapM_ ($ inps) (inputArrayToRenderIOs s ! dcN)
+                                           mapM_ (\(n,b) -> (uniformNameToRenderIO s ! n) x b) $ zip unis ubinds -- TODO: Dont bind already bound
+                                           mapM_ (\(n,b) -> (uniformNameToRenderIO s ! n) x b) $ zip samps sbinds -- TODO: Dont bind already bound                                          
+                                           (drawToRenderIOs s ! fbN) x  -- TODO: Dont bind already bound
+                                           mapM_ ($ inps) ((inputArrayToRenderIOs s ! dcN) x)
                                            putStrLn "-----------------------------------------"
                                            )
 

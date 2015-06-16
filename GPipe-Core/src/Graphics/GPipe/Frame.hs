@@ -4,114 +4,85 @@
 
 module Graphics.GPipe.Frame (
     Frame(..),
-    IntFrame(..),
-    StaticFrame,
-    DynamicFrame,
+    FrameM(..),
     FrameState(..),
-    dynInStatOut,
-    statIn,    
+    Render(..),
     getName,
     getDrawcall,
+    tellDrawcall,
+    modifyRenderIO,
+    render,
     runFrame,
-    compileFrame
+    compileFrame,
+    mapFrame
 ) where
 
-import Control.Monad.Trans.Class (lift)
-import Control.Category
-import Control.Arrow 
 
 import Graphics.GPipe.FrameCompiler
 import Graphics.GPipe.Context
 import Control.Monad.Trans.State 
 import Control.Monad.IO.Class
-import Data.IntMap as Map
 
-import Prelude hiding ((.), id)
-import Control.Monad.Trans.Writer.Lazy (execWriter, Writer)
-import Control.Monad.Exception (throw, MonadException)
-
-
-data FrameState = FrameState Int Int
-
-type StaticFrameT m = StateT FrameState m
-runStaticFrameT :: Monad m => StateT FrameState m a -> m a
-runStaticFrameT m = evalStateT m (FrameState 0 1)
+import Control.Monad.Trans.Writer.Lazy (Writer, runWriter, tell)
+import Control.Monad.Exception (MonadException)
+import Control.Applicative (Applicative)
+import Control.Monad.Trans.Class (lift)
 
 
+data FrameState s = FrameState Int Int (RenderIOState s)
 
-type StaticFrame = Writer [IO Drawcall] 
+newFrameState :: FrameState s
+newFrameState = FrameState 0 1 newRenderIOState
 
-
---type AttribNameToIndexMap = Map.IntMap Int
-
-type DynamicFrame = State RenderIOState
-runDynamicFrame m = execState m newRenderIOState 
-
-getName :: Monad m => StaticFrameT m Int
-getName = do FrameState n d <- get
-             put $ FrameState (n+1) d
+getName :: FrameM s Int
+getName = do FrameState n d r <- FrameM get
+             FrameM $ put $ FrameState (n+1) d r
              return n
 
-getDrawcall :: Monad m => StaticFrameT m Int
-getDrawcall = do FrameState n d <- get
-                 put $ FrameState n (d+1)
+getDrawcall :: FrameM s Int
+getDrawcall = do FrameState n d r <- FrameM get
+                 FrameM $ put $ FrameState n (d+1) r
                  return d
+
+modifyRenderIO :: (RenderIOState s -> RenderIOState s) -> FrameM s ()
+modifyRenderIO f = FrameM $ modify (\(FrameState a b s) -> FrameState a b (f s))
+
+tellDrawcall :: forall s. IO Drawcall -> FrameM s ()
+tellDrawcall dc = FrameM $ lift $ tell [dc] 
              
---runDynF :: Frame os f () () -> IO ()
---runDynF (Frame (Kleisli m) _) = m ()
+newtype FrameM s a = FrameM (StateT (FrameState s) (Writer [IO Drawcall]) a) deriving (Monad, Applicative, Functor)
 
-data IntFrame a b = Frame (Kleisli (StaticFrameT DynamicFrame) a b) (Kleisli (StaticFrameT StaticFrame) a b) 
+newtype Frame os f s a = Frame (FrameM s a)  deriving (Monad, Applicative, Functor)
 
-newtype Frame os f a b = IntFrame (IntFrame a b) 
+mapFrame :: (s -> s') -> Frame os f s' a -> Frame os f s a
+mapFrame f (Frame (FrameM m)) = Frame $ FrameM $   
+    do FrameState x y s <- get
+       let ((a,FrameState x' y' s'), dcs) = runWriter $ runStateT m (FrameState x y newRenderIOState)
+       put $ FrameState x' y' (mapRenderIOState f s' s)
+       lift $ tell dcs
+       return a
 
-
-instance Category (Frame os f) where
-     IntFrame x . IntFrame y = IntFrame (x . y)    
-     id = IntFrame id
-
-instance Arrow (Frame os f) where
-     arr f = IntFrame (arr f) 
-     first (IntFrame x) = IntFrame (first x) 
-
--- dyn in : Buffers
--- stat out: arrays, streams 
-
-instance Category IntFrame where
-     Frame x b . Frame y d = Frame (x . y)  (b . d)    
-     id = Frame id id
-
-instance Arrow IntFrame where
-     arr f = Frame (arr f) (arr f) 
-     first (Frame x b) = Frame (first x) (first b) 
-
-
-dynInStatOut :: (forall m. Monad m => StaticFrameT m (r, d -> DynamicFrame ())) -> IntFrame d r
-dynInStatOut m =  Frame (Kleisli $ \a -> do   (r, md) <- m
-                                              lift $ md a
-                                              return r)
-                        (Kleisli $ const $ do (r, _md) <- m
-                                              return r)
-
-                                                                                         
-statIn :: (a -> StaticFrame ()) -> IntFrame a ()
-statIn ms = Frame (arr $ const ()) (Kleisli (lift . ms))
-
-data CompiledFrame os f x = CompiledFrame (x -> IO ())
+data CompiledFrame os f s = CompiledFrame (s -> IO ())
 
 compileFrame :: (MonadIO m, MonadException m) => Frame os f x () -> ContextT os f m (CompiledFrame os f x)
-compileFrame (IntFrame (Frame (Kleisli dyn) (Kleisli stat))) =
-    do f <- compile . execWriter . runStaticFrameT . stat $ error "compileFrame: Frame is not fully defined! Make sure you use lazy patterns in the arrow notation ('proc ~(a,b,c,..) -> do')"
-       return (CompiledFrame (f . runDynamicFrame . runStaticFrameT . dyn))
+compileFrame (Frame (FrameM m)) =
+    let (((),FrameState _ _ s), dcs) = runWriter $ runStateT m newFrameState 
+    in do f <- compile dcs 
+          return (CompiledFrame (f s))
 
+newtype Render os f a = Render (IO a) deriving (Monad, Applicative, Functor)
 
-runFrame :: (MonadIO m, MonadException m) => CompiledFrame os f x -> x -> ContextT os f m ()
-runFrame (CompiledFrame f) x = liftContextIO $ do
-                               putStrLn "-------------------------------------------------------------------------------------------"
-                               putStrLn "-------------------------------------------------------------------------------------------"
-                               putStrLn "Running frame"
-                               (f x)
-                               putStrLn "-------------------------------------------------------------------------------------------"
-                               putStrLn "-------------------------------------------------------------------------------------------"
+render :: (MonadIO m, MonadException m) => Render os f () -> ContextT os f m ()
+render (Render m) = liftContextIO m
+
+runFrame :: CompiledFrame os f x -> x -> Render os f ()
+runFrame (CompiledFrame f) x = Render $ do
+                                   putStrLn "-------------------------------------------------------------------------------------------"
+                                   putStrLn "-------------------------------------------------------------------------------------------"
+                                   putStrLn "Running frame"
+                                   f x
+                                   putStrLn "-------------------------------------------------------------------------------------------"
+                                   putStrLn "-------------------------------------------------------------------------------------------"
 
 
 

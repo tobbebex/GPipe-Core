@@ -4,16 +4,13 @@ module Graphics.GPipe.VertexArray where
 import Graphics.GPipe.Buffer
 import Graphics.GPipe.Frame
 import Control.Applicative
-import Control.Arrow (arr)
-import Graphics.GPipe.IndexArray hiding (length)
-import qualified Graphics.GPipe.IndexArray as IndexArray (length)
 
 data VertexArray t a = VertexArray  { length :: Int, bArrBFunc:: BInput -> a }
 
 data Instances
 
-newVertexArray :: Frame os f (Buffer os a) (VertexArray x a)
-newVertexArray = arr $ \buffer -> VertexArray (bufElementCount buffer) $ bufBElement buffer
+newVertexArray :: Buffer os a -> Render os f (VertexArray x a)
+newVertexArray buffer = Render $ return $ VertexArray (bufElementCount buffer) $ bufBElement buffer
 
 instance Functor (VertexArray t) where
     fmap f (VertexArray n g) = VertexArray n (f . g)

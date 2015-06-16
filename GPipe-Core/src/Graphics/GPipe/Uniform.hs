@@ -12,7 +12,6 @@ import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
 import Control.Category hiding ((.))
 import qualified Data.IntMap as Map
-import Control.Monad.Trans.State.Lazy (modify)
 import Data.IntMap.Lazy (insert)
 
 
@@ -24,12 +23,13 @@ type UniformHostFormat x = HostFormat (UniformBufferFormat x)
 
 -- uniformBlock ::  forall os f b. Uniform b => Frame os f (UniformHostFormat b, Proxy b) b
  
-toUniformBlock :: forall os f b. Uniform b => Frame os f (Buffer os (BUniform (UniformBufferFormat b)), Int) b
-toUniformBlock = IntFrame $ dynInStatOut $ do 
+toUniformBlock :: forall os f s b. Uniform b => (s -> (Buffer os (BUniform (UniformBufferFormat b)), Int)) -> Frame os f s b
+toUniformBlock sf = Frame $ do 
                    blockId <- getName
-                   let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId) -- TODO: Verify that this tying-the-knot works!
-                   return (u, \(ub, i) -> doForUniform blockId $ \bind -> do
-                                             glBindBufferRange glUNIFORM_ARRAY bind (bufName ub) (i * bufElementSize ub) (bufElementSize ub))
+                   let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
+                   doForUniform blockId $ \s bind -> let (ub, i) = sf s 
+                                                     in  glBindBufferRange glUNIFORM_ARRAY bind (bufName ub) (i * bufElementSize ub) (bufElementSize ub)
+                   return u
     where
             sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform (UniformBufferFormat b) b
@@ -37,8 +37,8 @@ toUniformBlock = IntFrame $ dynInStatOut $ do
             shaderGen :: (Int -> ShaderM String) -> (b, OffsetToSType) -- Int is name of uniform block
             shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
 
-            doForUniform :: Int -> (Binding -> IO()) -> DynamicFrame ()
-            doForUniform n io = modify (\s -> s { uniformNameToRenderIO = insert n io (uniformNameToRenderIO s) } )
+            doForUniform :: Int -> (s -> Binding -> IO()) -> FrameM s ()
+            doForUniform n io = modifyRenderIO (\s -> s { uniformNameToRenderIO = insert n io (uniformNameToRenderIO s) } )
 
 buildUDecl :: OffsetToSType -> ShaderGlobDeclM ()
 buildUDecl = buildUDecl' 0 . Map.assocs 

@@ -3,7 +3,6 @@
 module Graphics.GPipe.VertexStream where
 
 import Control.Monad.Trans.Class
-import Graphics.GPipe.Frame (DynamicFrame)
 import Control.Monad.Trans.Writer.Lazy
 import Control.Monad.Trans.State.Lazy
 import Prelude hiding (length, id, (.))
@@ -64,7 +63,7 @@ data PrimitiveArrayInt p a = PrimitiveArraySimple p Int a
                            | PrimitiveArrayInstanced p InstanceCount Int a 
                            | PrimitiveArrayIndexedInstanced p IndexArray InstanceCount a 
 
-newtype PrimitiveArray p a = PrimitiveArray [PrimitiveArrayInt p a]
+newtype PrimitiveArray p a = PrimitiveArray {getPrimitiveArray :: [PrimitiveArrayInt p a]}
 
 instance Monoid (PrimitiveArray p a) where
     mempty = PrimitiveArray []
@@ -90,10 +89,10 @@ toPrimitiveArrayIndexedInstanced p ia va ina f = PrimitiveArray [PrimitiveArrayI
 type DrawCallName = Int
 data VertexStreamData = VertexStreamData DrawCallName
 
-newtype VertexStream t a = VertexStream [(a, VertexStreamData)] deriving Monoid
+newtype PrimitiveStream t a = PrimitiveStream [(a, VertexStreamData)] deriving Monoid
 
-instance Functor (VertexStream t) where
-        fmap f (VertexStream xs) = VertexStream $ map (first f) xs
+instance Functor (PrimitiveStream t) where
+        fmap f (PrimitiveStream xs) = PrimitiveStream $ map (first f) xs
 
 class BufferFormat a => VertexInput a where
     type VertexFormat a
@@ -105,14 +104,14 @@ newtype ToVertex a b = ToVertex (Kleisli (StateT Int (Writer [Binding -> IO ()])
 instance VertexInput BFloat where
     type VertexFormat BFloat = VFloat
     toVertex = ToVertex $ Kleisli $ \b -> do n <- get
-                                             put $ (n+1)
+                                             put $ n + 1
                                              lift $ tell [\ix -> glBindBuffer (bName b) glVERTEX_ARRAY  >> glAttribArray ix 1 glFLOAT False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)]
                                              return (S $ useVInput STypeFloat n)
 instance VertexInput BInt32Norm where
     type VertexFormat BInt32Norm = VFloat
     toVertex = ToVertex $ Kleisli $ \(BNormalized b) -> do 
                                              n <- get
-                                             put $ (n+1)
+                                             put $ n + 1
                                              lift $ tell [\ix -> glBindBuffer (bName b) glVERTEX_ARRAY  >> glAttribArray ix 1 glINT32 False (bName b) (bStride b) (bStride b * bSkipElems b + bOffset b)]
                                              return (S $ useVInput STypeFloat n)
 instance (VertexInput a, VertexInput b) => VertexInput (a,b) where
@@ -121,30 +120,29 @@ instance (VertexInput a, VertexInput b) => VertexInput (a,b) where
                                 b' <- toVertex -< b
                                 returnA -< (a', b')
                                                                
-toPrimitiveStream :: forall os f a p. (VertexInput a, PrimitiveTopology p) => Frame os f (PrimitiveArray p a) (VertexStream p (VertexFormat a))   
-toPrimitiveStream = IntFrame $ dynInStatOut $ do 
-                                      n <- getName
-                                      let sampleBuffer = makeBuffer undefined undefined :: Buffer os a
-                                          b = bufBElement sampleBuffer $ BInput 0 0
-                                          ((x,n'), _) = runWriter (runStateT (f b) 0) 
-                                      return (VertexStream [(x, VertexStreamData n)], \ (PrimitiveArray xs) -> doForInputArray n $ map drawcall xs) 
+toPrimitiveStream :: forall os f s a p. (VertexInput a, PrimitiveTopology p) => (s -> PrimitiveArray p a) -> Frame os f s (PrimitiveStream p (VertexFormat a))   
+toPrimitiveStream sf = Frame $ do n <- getName
+                                  let sampleBuffer = makeBuffer undefined undefined :: Buffer os a
+                                      x = fst $ runWriter (evalStateT (mf $ bufBElement sampleBuffer $ BInput 0 0) 0) 
+                                  doForInputArray n (map drawcall . getPrimitiveArray . sf)
+                                  return $ PrimitiveStream [(x, VertexStreamData n)] 
     where 
-        ToVertex (Kleisli f) = toVertex :: ToVertex a (VertexFormat a)
+        ToVertex (Kleisli mf) = toVertex :: ToVertex a (VertexFormat a)
         drawcall (PrimitiveArraySimple p l a) binds = do runAttribs  a binds
                                                          glDrawArrays (toGLtopology p) 0 l
         drawcall (PrimitiveArrayIndexed p i a) binds = do 
                                                     runAttribs a binds
-                                                    forM_ (restart i) glRestartIndex  
-                                                    glBindBuffer (iArrName i) glELEMENT_ARRAY
+                                                    bindIndexBuffer i
                                                     glDrawElements (toGLtopology p) (IndexArray.length i) (indexType i) (offset i)
         drawcall (PrimitiveArrayInstanced p il l a) binds = do
                                               runAttribs a binds
                                               glDrawArraysInstanced (toGLtopology p) 0 l il
         drawcall (PrimitiveArrayIndexedInstanced p i il a) binds = do
                                                       runAttribs a binds
-                                                      forM_ (restart i) glRestartIndex 
-                                                      glBindBuffer (iArrName i) glELEMENT_ARRAY
+                                                      bindIndexBuffer i
                                                       glDrawElementsInstanced (toGLtopology p) (IndexArray.length i) (indexType i) (offset i) il
+        bindIndexBuffer i = do forM_ (restart i) glRestartIndex 
+                               glBindBuffer (iArrName i) glELEMENT_ARRAY                                                      
 
         assignIxs :: Int -> Int -> [Int] -> [Int -> IO ()] -> [IO ()]
         assignIxs n ix xxs@(x:xs) (f:fs) | x == n    = f ix : assignIxs (n+1) (ix+1) xs fs
@@ -152,10 +150,10 @@ toPrimitiveStream = IntFrame $ dynInStatOut $ do
         assignIxs _ _ _ [] = []                                          
         assignIxs _ _ _ _ = error "Too few attributes generated in toPrimitiveStream"
         
-        runAttribs a binds = sequence_ $ assignIxs 0 0 binds $ snd $ runWriter (runStateT (f a) 0)
+        runAttribs a binds = sequence_ $ assignIxs 0 0 binds $ snd $ runWriter (runStateT (mf a) 0)
 
-        doForInputArray :: Int -> [[Binding] -> IO()] -> DynamicFrame ()
-        doForInputArray n io = modify (\s -> s { inputArrayToRenderIOs = insert n io (inputArrayToRenderIOs s) } )
+        doForInputArray :: Int -> (s -> [[Binding] -> IO()]) -> FrameM s ()
+        doForInputArray n io = modifyRenderIO (\s -> s { inputArrayToRenderIOs = insert n io (inputArrayToRenderIOs s) } )
 
 
 glDrawArrays :: Int -> Int -> Int -> IO ()

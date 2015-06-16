@@ -1,4 +1,4 @@
-{-# LANGUAGE Arrows, ScopedTypeVariables, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables, GeneralizedNewtypeDeriving #-}
 module Graphics.GPipe.FrameBuffer where
 
 import Graphics.GPipe.Shader
@@ -7,30 +7,29 @@ import Graphics.GPipe.Format
 import Graphics.GPipe.Frame
 import Graphics.GPipe.VertexStream
 import Graphics.GPipe.FrameCompiler
-import Control.Monad.Trans.Writer.Lazy (tell)
-import Control.Category (Category)
-import Control.Arrow (Arrow)
-import Control.Monad.Trans.State.Lazy (modify)
 import Data.IntMap.Lazy (insert)
+import Control.Applicative (Applicative)
 
-newtype DrawColors os a b = DrawColors (IntFrame a b) deriving (Category, Arrow)
+newtype DrawColors os s a = DrawColors (FrameM s a) deriving (Functor, Applicative, Monad)
 
-drawColor :: forall c os. ColorRenderable c => DrawColors os (Image c, ColorOption c, FragColor c) ()
+drawColor :: forall c s os. ColorRenderable c => FragColor c -> (s -> (Image c, ColorOption c)) -> DrawColors os s ()
 drawColor = undefined
 
-drawColorsDepth :: forall a os f d. DepthRenderable d => DrawColors os a () -> Frame os f (Image d, DepthOption, FragmentStream (a, FragDepth)) ()
-drawColorsStencil :: forall a os f s. StencilRenderable s => DrawColors os a () -> Frame os f (Image s, StencilOption, FragmentStream a) ()
-drawColorsDepthStencil :: forall a os f d s. (DepthRenderable d, StencilRenderable s) => DrawColors os a () -> Frame os f (Image d, Image s, DepthStencilOption, FragmentStream (a, FragDepth)) ()
+draw :: forall a os f s. FragmentStream a -> (a -> DrawColors os s ()) -> Frame os f s ()
+drawDepth :: forall a os f s d. DepthRenderable d => FragmentStream (a, FragDepth) -> (s -> (Image d, DepthOption)) -> (a -> DrawColors os s ()) -> Frame os f s ()
+drawStencil :: forall a os f s st. StencilRenderable st => FragmentStream a -> (s -> (Image st, StencilOption)) -> (a -> DrawColors os s ()) -> Frame os f s ()
+drawDepthStencil :: forall a os f s d st. (DepthRenderable d, StencilRenderable st) => FragmentStream (a, FragDepth) -> (s -> (Image d, Image st, DepthStencilOption)) -> (a -> DrawColors os s ()) -> Frame os f s ()
 
-drawColorsDepth = undefined
-drawColorsStencil = undefined
-drawColorsDepthStencil = undefined
+draw = undefined
+drawDepth = undefined
+drawStencil = undefined
+drawDepthStencil = undefined
 
-drawContextDepth :: forall c os ds. DepthRenderable ds => Frame os (ContextFormat c ds) (DepthOption, FragmentStream FragDepth) ()
-drawContextColorDepth :: forall c os ds. (ColorRenderable c, DepthRenderable ds) => Frame os (ContextFormat c ds) (ColorOption c, DepthOption, FragmentStream (FragColor c, FragDepth)) ()
-drawContextStencil :: forall c os ds. StencilRenderable ds => Frame os (ContextFormat c ds) (StencilOption, FragmentStream ()) ()
-drawContextDepthStencil :: forall c os ds. (DepthRenderable ds, StencilRenderable ds) => Frame os (ContextFormat c ds) (DepthStencilOption, FragmentStream FragDepth) ()
-drawContextColorDepthStencil :: forall c os ds. (ColorRenderable c, DepthRenderable ds, StencilRenderable ds) => Frame os (ContextFormat c ds) (ColorOption c, DepthStencilOption, FragmentStream (FragColor c, FragDepth)) ()
+drawContextDepth :: forall os s c ds. DepthRenderable ds => FragmentStream FragDepth -> (s -> DepthOption) -> Frame os (ContextFormat c ds) s ()
+drawContextColorDepth :: forall os s c ds. (ColorRenderable c, DepthRenderable ds) => FragmentStream (FragColor c, FragDepth) -> (s -> (ColorOption c, DepthOption)) -> Frame os (ContextFormat c ds) s ()
+drawContextStencil :: forall os s c ds. StencilRenderable ds => FragmentStream () -> (s -> StencilOption) -> Frame os (ContextFormat c ds) s ()
+drawContextDepthStencil :: forall os s c ds. (DepthRenderable ds, StencilRenderable ds) => FragmentStream FragDepth -> (s -> DepthStencilOption) -> Frame os (ContextFormat c ds) s ()
+drawContextColorDepthStencil :: forall os s c ds. (ColorRenderable c, DepthRenderable ds, StencilRenderable ds) => FragmentStream (FragColor c, FragDepth) -> (s -> (ColorOption c, DepthStencilOption)) -> Frame os (ContextFormat c ds) s ()
 
 drawContextDepth = undefined
 drawContextColorDepth = undefined
@@ -38,26 +37,24 @@ drawContextStencil = undefined
 drawContextDepthStencil = undefined
 drawContextColorDepthStencil = undefined 
 
-drawContextColor :: forall c os ds. ColorRenderable c => Frame os (ContextFormat c ds) (ColorOption c, FragmentStream (FragColor c)) ()
-drawContextColor = dynStatIn md f 
-    where
-        md = dynInStatOut $ do n <- getName
-                               dc <- getDrawcall 
-                               return ((n, dc) ,\co -> doForDraw n $ glBindOutputAndSetColorOptions co)
-        f ((n,dc),FragmentStream xs) = mapM_ (g n dc) xs
-        g n dc (c, fd) = tell [makeDrawcall n (orderth dc ++ " drawcall") (setColor (undefined :: c) "gl_FragColor" c) fd]                                       
+drawContextColor :: forall os s c ds. ColorRenderable c => FragmentStream (FragColor c) -> (s -> ColorOption c) -> Frame os (ContextFormat c ds) s ()
+drawContextColor (FragmentStream xs) sf = Frame $ do 
+                               n <- getName
+                               dc <- getDrawcall
+                               let f (c, fd) = tellDrawcall $ makeDrawcall n (orderth dc ++ " drawcall") (setColor (undefined :: c) "gl_FragColor" c) fd
+                               mapM_ f xs
+                               doForDraw n $ \s -> glBindOutputAndSetColorOptions (sf s)
 
-
-doForDraw :: Int -> IO () -> DynamicFrame ()
-doForDraw n io = modify (\s -> s { drawToRenderIOs = insert n io (drawToRenderIOs s) } )
+doForDraw :: Int -> (s -> IO ()) -> FrameM s ()
+doForDraw n io = modifyRenderIO (\s -> s { drawToRenderIOs = insert n io (drawToRenderIOs s) } )
 
 makeDrawcall :: Int -> String -> ShaderM () -> FragmentStreamData -> IO Drawcall
-makeDrawcall n _err sh (FragmentStreamData side shaderpos (VertexStreamData dcN)) =
+makeDrawcall n err sh (FragmentStreamData side shaderpos (VertexStreamData dcN)) =
        do (fsource, funis, fsamps, _, prevDecls, prevS) <- runShaderM (return ()) sh
           (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls (prevS >> shaderpos)
           let unis = orderedUnion funis vunis
               samps = orderedUnion fsamps vsamps
-          return $ Drawcall n dcN vsource fsource vinps unis samps
+          return $ Drawcall err n dcN vsource fsource vinps unis samps
 
 orderedUnion :: Ord a => [a] -> [a] -> [a]
 orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys 
@@ -65,11 +62,6 @@ orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys
                                    | otherwise = y : orderedUnion xxs ys
 orderedUnion xs [] = xs
 orderedUnion [] ys = ys
-
-
-dynStatIn :: IntFrame a t -> ((t, t1) -> StaticFrame ()) -> Frame os f (a, t1) ()
-dynStatIn  md f = proc (co, fs) -> do ndc <- IntFrame md -< co  
-                                      IntFrame (statIn f) -< (ndc, fs)
 
 
 setColor :: forall c. ColorFormat c => c -> String -> FragColor c -> ShaderM ()

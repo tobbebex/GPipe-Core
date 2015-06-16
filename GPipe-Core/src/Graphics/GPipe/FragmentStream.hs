@@ -35,9 +35,9 @@ instance FragmentInput VFloat where
 
 rasterize:: forall p a. (PrimitiveTopology p, FragmentInput a)
           => Side 
-          -> VertexStream p (VPos, a)
+          -> PrimitiveStream p (VPos, a)
           -> FragmentStream (FragmentFormat a) -- FBool {-- TODO make struct of all sorts of stuff --}, 
-rasterize side (VertexStream xs) = 
+rasterize side (PrimitiveStream xs) = 
     let ToFragment (Kleisli m) = toFragment :: ToFragment a (FragmentFormat a)
         f ((p, x),s) = (evalState (m x) 0, FragmentStreamData side (makePos p) s)
         makePos (S x,S y,S z,S w) = do x' <- x

@@ -10,7 +10,6 @@ module Graphics.GPipe.IndexArray (
 import Graphics.GPipe.Buffer
 import Graphics.GPipe.Frame
 import Prelude hiding (length)
-import Control.Arrow (arr)
 
 class BufferFormat a => IndexFormat a where
     indexToInt :: a -> HostFormat a -> Int
@@ -27,9 +26,8 @@ instance IndexFormat BWord8 where
     glType _ = glBYTE
     
 data IndexArray = IndexArray { iArrName :: Int, length:: Int, offset:: Int, restart:: Maybe Int, indexType :: Int } 
-newIndexArray :: forall os f a. IndexFormat a => Frame os f (Buffer os a, Maybe (HostFormat a)) IndexArray
-newIndexArray = arr (\(buf, r) ->
-        let a = undefined :: a in IndexArray (bufName buf) (bufElementCount buf) 0 (fmap (indexToInt a) r) (glType a)) 
+newIndexArray :: forall os f a. IndexFormat a => Buffer os a -> Maybe (HostFormat a) -> Render os f IndexArray
+newIndexArray buf r = let a = undefined :: a in Render $ return $ IndexArray (bufName buf) (bufElementCount buf) 0 (fmap (indexToInt a) r) (glType a) 
  
 take :: Int -> IndexArray -> IndexArray
 take n i = i { length = min n (length i) }

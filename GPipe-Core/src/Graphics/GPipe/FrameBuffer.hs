@@ -58,6 +58,14 @@ makeDrawcall n _err sh (FragmentStreamData side shaderpos (VertexStreamData dcN)
               samps = orderedUnion fsamps vsamps
           return $ Drawcall dcN vsource fsource vinps unis samps
 
+orderedUnion :: Ord a => [a] -> [a] -> [a]
+orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys 
+                                   | x < y     = x : orderedUnion xs yys
+                                   | otherwise = y : orderedUnion xxs ys
+orderedUnion xs [] = xs
+orderedUnion [] ys = ys
+
+
 dynStatIn :: IntFrame a t -> ((t, t1) -> StaticFrame ()) -> Frame os f (a, t1) ()
 dynStatIn  md f = proc (co, fs) -> do ndc <- IntFrame md -< co  
                                       IntFrame (statIn f) -< (ndc, fs)

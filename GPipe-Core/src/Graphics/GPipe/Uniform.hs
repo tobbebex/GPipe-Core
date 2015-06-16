@@ -64,8 +64,8 @@ glUNIFORM_ARRAY = 0
 
 newtype ToUniform a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader (Int -> ShaderM String))) a b) deriving (Category, Arrow) 
 
-instance Uniform VFloat where
-    type UniformBufferFormat VFloat = BFloat
+instance Uniform (S x Float) where
+    type UniformBufferFormat (S x Float) = BFloat
     toUniform = ToUniform $ Kleisli $ \bIn -> do let offset = bOffset bIn
                                                  tell $ Map.singleton offset STypeFloat
                                                  useF <- lift ask

@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternGuards #-}
 module Graphics.GPipe.FrameCompiler where
 
 import Graphics.GPipe.Context
@@ -81,23 +82,33 @@ compile dcs = do
                                            putStrLn "-----------------------------------------"
                                            putStrLn $ "UseProgram " ++ show pName 
                                            -- Bind uniforms
-                                           mapM_ (\(n, b) -> (uniformNameToRenderIO s ! n) b) unisbinds
-                                           mapM_ (\(n, b) -> (samplerNameToRenderIO s ! n) b) sampsbinds
+                                           mapM_ (uncurry (uniformNameToRenderIO s !)) unisbinds
+                                           mapM_ (uncurry (samplerNameToRenderIO s !)) sampsbinds
                                            mapM_ ($ inps) (inputArrayToRenderIOs s ! dcN)
                                            putStrLn "-----------------------------------------"
                                            )
 
-allocate mx xss = xss -- TODO, find bindings 
+allocate :: Int -> [[Int]] -> [[Int]]
+allocate mx = allocate' Map.empty []
+    where allocate' m ys ((x:xs):xss) | Just a <- Map.lookup x m  = allocate' m (a:ys) (xs:xss) 
+                                      | ms <- Map.size m, ms < mx = allocate' (Map.insert x ms m) (ms:ys) (xs:xss)
+                                      | otherwise                 = let (ek,ev) = findLastUsed m mx (ys ++ xs ++ concat xss) in allocate' (Map.insert x ev (Map.delete ek m)) (ev:ys) (xs:xss)
+          allocate' m ys (_:xss) = reverse ys : allocate' m [] xss 
+          allocate' _ _ [] = []
+          
+          findLastUsed m n (x:xs) | n > 1 = let (a, m') = Map.updateLookupWithKey (const $ const Nothing) x m 
+                                                n' = case a of
+                                                        Just _  -> n-1
+                                                        Nothing -> n
+                                            in findLastUsed m' n' xs
+          findLastUsed m _ _ = head $ Map.toList m                                    
+          
+                                        
 
 glMAXUniforms = 3 :: Int
 glMAXSamplers = 3:: Int
       
-orderedUnion :: Ord a => [a] -> [a] -> [a]
-orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys 
-                                   | x < y     = x : orderedUnion xs yys
-                                   | otherwise = y : orderedUnion xxs ys
-orderedUnion xs [] = xs
-orderedUnion [] ys = ys
+
 
 {-
             in do (fsource, funis, fsamps, finps, prevDecls, prevS) <- runShaderM (return ()) m

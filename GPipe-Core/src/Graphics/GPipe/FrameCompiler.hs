@@ -12,8 +12,10 @@ import Data.Monoid (mconcat)
 import Data.Text.Lazy (Text)
 import Control.Monad (forM, forM_)
 import Data.List (transpose, zip4)
+import Data.Maybe (isJust)
 
 data Drawcall = Drawcall {
+                    frameBufferName :: Int,
                     drawcallName :: Int,
                     vertexsSource :: Text,
                     fragmentSource :: Text,
@@ -40,21 +42,13 @@ newRenderIOState = RenderIOState Map.empty Map.empty Map.empty Map.empty
 compile :: (Monad m, MonadIO m, MonadException m) => [IO Drawcall] -> ContextT os f m (RenderIOState -> IO ()) 
 compile dcs = do
     drawcalls <- liftIO $ sequence dcs
-    let allocatedUniforms = allocate glMAXUniforms (map (usedUniforms) drawcalls)      
-    let allocatedSamplers = allocate glMAXSamplers (map (usedSamplers) drawcalls)      
+    let allocatedUniforms = allocate glMAXUniforms (map usedUniforms drawcalls)      
+    let allocatedSamplers = allocate glMAXSamplers (map usedSamplers drawcalls)      
     fs <- mapM comp $ zip4 drawcalls allocatedUniforms allocatedSamplers [111..] -- just to debug program names, make zip3 later      
     return $ \x -> foldl (\io f -> io >> f x) (return ()) fs 
  where
-    comp (Drawcall dcN vsource fsource inps unis samps, ubinds, sbinds, pN) =
-           liftContextIO $ do let inpsi = zip inps [0..] :: [(Int,Int)]
-                                  unisi = zip unis [0..] :: [(Int,Int)]
-                                  sampsi = zip samps [0..] :: [(Int,Int)]
-                                  ubindsi = zip ubinds [0..] :: [(Int,Int)]
-                                  sbindsi = zip sbinds [0..] :: [(Int,Int)]
-                                  unisbinds = zip unis ubinds :: [(Int,Int)]
-                                  sampsbinds = zip samps sbinds :: [(Int,Int)]
-                              
-                              putStrLn "-------------------------------------------------------------------------------------------"
+    comp (Drawcall fbN dcN vsource fsource inps unis samps, ubinds, sbinds, pN) =
+           liftContextIO $ do putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "Compiling program"
                               putStrLn "-------------"
@@ -65,16 +59,16 @@ compile dcs = do
                               putStr fsource
                               putStrLn "-------------"
                               
-                              mapM_ (\(name, ix) -> putStrLn $ "INPUT BindNameToIndex in" ++ show name ++ " " ++ show ix) inpsi
-                              mapM_ (\(name, ix) -> putStrLn $ "UNI BindNameToIndex uBlock" ++ show name ++ " " ++ show ix) unisi
-                              mapM_ (\(name, ix) -> putStrLn $ "SAMP BindNameToIndex s" ++ show name ++ " " ++ show ix) sampsi
+                              mapM_ (\(name, ix) -> putStrLn $ "INPUT BindNameToIndex in" ++ show name ++ " " ++ show ix) $ zip inps [0..]
+                              mapM_ (\(name, ix) -> putStrLn $ "UNI BindNameToIndex uBlock" ++ show name ++ " " ++ show ix) $ zip unis [0..]
+                              mapM_ (\(name, ix) -> putStrLn $ "SAMP BindNameToIndex s" ++ show name ++ " " ++ show ix) $ zip samps [0..]
                               
                               putStrLn "---- LINK ---"
                               pName <- return pN -- glGenProg
                               putStrLn $ "pName = " ++ show pName
                               
-                              mapM_ (\(bind, ix) -> putStrLn $ "glUniformBlockBinding p ix bind " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) ubindsi
-                              mapM_ (\(bind, ix) -> putStrLn $ "samplerBinds " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) sbindsi
+                              mapM_ (\(bind, ix) -> putStrLn $ "glUniformBlockBinding p ix bind " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) $ zip ubinds [0..]
+                              mapM_ (\(bind, ix) -> putStrLn $ "samplerBinds " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) $ zip sbinds [0..]
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
                               
@@ -82,8 +76,9 @@ compile dcs = do
                                            putStrLn "-----------------------------------------"
                                            putStrLn $ "UseProgram " ++ show pName 
                                            -- Bind uniforms
-                                           mapM_ (uncurry (uniformNameToRenderIO s !)) unisbinds
-                                           mapM_ (uncurry (samplerNameToRenderIO s !)) sampsbinds
+                                           mapM_ (uncurry (uniformNameToRenderIO s !)) $ zip unis ubinds -- TODO: Dont bind already bound
+                                           mapM_ (uncurry (samplerNameToRenderIO s !)) $ zip samps sbinds -- TODO: Dont bind already bound                                          
+                                           drawToRenderIOs s ! fbN  -- TODO: Dont bind already bound
                                            mapM_ ($ inps) (inputArrayToRenderIOs s ! dcN)
                                            putStrLn "-----------------------------------------"
                                            )
@@ -97,9 +92,7 @@ allocate mx = allocate' Map.empty []
           allocate' _ _ [] = []
           
           findLastUsed m n (x:xs) | n > 1 = let (a, m') = Map.updateLookupWithKey (const $ const Nothing) x m 
-                                                n' = case a of
-                                                        Just _  -> n-1
-                                                        Nothing -> n
+                                                n' = if isJust a then n-1 else n
                                             in findLastUsed m' n' xs
           findLastUsed m _ _ = head $ Map.toList m                                    
           

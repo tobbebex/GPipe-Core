@@ -48,15 +48,16 @@ drawContextColor = dynStatIn md f
         g n dc (c, fd) = tell [makeDrawcall n (orderth dc ++ " drawcall") (setColor (undefined :: c) "gl_FragColor" c) fd]                                       
 
 
-doForDraw :: Int -> (IO()) -> DynamicFrame ()
+doForDraw :: Int -> IO () -> DynamicFrame ()
 doForDraw n io = modify (\s -> s { drawToRenderIOs = insert n io (drawToRenderIOs s) } )
 
+makeDrawcall :: Int -> String -> ShaderM () -> FragmentStreamData -> IO Drawcall
 makeDrawcall n _err sh (FragmentStreamData side shaderpos (VertexStreamData dcN)) =
        do (fsource, funis, fsamps, _, prevDecls, prevS) <- runShaderM (return ()) sh
           (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls (prevS >> shaderpos)
           let unis = orderedUnion funis vunis
               samps = orderedUnion fsamps vsamps
-          return $ Drawcall dcN vsource fsource vinps unis samps
+          return $ Drawcall n dcN vsource fsource vinps unis samps
 
 orderedUnion :: Ord a => [a] -> [a] -> [a]
 orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys 

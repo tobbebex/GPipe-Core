@@ -3,7 +3,6 @@ module Graphics.GPipe.FragmentStream where
 
 import Control.Category hiding ((.))
 import Control.Arrow 
-import Graphics.GPipe.FrameCompiler
 import Graphics.GPipe.Shader
 import Graphics.GPipe.VertexStream
 import Control.Monad.Trans.State.Lazy

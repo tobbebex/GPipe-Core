@@ -48,7 +48,7 @@ data CompiledFrame os f s = CompiledFrame (s -> IO ())
 
 compile :: (Monad m, MonadIO m, MonadException m) => [IO Drawcall] -> RenderIOState s -> ContextT os f m (CompiledFrame os f s) 
 compile dcs s = do
-    drawcalls <- liftIO $ sequence dcs
+    drawcalls <- liftIO $ sequence dcs -- IO only for SNMap
     let allocatedUniforms = allocate glMAXUniforms (map usedUniforms drawcalls)      
     let allocatedSamplers = allocate glMAXSamplers (map usedSamplers drawcalls)      
     (pnames, fs) <- liftM unzip $ mapM comp $ zip3 drawcalls allocatedUniforms allocatedSamplers

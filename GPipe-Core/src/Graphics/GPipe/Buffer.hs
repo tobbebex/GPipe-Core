@@ -197,7 +197,8 @@ writeBuffer elems offset buffer =
         write ptr n (x:xs) = do writeElem ptr x
                                 write (ptr `plusPtr` elemSize) (n-1) xs
         write ptr _ [] = return ptr
-    in liftContextIO $ do glBindBuffer glCOPY_WRITE_BUFFER (bufName buffer)
+    in liftContextIOAsync $ do 
+                          glBindBuffer glCOPY_WRITE_BUFFER (bufName buffer)
                           ptr <- glMapBufferRange glCOPY_WRITE_BUFFER off (maxElems * elemSize) (glMAP_WRITE_BIT + glMAP_FLUSH_EXPLICIT_BIT)
                           end <- write ptr maxElems elems
                           glFlushMappedBufferRange glCOPY_WRITE_BUFFER off (end `minusPtr` ptr) 
@@ -210,10 +211,11 @@ readBuffer :: MonadIO m => Int -> Int -> Buffer os f -> (HostFormat f -> a -> a)
 readBuffer x y z f = readBufferM x y z (\ a b -> return $ f a b)
 
 copyBuffer :: MonadIO m => Int -> Int -> Buffer os f -> Int -> Buffer os f -> ContextT os f2 m ()
-copyBuffer len from bFrom to bTo = liftIO $ do glBindBuffer glCOPY_READ_BUFFER (bufName bFrom)
-                                               glBindBuffer glCOPY_WRITE_BUFFER (bufName bTo)
-                                               let elemSize = bufElementSize bFrom -- same as for bTo
-                                               glCopyBufferSubData glCOPY_READ_BUFFER glCOPY_WRITE_BUFFER (from * elemSize) (to * elemSize) (len * elemSize)   
+copyBuffer len from bFrom to bTo = liftContextIOAsync $ do 
+                                                      glBindBuffer glCOPY_READ_BUFFER (bufName bFrom)
+                                                      glBindBuffer glCOPY_WRITE_BUFFER (bufName bTo)
+                                                      let elemSize = bufElementSize bFrom -- same as for bTo
+                                                      glCopyBufferSubData glCOPY_READ_BUFFER glCOPY_WRITE_BUFFER (from * elemSize) (to * elemSize) (len * elemSize)   
 
 ----------------------------------------------
 

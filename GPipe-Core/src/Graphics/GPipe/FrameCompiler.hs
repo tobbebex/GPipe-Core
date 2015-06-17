@@ -11,7 +11,7 @@ import Prelude hiding (putStr, (!))
 import Data.Text.Lazy.IO (putStr)
 import Data.Monoid (mconcat)
 import Data.Text.Lazy (Text)
-import Control.Monad (forM, forM_)
+import Control.Monad (forM, forM_, liftM)
 import Data.List (transpose, zip4)
 import Data.Maybe (isJust)
 
@@ -44,16 +44,21 @@ newRenderIOState = RenderIOState Map.empty Map.empty Map.empty Map.empty
 mapRenderIOState :: (s -> s') -> RenderIOState s' -> RenderIOState s -> RenderIOState s
 mapRenderIOState f (RenderIOState a b c d) (RenderIOState i j k l) = let g x = x . f in RenderIOState (Map.union i $ Map.map g a) (Map.union j $ Map.map g b) (Map.union k $ Map.map g c) (Map.union l $ Map.map g d)
 
-compile :: (Monad m, MonadIO m, MonadException m) => [IO Drawcall] -> ContextT os f m (RenderIOState s -> s -> IO ()) 
-compile dcs = do
+data CompiledFrame os f s = CompiledFrame (s -> IO ())
+
+compile :: (Monad m, MonadIO m, MonadException m) => [IO Drawcall] -> RenderIOState s -> ContextT os f m (CompiledFrame os f s) 
+compile dcs s = do
     drawcalls <- liftIO $ sequence dcs
     let allocatedUniforms = allocate glMAXUniforms (map usedUniforms drawcalls)      
     let allocatedSamplers = allocate glMAXSamplers (map usedSamplers drawcalls)      
-    fs <- mapM comp $ zip4 drawcalls allocatedUniforms allocatedSamplers [111..] -- just to debug program names, make zip3 later      
-    return $ \s x -> foldl (\io f -> io >> f s x) (return ()) fs 
+    (pnames, fs) <- liftM unzip $ mapM comp $ zip3 drawcalls allocatedUniforms allocatedSamplers
+    let fr = CompiledFrame $ \x -> foldl (\io f -> io >> f x) (return ()) fs
+    addContextFinalizer fr $ do mapM_ glDelProg pnames    
+    return fr
  where
-    comp (Drawcall err fbN dcN vsource fsource inps unis samps, ubinds, sbinds, pN) =
-           liftContextIO $ do putStrLn "-------------------------------------------------------------------------------------------"
+    comp (Drawcall err fbN dcN vsource fsource inps unis samps, ubinds, sbinds) =
+           liftContextIO $ do
+                              putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "Compiling program"
                               putStrLn "-------------"
@@ -70,24 +75,26 @@ compile dcs = do
                               
                               putStrLn "---- LINK ---"
                               putStrLn $ "If errors, blame it on " ++ err
-                              pName <- return pN -- glGenProg
-                              putStrLn $ "pName = " ++ show pName
+                              pName <- glGenProg
                               
                               mapM_ (\(bind, ix) -> putStrLn $ "glUniformBlockBinding p ix bind " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) $ zip ubinds [0..]
                               mapM_ (\(bind, ix) -> putStrLn $ "samplerBinds " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) $ zip sbinds [0..]
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
                               
-                              return (\s x -> do 
+                              return (pName, \x -> do 
                                            putStrLn "-----------------------------------------"
                                            putStrLn $ "UseProgram " ++ show pName 
                                            -- Bind uniforms
                                            mapM_ (\(n,b) -> (uniformNameToRenderIO s ! n) x b) $ zip unis ubinds -- TODO: Dont bind already bound
-                                           mapM_ (\(n,b) -> (uniformNameToRenderIO s ! n) x b) $ zip samps sbinds -- TODO: Dont bind already bound                                          
+                                           mapM_ (\(n,b) -> (samplerNameToRenderIO s ! n) x b) $ zip samps sbinds -- TODO: Dont bind already bound                                          
                                            (drawToRenderIOs s ! fbN) x  -- TODO: Dont bind already bound
                                            mapM_ ($ inps) ((inputArrayToRenderIOs s ! dcN) x)
                                            putStrLn "-----------------------------------------"
                                            )
+
+glGenProg = return 0
+glDelProg n = putStrLn $ "gldelprog " ++ show n
 
 allocate :: Int -> [[Int]] -> [[Int]]
 allocate mx = allocate' Map.empty []

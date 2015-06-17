@@ -33,7 +33,6 @@ import Data.Word
 import Data.Int
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
-import System.Mem.Weak (addFinalizer)
 
 class BufferFormat f where
     type HostFormat f
@@ -179,12 +178,14 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
                 returnA -< (a', b', c', d')
 
 newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT os f m (Buffer os b)
-newBuffer elementCount =
-    liftContextIO $ do name <- genBufferGl
+newBuffer elementCount = do
+    (buffer, name) <- liftContextIO $ do
+                       name <- genBufferGl
                        let buffer = makeBuffer name elementCount  
                        setBufferStorageGl name (bufSize buffer)
-                       liftIO $ addFinalizer buffer $ glDeleteBuffer name
-                       return buffer 
+                       return (buffer, name)
+    addContextFinalizer buffer $ glDeleteBuffer name
+    return buffer 
 
 writeBuffer :: MonadIO m => [HostFormat f] -> Int -> Buffer os f -> ContextT os f2 m ()
 writeBuffer elems offset buffer = 
@@ -259,10 +260,11 @@ genBufferGl = do putStrLn "genBuffer"
                  return 987
 
 glDeleteBuffer :: Int -> IO ()     
-glDeleteBuffer _ = return ()
+glDeleteBuffer n = putStrLn $ "gldelbuffer " ++ show n
 
 setBufferStorageGl :: Int -> Int -> IO ()
-setBufferStorageGl _ _ = return ()                  
+setBufferStorageGl _ s = putStrLn $ "setBufferStorageGl " ++ show s
+
 
 glUNIFORM_BUFFER_ALIGNMENT :: Int
 glUNIFORM_BUFFER_ALIGNMENT = 256

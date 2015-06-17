@@ -27,6 +27,7 @@ import Control.Monad.Trans.Writer.Lazy (Writer, runWriter, tell)
 import Control.Monad.Exception (MonadException)
 import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (lift)
+import Control.Monad (liftM)
 
 
 data FrameState s = FrameState Int Int (RenderIOState s)
@@ -62,18 +63,15 @@ mapFrame f (Frame (FrameM m)) = Frame $ FrameM $
        lift $ tell dcs
        return a
 
-data CompiledFrame os f s = CompiledFrame (s -> IO ())
-
 compileFrame :: (MonadIO m, MonadException m) => Frame os f x () -> ContextT os f m (CompiledFrame os f x)
 compileFrame (Frame (FrameM m)) =
     let (((),FrameState _ _ s), dcs) = runWriter $ runStateT m newFrameState 
-    in do f <- compile dcs 
-          return (CompiledFrame (f s))
+    in compile dcs s
 
 newtype Render os f a = Render (IO a) deriving (Monad, Applicative, Functor)
 
 render :: (MonadIO m, MonadException m) => Render os f () -> ContextT os f m ()
-render (Render m) = liftContextIO m
+render (Render m) = liftContextIOAsync m
 
 runFrame :: CompiledFrame os f x -> x -> Render os f ()
 runFrame (CompiledFrame f) x = Render $ do

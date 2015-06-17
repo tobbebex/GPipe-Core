@@ -28,18 +28,20 @@ import Control.Monad.Trans.Class (lift)
 debugContext :: ContextFactory c ds 
 debugContext f = return $ ContextHandle 
                 (error "newSharedContext not supported")
-                id
-                (\_ -> return ())
-                (return ())
+                (putStrLn "sync:" >>)
+                (putStrLn "async:" >>)
+                (putStrLn "swap")
                 (return (1,1))
-                (return ())
+                (putStrLn "Delete context")
                 
 main :: IO ()
-main = runContextT debugContext (ContextFormatColorDepth RGBA8 Depth16) myProg
+main = do runContextT debugContext (ContextFormatColorDepth RGBA8 Depth16) myProg
+          putStrLn "Finished!"
 
 myProg = do (myVertices1 :: Buffer os BFloat) <- newBuffer 12
             (myVertices2) <- newBuffer 45
             myUniform1 <- newBuffer 45
+            (_ :: Buffer os BFloat) <- newBuffer 12
       
             
             liftIO $ printStableName myFrame -- TODO: Use this
@@ -52,6 +54,7 @@ myProg = do (myVertices1 :: Buffer os BFloat) <- newBuffer 12
                 let p1 = toPrimitiveArray TriangleList myVertArray1 <> toPrimitiveArray TriangleList myVertArray2
                 let p2 = toPrimitiveArrayInstanced TriangleList (VertexArray.zipWith (,) myVertArray2 myVertArray12) myVertArray11 (,)
                 runFrame f ((p1, p2), myUniform1)
+            swap
          
  
            

@@ -49,8 +49,8 @@ doForDraw :: Int -> (s -> IO ()) -> FrameM s ()
 doForDraw n io = modifyRenderIO (\s -> s { drawToRenderIOs = insert n io (drawToRenderIOs s) } )
 
 makeDrawcall :: Int -> String -> ShaderM () -> FragmentStreamData -> IO Drawcall
-makeDrawcall n err sh (FragmentStreamData side shaderpos (VertexStreamData dcN)) =
-       do (fsource, funis, fsamps, _, prevDecls, prevS) <- runShaderM (return ()) sh
+makeDrawcall n err sh (FragmentStreamData side shaderpos (PrimitiveStreamData dcN) keep) =
+       do (fsource, funis, fsamps, _, prevDecls, prevS) <- runShaderM (return ()) (discard keep >> sh)
           (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls (prevS >> shaderpos)
           let unis = orderedUnion funis vunis
               samps = orderedUnion fsamps vsamps

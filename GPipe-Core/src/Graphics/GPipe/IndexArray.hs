@@ -3,13 +3,13 @@ module Graphics.GPipe.IndexArray (
     IndexArray(..), 
     IndexFormat(),
     newIndexArray,
-    Graphics.GPipe.IndexArray.take,
-    Graphics.GPipe.IndexArray.drop
+    take,
+    drop
 ) where
 
 import Graphics.GPipe.Buffer
 import Graphics.GPipe.Frame
-import Prelude hiding (length)
+import Prelude hiding (length, take, drop)
 
 class BufferFormat a => IndexFormat a where
     indexToInt :: a -> HostFormat a -> Int

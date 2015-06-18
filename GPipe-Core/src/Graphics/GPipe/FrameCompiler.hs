@@ -4,16 +4,13 @@ module Graphics.GPipe.FrameCompiler where
 import Graphics.GPipe.Context
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Exception (MonadException)
-import Graphics.GPipe.Shader
 import qualified Data.IntMap as Map
 import Data.IntMap ((!))
-import Prelude hiding (putStr, (!))
+import Prelude hiding (putStr)
 import Data.Text.Lazy.IO (putStr)
-import Data.Monoid (mconcat)
 import Data.Text.Lazy (Text)
-import Control.Monad (forM, forM_, liftM)
-import Data.List (transpose, zip4)
 import Data.Maybe (isJust)
+import Control.Monad (mapAndUnzipM)
 
 data Drawcall = Drawcall {
                     drawcallErrorStr :: String,
@@ -51,9 +48,9 @@ compile dcs s = do
     drawcalls <- liftIO $ sequence dcs -- IO only for SNMap
     let allocatedUniforms = allocate glMAXUniforms (map usedUniforms drawcalls)      
     let allocatedSamplers = allocate glMAXSamplers (map usedSamplers drawcalls)      
-    (pnames, fs) <- liftM unzip $ mapM comp $ zip3 drawcalls allocatedUniforms allocatedSamplers
+    (pnames, fs) <- mapAndUnzipM comp  (zip3 drawcalls allocatedUniforms allocatedSamplers)
     let fr = CompiledFrame $ \x -> foldl (\io f -> io >> f x) (return ()) fs
-    addContextFinalizer fr $ do mapM_ glDelProg pnames    
+    addContextFinalizer fr $ mapM_ glDelProg pnames    
     return fr
  where
     comp (Drawcall err fbN dcN vsource fsource inps unis samps, ubinds, sbinds) =
@@ -114,52 +111,4 @@ allocate mx = allocate' Map.empty []
 glMAXUniforms = 3 :: Int
 glMAXSamplers = 3:: Int
       
-
-
-{-
-            in do (fsource, funis, fsamps, finps, prevDecls, prevS) <- runShaderM (return ()) m
-                  (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls prevS                 
-                  let unis = orderedUnion funis vunis
-                      samps = orderedUnion fsamps vsamps
-                      dcname = 
-                      showBiggerThen x m = '(' : show x ++ '>': show m ++ ")\n"
-                      testLimit x m s = when (x > m) $ tellError ("Too many " ++ s ++ " in " ++ dcname ++ showBiggerThen x m)
-                  
-                  mvu <- getGlMAX_VERTEX_UNIFORMS
-                  mfu <- getGlMAX_FRAGMENT_UNIFORMS
-                  mu <- getGlMAX_UNIFORM_BINDINGS
-                  mvs <- getGlMAX_VERTEX_SAMPLERS
-                  mfs <- getGlMAX_FRAGMENT_SAMPLERS
-                  ms <- getGlMAX_SAMPLER_BINDINGS                 
-                  mvi <- getGlMAX_VERTEX_ATTRIBS                 
-                  mfi <- getGlMAX_VARYING_FLOATS                                  
-                  testLimit (length vunis) mvu "vertex uniform blocks"
-                  testLimit (length funis) mfu "fragment uniform blocks"
-                  testLimit (length unis) mu "total uniform blocks"
-                  testLimit (length vsamps) mvs "vertex samplers"
-                  testLimit (length fsamps) mfs "fragment samplers"
-                  testLimit (length samps) ms "total samplers"
-                  testLimit (length vinps) mvi "vertex inputs"
-                  testLimit (length finps) mfi "fragment inputs"                 
-                  
-                  --generate program, bind inputs, uniforms and samplers
-                  
-
-                  glCompile                                     
-                  -- compile shader and program
-                  return () -- TODO: Make the shader and write the drawcall
-
-
-getGlMAX_VERTEX_ATTRIBS = return 5
-getGlMAX_VARYING_FLOATS = return 5     
-getGlMAX_VERTEX_UNIFORMS = return 5                                                
-getGlMAX_FRAGMENT_UNIFORMS = return 5                                                
-getGlMAX_UNIFORM_BINDINGS = return 5                                                
-getGlMAX_VERTEX_SAMPLERS = return 5                                                
-getGlMAX_FRAGMENT_SAMPLERS = return 5
-getGlMAX_SAMPLER_BINDINGS = return 5
-
--}
-
-
       

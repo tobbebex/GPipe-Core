@@ -23,9 +23,9 @@ import Data.IntMap.Lazy (insert)
 --------------------
 
 class PrimitiveTopology p where
-    data Geometry p :: * -> *
     toGLtopology :: p -> Int
-    makeGeometry :: [a] -> Geometry p a  
+    --data Geometry p :: * -> *
+    --makeGeometry :: [a] -> Geometry p a  
    
 data Triangles = TriangleStrip | TriangleList
 data TrianglesWithAdjacency = TriangleStripWithAdjacency
@@ -34,27 +34,27 @@ data LinesWithAdjacency = LinesWithAdjacencyList | LinesWithAdjacencyStrip
 data Points = PointList
 
 instance PrimitiveTopology Triangles where
-    data Geometry Triangles a = Triangle a a a
     toGLtopology TriangleStrip = 0
     toGLtopology TriangleList = 1
+    --data Geometry Triangles a = Triangle a a a
    
 instance PrimitiveTopology TrianglesWithAdjacency where
-    data Geometry TrianglesWithAdjacency a = TriangleWithAdjacency a a a a a a
     toGLtopology TriangleStripWithAdjacency = 0
+    --data Geometry TrianglesWithAdjacency a = TriangleWithAdjacency a a a a a a
 
 instance PrimitiveTopology Lines where
-    data Geometry Lines a = Line a a
     toGLtopology LineStrip = 0
     toGLtopology LineList = 1
+    --data Geometry Lines a = Line a a
 
 instance PrimitiveTopology LinesWithAdjacency where
-    data Geometry LinesWithAdjacency a = LineWithAdjacency a a a a
     toGLtopology LinesWithAdjacencyList = 0
     toGLtopology LinesWithAdjacencyStrip = 1
+    --data Geometry LinesWithAdjacency a = LineWithAdjacency a a a a
 
 instance PrimitiveTopology Points where
-    data Geometry Points a = Point a
     toGLtopology PointList = 0
+    --data Geometry Points a = Point a
 
 type InstanceCount = Int
 
@@ -87,9 +87,9 @@ toPrimitiveArrayIndexedInstanced p ia va ina f = PrimitiveArray [PrimitiveArrayI
 
 --------------------
 type DrawCallName = Int
-data VertexStreamData = VertexStreamData DrawCallName
+data PrimitiveStreamData = PrimitiveStreamData DrawCallName
 
-newtype PrimitiveStream t a = PrimitiveStream [(a, VertexStreamData)] deriving Monoid
+newtype PrimitiveStream t a = PrimitiveStream [(a, PrimitiveStreamData)] deriving Monoid
 
 instance Functor (PrimitiveStream t) where
         fmap f (PrimitiveStream xs) = PrimitiveStream $ map (first f) xs
@@ -125,7 +125,7 @@ toPrimitiveStream sf = Frame $ do n <- getName
                                   let sampleBuffer = makeBuffer undefined undefined :: Buffer os a
                                       x = fst $ runWriter (evalStateT (mf $ bufBElement sampleBuffer $ BInput 0 0) 0) 
                                   doForInputArray n (map drawcall . getPrimitiveArray . sf)
-                                  return $ PrimitiveStream [(x, VertexStreamData n)] 
+                                  return $ PrimitiveStream [(x, PrimitiveStreamData n)] 
     where 
         ToVertex (Kleisli mf) = toVertex :: ToVertex a (VertexFormat a)
         drawcall (PrimitiveArraySimple p l a) binds = do runAttribs  a binds

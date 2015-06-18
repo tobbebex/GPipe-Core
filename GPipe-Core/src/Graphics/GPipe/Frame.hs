@@ -14,7 +14,8 @@ module Graphics.GPipe.Frame (
     render,
     runFrame,
     compileFrame,
-    mapFrame
+    mapFrame,
+    silenceFrame
 ) where
 
 
@@ -61,6 +62,13 @@ mapFrame f (Frame (FrameM m)) = Frame $ FrameM $
        let ((a,FrameState x' y' s'), dcs) = runWriter $ runStateT m (FrameState x y newRenderIOState)
        put $ FrameState x' y' (mapRenderIOState f s' s)
        lift $ tell dcs
+       return a
+
+silenceFrame :: Frame os f' s a -> Frame os f s a
+silenceFrame (Frame (FrameM m)) = Frame $ FrameM $   
+    do s <- get
+       let ((a,s'), _) = runWriter $ runStateT m s
+       put s'
        return a
 
 compileFrame :: (MonadIO m, MonadException m) => Frame os f x () -> ContextT os f m (CompiledFrame os f x)

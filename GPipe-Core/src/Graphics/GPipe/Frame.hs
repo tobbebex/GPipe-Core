@@ -15,6 +15,7 @@ module Graphics.GPipe.Frame (
     runFrame,
     compileFrame,
     mapFrame,
+    maybeFrame,
     silenceFrame
 ) where
 
@@ -28,7 +29,7 @@ import Control.Monad.Trans.Writer.Lazy (Writer, runWriter, tell)
 import Control.Monad.Exception (MonadException)
 import Control.Applicative (Applicative)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad (liftM)
+import Data.Maybe (fromJust)
 
 
 data FrameState s = FrameState Int Int (RenderIOState s)
@@ -49,10 +50,13 @@ getDrawcall = do FrameState n d r <- FrameM get
 modifyRenderIO :: (RenderIOState s -> RenderIOState s) -> FrameM s ()
 modifyRenderIO f = FrameM $ modify (\(FrameState a b s) -> FrameState a b (f s))
 
-tellDrawcall :: forall s. IO Drawcall -> FrameM s ()
+tellDrawcall :: IO (Drawcall s) -> FrameM s ()
 tellDrawcall dc = FrameM $ lift $ tell [dc] 
+
+mapDrawcall :: ((s' -> Bool) -> s -> Bool) -> (s -> s') -> Drawcall s' -> Drawcall s
+mapDrawcall f x (Drawcall a b c d e g h i j k) = Drawcall (f a) (b . x) c d e g h i j k 
              
-newtype FrameM s a = FrameM (StateT (FrameState s) (Writer [IO Drawcall]) a) deriving (Monad, Applicative, Functor)
+newtype FrameM s a = FrameM (StateT (FrameState s) (Writer [IO (Drawcall s)]) a) deriving (Monad, Applicative, Functor)
 
 newtype Frame os f s a = Frame (FrameM s a)  deriving (Monad, Applicative, Functor)
 
@@ -61,8 +65,15 @@ mapFrame f (Frame (FrameM m)) = Frame $ FrameM $
     do FrameState x y s <- get
        let ((a,FrameState x' y' s'), dcs) = runWriter $ runStateT m (FrameState x y newRenderIOState)
        put $ FrameState x' y' (mapRenderIOState f s' s)
-       lift $ tell dcs
+       lift $ tell $ map (>>= (return . mapDrawcall (.f) f)) dcs
        return a
+
+maybeFrame :: (s -> Maybe s') -> Frame os f s' () -> Frame os f s ()
+maybeFrame f (Frame (FrameM m)) = Frame $ FrameM $   
+    do FrameState x y s <- get
+       let (FrameState x' y' s', dcs) = runWriter $ execStateT m (FrameState x y newRenderIOState)
+       put $ FrameState x' y' (mapRenderIOState (fromJust . f) s' s) -- This fromJust wont get evaluated on Nothing thanks to the "when (runIf x)" in FrameCompiler
+       lift $ tell $ map (>>= (return . mapDrawcall (\g -> maybe False g . f ) (fromJust . f))) dcs
 
 silenceFrame :: Frame os f' s a -> Frame os f s a
 silenceFrame (Frame (FrameM m)) = Frame $ FrameM $   
@@ -89,7 +100,5 @@ runFrame (CompiledFrame f) x = Render $ do
                                    f x
                                    putStrLn "-------------------------------------------------------------------------------------------"
                                    putStrLn "-------------------------------------------------------------------------------------------"
-
-
 
      

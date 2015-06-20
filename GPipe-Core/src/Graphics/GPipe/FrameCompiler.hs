@@ -10,12 +10,14 @@ import Prelude hiding (putStr)
 import Data.Text.Lazy.IO (putStr)
 import Data.Text.Lazy (Text)
 import Data.Maybe (isJust)
-import Control.Monad (mapAndUnzipM)
+import Control.Monad (mapAndUnzipM, when)
 
-data Drawcall = Drawcall {
+data Drawcall s = Drawcall {
+                    runDrawcallIf :: s -> Bool,
+                    runDrawcall :: s -> IO (),
                     drawcallErrorStr :: String,
-                    frameBufferName :: Int,
                     drawcallName :: Int,
+                    rasterizationName :: Int,
                     vertexsSource :: Text,
                     fragmentSource :: Text,
                     usedInputs :: [Int],
@@ -27,12 +29,15 @@ type Binding = Int
 -- index/binding refers to what is used in the final shader. Index space is limited, usually 16
 -- attribname is what was declared, but all might not be used. Attribname share namespace with uniforms and textures and is unlimited(TM)
 
+-- TODO: Add usedBuffers to RenderIOState, ie Map.IntMap (s -> (Binding -> IO (), Int)) and the like
+--       then create a function that checks that none of the input buffers are used as output, and throws if it is
+
 data RenderIOState s = RenderIOState 
     {
         uniformNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()),
         samplerNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()),
-        inputArrayToRenderIOs :: Map.IntMap (s -> [[Binding] -> IO ()]),
-        drawToRenderIOs :: Map.IntMap (s -> IO ())
+        rasterizationNameToRenderIO :: Map.IntMap (s -> IO ()),
+        inputArrayToRenderIOs :: Map.IntMap (s -> [[Binding] -> IO ()])
     }  
 
 newRenderIOState :: RenderIOState s
@@ -43,17 +48,17 @@ mapRenderIOState f (RenderIOState a b c d) (RenderIOState i j k l) = let g x = x
 
 data CompiledFrame os f s = CompiledFrame (s -> IO ())
 
-compile :: (Monad m, MonadIO m, MonadException m) => [IO Drawcall] -> RenderIOState s -> ContextT os f m (CompiledFrame os f s) 
+compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT os f m (CompiledFrame os f s) 
 compile dcs s = do
     drawcalls <- liftIO $ sequence dcs -- IO only for SNMap
     let allocatedUniforms = allocate glMAXUniforms (map usedUniforms drawcalls)      
     let allocatedSamplers = allocate glMAXSamplers (map usedSamplers drawcalls)      
     (pnames, fs) <- mapAndUnzipM comp  (zip3 drawcalls allocatedUniforms allocatedSamplers)
-    let fr = CompiledFrame $ \x -> foldl (\io f -> io >> f x) (return ()) fs
+    let fr x = foldl (\ io f -> io >> f x) (return ()) fs
     addContextFinalizer fr $ mapM_ glDelProg pnames    
-    return fr
+    return $ CompiledFrame fr
  where
-    comp (Drawcall err fbN dcN vsource fsource inps unis samps, ubinds, sbinds) =
+    comp (Drawcall runIf runner err dcN rastN vsource fsource inps unis samps, ubinds, sbinds) =
            liftContextIO $ do
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
@@ -79,14 +84,15 @@ compile dcs s = do
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
                               
-                              return (pName, \x -> do 
+                              return (pName, \x -> when (runIf x) $ do
                                            putStrLn "-----------------------------------------"
                                            putStrLn $ "UseProgram " ++ show pName 
                                            -- Bind uniforms
                                            mapM_ (\(n,b) -> (uniformNameToRenderIO s ! n) x b) $ zip unis ubinds -- TODO: Dont bind already bound
                                            mapM_ (\(n,b) -> (samplerNameToRenderIO s ! n) x b) $ zip samps sbinds -- TODO: Dont bind already bound                                          
-                                           (drawToRenderIOs s ! fbN) x  -- TODO: Dont bind already bound
-                                           mapM_ ($ inps) ((inputArrayToRenderIOs s ! dcN) x)
+                                           runner x  -- TODO: Dont bind already bound
+                                           (rasterizationNameToRenderIO s ! rastN) x -- TODO: Dont bind already bound
+                                           mapM_ ($ inps) ((inputArrayToRenderIOs s ! dcN) x) -- TODO: Dont bind already bound
                                            putStrLn "-----------------------------------------"
                                            )
 

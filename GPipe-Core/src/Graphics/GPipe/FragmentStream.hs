@@ -4,16 +4,20 @@ module Graphics.GPipe.FragmentStream where
 import Control.Category hiding ((.))
 import Control.Arrow 
 import Graphics.GPipe.Shader
+import Graphics.GPipe.Frame
+import Graphics.GPipe.FrameCompiler
 import Graphics.GPipe.VertexStream
 import Control.Monad.Trans.State.Lazy
 import Data.Monoid (Monoid)
 import Data.Boolean
+import Data.IntMap.Lazy (insert)
 
 type VPos = (VFloat,VFloat,VFloat,VFloat)
 
 data Side = Front | Back | FrontAndBack
 type ShaderPos = ShaderM ()
-data FragmentStreamData = FragmentStreamData Side ShaderPos PrimitiveStreamData FBool
+type RasterizationName = Int
+data FragmentStreamData = FragmentStreamData RasterizationName ShaderPos PrimitiveStreamData FBool
 
 newtype FragmentStream a = FragmentStream [(a, FragmentStreamData)] deriving Monoid
 
@@ -34,19 +38,25 @@ instance FragmentInput VFloat where
                                                           return $ S $ useFInput "vf" STypeFloat n s 
                
 
-rasterize:: forall p a. (PrimitiveTopology p, FragmentInput a)
-          => Side 
+rasterize:: forall p a s os f. (PrimitiveTopology p, FragmentInput a)
+          => (s -> (Side, ViewPort))
           -> PrimitiveStream p (VPos, a)
-          -> FragmentStream (FragmentFormat a) -- FBool {-- TODO make struct of all sorts of stuff --}, 
-rasterize side (PrimitiveStream xs) = 
-    let ToFragment (Kleisli m) = toFragment :: ToFragment a (FragmentFormat a)
-        f ((p, x),s) = (evalState (m x) 0, FragmentStreamData side (makePos p) s true)
+          -> Frame os f s (FragmentStream (FragmentFormat a)) 
+rasterize sf (PrimitiveStream xs) = Frame $ do
+        n <- getName
+        modifyRenderIO (\s -> s { rasterizationNameToRenderIO = insert n io (rasterizationNameToRenderIO s) } )
+        return (FragmentStream $ map (f n) xs) 
+    where        
+        ToFragment (Kleisli m) = toFragment :: ToFragment a (FragmentFormat a)
+        f n ((p, x),s) = (evalState (m x) 0, FragmentStreamData n (makePos p) s true)
         makePos (S x,S y,S z,S w) = do x' <- x
                                        y' <- y
                                        z' <- z
                                        w' <- w
                                        tellAssignment' "gl_Position" $ "vec4("++x'++',':y'++',':z'++',':w'++")"
-    in FragmentStream $ map f xs
+        io s = let (side, vp) = sf s in putStrLn "glSetSideAndViewport"
+
+data ViewPort = ViewPort (Int,Int) (Int,Int)
 
 -- TODO: Add scissor and viewport
  
@@ -55,10 +65,8 @@ filterFragments f (FragmentStream xs) = FragmentStream $ map g xs
     where g (a,FragmentStreamData x y z w) = (a,FragmentStreamData x y z (w &&* f a))  
 
 
-
-
-
-
+-- TODO: Add withRasterizedInfo to add depth, side, etc
+ -- FBool {-- TODO make struct of all sorts of stuff --},
 
 
 

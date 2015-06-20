@@ -35,9 +35,8 @@ main = do runContextT debugContext (ContextFormatColorDepthStencil RGBA8 (DepthS
 
 myProg = do (myVertices1 :: Buffer os BFloat) <- newBuffer 12
             (myVertices2) <- newBuffer 45
+            (myVertices2') <- newBuffer 45
             myUniform1 <- newBuffer 45
-            (_ :: Buffer os BFloat) <- newBuffer 12
-      
             
             liftIO $ printStableName myFrame -- TODO: Use this
             f <- compileFrame myFrame
@@ -46,9 +45,11 @@ myProg = do (myVertices1 :: Buffer os BFloat) <- newBuffer 12
                 myVertArray11 <- newVertexArray myVertices1
                 myVertArray12 <- newVertexArray myVertices2
                 myVertArray2 <- newVertexArray myVertices2
+                myVertArray2' <- newVertexArray myVertices2'
                 let p1 = toPrimitiveArray TriangleList myVertArray1 <> toPrimitiveArray TriangleList myVertArray2
                 let p2 = toPrimitiveArrayInstanced TriangleList (VertexArray.zipWith (,) myVertArray2 myVertArray12) myVertArray11 (,)
-                runFrame f ((p1, p2), (myUniform1, (True, False)))
+                let p2' = toPrimitiveArrayInstanced TriangleList (VertexArray.zipWith (,) myVertArray2' myVertArray12) myVertArray11 (,)
+                runFrame f ((p1, p2'), (myUniform1, (True, False)))
                 runFrame f ((p1, p2), (myUniform1, (True, True)))
                 runFrame f ((p1, p2), (myUniform1, (False, False)))
                 runFrame f ((p1, p2), (myUniform1, (False, True)))

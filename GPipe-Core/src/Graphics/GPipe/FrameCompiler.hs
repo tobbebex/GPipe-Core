@@ -11,6 +11,8 @@ import Data.Text.Lazy.IO (putStr)
 import Data.Text.Lazy (Text)
 import Data.Maybe (isJust)
 import Control.Monad (mapAndUnzipM, when)
+import Control.Monad.Trans.State.Lazy (evalStateT, get, put)
+import Control.Monad.Trans.Class (lift)
 
 data Drawcall s = Drawcall {
                     runDrawcallIf :: s -> Bool,
@@ -48,18 +50,28 @@ mapRenderIOState f (RenderIOState a b c d) (RenderIOState i j k l) = let g x = x
 
 data CompiledFrame os f s = CompiledFrame (s -> IO ())
 
+data BoundState = BoundState { 
+                        boundUniforms :: Map.IntMap Int,  
+                        boundSamplers :: Map.IntMap Int
+                        }  
+
 compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT os f m (CompiledFrame os f s) 
 compile dcs s = do
     drawcalls <- liftIO $ sequence dcs -- IO only for SNMap
     let allocatedUniforms = allocate glMAXUniforms (map usedUniforms drawcalls)      
     let allocatedSamplers = allocate glMAXSamplers (map usedSamplers drawcalls)      
-    (pnames, fs) <- mapAndUnzipM comp  (zip3 drawcalls allocatedUniforms allocatedSamplers)
+    (pnames, fs) <- evalStateT (mapAndUnzipM comp  (zip3 drawcalls allocatedUniforms allocatedSamplers)) (BoundState Map.empty Map.empty)
     let fr x = foldl (\ io f -> io >> f x) (return ()) fs
     addContextFinalizer fr $ mapM_ glDelProg pnames    
     return $ CompiledFrame fr
- where
-    comp (Drawcall runIf runner err dcN rastN vsource fsource inps unis samps, ubinds, sbinds) =
-           liftContextIO $ do
+ where   
+    comp (Drawcall runIf runner err primN rastN vsource fsource inps unis samps, ubinds, sbinds) = do
+           BoundState uniState sampState <- get
+           let (bindUni, uniState') = makeBind uniState (uniformNameToRenderIO s) (zip unis ubinds)
+           let (bindSamp, sampState') = makeBind sampState (samplerNameToRenderIO s) $ zip samps sbinds
+           put $ BoundState uniState' sampState'
+           
+           lift $ liftContextIO $ do
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "Compiling program"
@@ -87,14 +99,24 @@ compile dcs s = do
                               return (pName, \x -> when (runIf x) $ do
                                            putStrLn "-----------------------------------------"
                                            putStrLn $ "UseProgram " ++ show pName 
-                                           -- Bind uniforms
-                                           mapM_ (\(n,b) -> (uniformNameToRenderIO s ! n) x b) $ zip unis ubinds -- TODO: Dont bind already bound
-                                           mapM_ (\(n,b) -> (samplerNameToRenderIO s ! n) x b) $ zip samps sbinds -- TODO: Dont bind already bound                                          
-                                           runner x  -- TODO: Dont bind already bound
-                                           (rasterizationNameToRenderIO s ! rastN) x -- TODO: Dont bind already bound
-                                           mapM_ ($ inps) ((inputArrayToRenderIOs s ! dcN) x) -- TODO: Dont bind already bound
+                                           bindUni x 
+                                           bindSamp x                                           
+                                           runner x
+                                           (rasterizationNameToRenderIO s ! rastN) x -- TODO: Dont bind already bound?
+                                           mapM_ ($ inps) ((inputArrayToRenderIOs s ! primN) x) -- TODO: Dont bind already bound?
                                            putStrLn "-----------------------------------------"
                                            )
+
+-- Optimization, save gl calls to already bound buffers/samplers
+makeBind :: Map.IntMap Int -> Map.IntMap (s -> Int -> IO ()) -> [(Int, Int)] -> (s -> IO (), Map.IntMap Int)
+makeBind m iom ((n,b):xs) = (g, m'')
+    where 
+        (f, m') = makeBind m iom xs
+        (io, m'') = case Map.lookup b m' of
+                            Just x | x == n -> (const $ return (), m')
+                            _               -> (\s -> (iom ! n) s b, Map.insert b n m')      
+        g s = f s >> io s
+makeBind m _ [] = (const $ return (), m)                          
 
 glGenProg = return 0
 glDelProg n = putStrLn $ "gldelprog " ++ show n

@@ -15,7 +15,6 @@ import Control.Monad.Trans.State.Lazy (evalStateT, get, put)
 import Control.Monad.Trans.Class (lift)
 
 data Drawcall s = Drawcall {
-                    runDrawcallIf :: s -> Bool,
                     runDrawcall :: s -> IO (),
                     drawcallErrorStr :: String,
                     drawcallName :: Int,
@@ -48,14 +47,12 @@ newRenderIOState = RenderIOState Map.empty Map.empty Map.empty Map.empty
 mapRenderIOState :: (s -> s') -> RenderIOState s' -> RenderIOState s -> RenderIOState s
 mapRenderIOState f (RenderIOState a b c d) (RenderIOState i j k l) = let g x = x . f in RenderIOState (Map.union i $ Map.map g a) (Map.union j $ Map.map g b) (Map.union k $ Map.map g c) (Map.union l $ Map.map g d)
 
-data CompiledFrame os f s = CompiledFrame (s -> IO ())
-
 data BoundState = BoundState { 
                         boundUniforms :: Map.IntMap Int,  
                         boundSamplers :: Map.IntMap Int
                         }  
 
-compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT os f m (CompiledFrame os f s) 
+compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT os f m (s -> IO ())
 compile dcs s = do
     drawcalls <- liftIO $ sequence dcs -- IO only for SNMap
     let allocatedUniforms = allocate glMAXUniforms (map usedUniforms drawcalls)      
@@ -63,9 +60,9 @@ compile dcs s = do
     (pnames, fs) <- evalStateT (mapAndUnzipM comp  (zip3 drawcalls allocatedUniforms allocatedSamplers)) (BoundState Map.empty Map.empty)
     let fr x = foldl (\ io f -> io >> f x) (return ()) fs
     addContextFinalizer fr $ mapM_ glDelProg pnames    
-    return $ CompiledFrame fr
+    return fr
  where   
-    comp (Drawcall runIf runner err primN rastN vsource fsource inps unis samps, ubinds, sbinds) = do
+    comp (Drawcall runner err primN rastN vsource fsource inps unis samps, ubinds, sbinds) = do
            BoundState uniState sampState <- get
            let (bindUni, uniState') = makeBind uniState (uniformNameToRenderIO s) (zip unis ubinds)
            let (bindSamp, sampState') = makeBind sampState (samplerNameToRenderIO s) $ zip samps sbinds
@@ -96,7 +93,7 @@ compile dcs s = do
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
                               
-                              return (pName, \x -> when (runIf x) $ do
+                              return (pName, \x -> do
                                            putStrLn "-----------------------------------------"
                                            putStrLn $ "UseProgram " ++ show pName 
                                            bindUni x 

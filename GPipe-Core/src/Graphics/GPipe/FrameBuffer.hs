@@ -78,7 +78,7 @@ makeDrawcall err (sh, shd, io) (FragmentStreamData rastN shaderpos (PrimitiveStr
           (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls (prevS >> shaderpos)
           let unis = orderedUnion funis vunis
               samps = orderedUnion fsamps vsamps
-          return $ Drawcall (const True) io err primN rastN vsource fsource vinps unis samps
+          return $ Drawcall io err primN rastN vsource fsource vinps unis samps
 
 orderedUnion :: Ord a => [a] -> [a] -> [a]
 orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys 

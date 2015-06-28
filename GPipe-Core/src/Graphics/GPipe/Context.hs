@@ -72,7 +72,7 @@ swap :: MonadIO m => ContextT os f m ()
 swap = ContextT ask >>= (\c -> liftIO $ contextDoAsync c $ contextSwap c)
 
 frameBufferSize :: (MonadIO m) => ContextT os f m (Int, Int)
-frameBufferSize = ContextT ask >>= liftIO . contextFrameBufferSize
+frameBufferSize = ContextT ask >>= (\c -> liftIO $ contextDoSync c $ contextFrameBufferSize c)
 
 data GPipeException = GPipeException String
      deriving (Show, Typeable)

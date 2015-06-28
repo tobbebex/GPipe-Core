@@ -10,13 +10,12 @@ import Prelude hiding (putStr)
 import Data.Text.Lazy.IO (putStr)
 import Data.Text.Lazy (Text)
 import Data.Maybe (isJust)
-import Control.Monad (mapAndUnzipM, when)
+import Control.Monad (mapAndUnzipM)
 import Control.Monad.Trans.State.Lazy (evalStateT, get, put)
 import Control.Monad.Trans.Class (lift)
 
 data Drawcall s = Drawcall {
                     runDrawcall :: s -> IO (),
-                    drawcallErrorStr :: String,
                     drawcallName :: Int,
                     rasterizationName :: Int,
                     vertexsSource :: Text,
@@ -62,7 +61,7 @@ compile dcs s = do
     addContextFinalizer fr $ mapM_ glDelProg pnames    
     return fr
  where   
-    comp (Drawcall runner err primN rastN vsource fsource inps unis samps, ubinds, sbinds) = do
+    comp (Drawcall runner primN rastN vsource fsource inps unis samps, ubinds, sbinds) = do
            BoundState uniState sampState <- get
            let (bindUni, uniState') = makeBind uniState (uniformNameToRenderIO s) (zip unis ubinds)
            let (bindSamp, sampState') = makeBind sampState (samplerNameToRenderIO s) $ zip samps sbinds
@@ -85,7 +84,6 @@ compile dcs s = do
                               mapM_ (\(name, ix) -> putStrLn $ "SAMP BindNameToIndex s" ++ show name ++ " " ++ show ix) $ zip samps [0..]
                               
                               putStrLn "---- LINK ---"
-                              putStrLn $ "If errors, blame it on " ++ err
                               pName <- glGenProg
                               
                               mapM_ (\(bind, ix) -> putStrLn $ "glUniformBlockBinding p ix bind " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) $ zip ubinds [0..]

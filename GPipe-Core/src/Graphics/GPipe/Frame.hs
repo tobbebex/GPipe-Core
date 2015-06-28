@@ -8,7 +8,6 @@ module Graphics.GPipe.Frame (
     FrameState(..),
     Render(..),
     getName,
-    getDrawcall,
     tellDrawcall,
     modifyRenderIO,
     render,
@@ -37,29 +36,24 @@ import Control.Monad.Trans.List (ListT(..))
 import Data.Monoid (All(..), mempty)
 import Data.Either
 
-data FrameState s = FrameState Int Int (RenderIOState s)
+data FrameState s = FrameState Int (RenderIOState s)
 
 newFrameState :: FrameState s
-newFrameState = FrameState 0 1 newRenderIOState
+newFrameState = FrameState 0 newRenderIOState
 
 getName :: FrameM s Int
-getName = do FrameState n d r <- FrameM $ lift $ lift get
-             FrameM $ lift $ lift $ put $ FrameState (n+1) d r
+getName = do FrameState n r <- FrameM $ lift $ lift get
+             FrameM $ lift $ lift $ put $ FrameState (n+1) r
              return n
 
-getDrawcall :: FrameM s Int
-getDrawcall = do FrameState n d r <- FrameM $ lift $ lift get
-                 FrameM $ lift $ lift $ put $ FrameState n (d+1) r
-                 return d
-
 modifyRenderIO :: (RenderIOState s -> RenderIOState s) -> FrameM s ()
-modifyRenderIO f = FrameM $ lift $ lift $ modify (\(FrameState a b s) -> FrameState a b (f s))
+modifyRenderIO f = FrameM $ lift $ lift $ modify (\(FrameState a s) -> FrameState a (f s))
 
 tellDrawcall :: IO (Drawcall s) -> FrameM s ()
 tellDrawcall dc = FrameM $ tell ([dc], mempty) 
 
 mapDrawcall :: (s -> s') -> Drawcall s' -> Drawcall s
-mapDrawcall f (Drawcall b c d e g h i j k) = Drawcall (b . f) c d e g h i j k 
+mapDrawcall f (Drawcall b d e g h i j k) = Drawcall (b . f) d e g h i j k 
            
 newtype FrameM s a = FrameM (WriterT ([IO (Drawcall s)], s -> All) (ListT (State (FrameState s))) a) deriving (MonadPlus, Monad, Alternative, Applicative, Functor)
 
@@ -67,10 +61,10 @@ newtype Frame os f s a = Frame (FrameM s a)  deriving (MonadPlus, Monad, Alterna
 
 mapFrame :: (s -> s') -> Frame os f s' a -> Frame os f s a
 mapFrame f (Frame (FrameM m)) = Frame $ FrameM $     
-    do FrameState x y s <- lift $ lift get      
-       let (adcs, FrameState x' y' s') = runState (runListT (runWriterT m)) (FrameState x y newRenderIOState)
+    do FrameState x s <- lift $ lift get      
+       let (adcs, FrameState x' s') = runState (runListT (runWriterT m)) (FrameState x newRenderIOState)
        WriterT $ ListT $ do
-            put $ FrameState x' y' (mapRenderIOState f s' s) 
+            put $ FrameState x' (mapRenderIOState f s' s) 
             return $ map (\(a,(dcs, disc)) -> (a, (map (>>= (return . mapDrawcall f)) dcs, disc . f))) adcs
 
 maybeFrame :: (s -> Maybe s') -> Frame os f s' () -> Frame os f s ()
@@ -97,7 +91,7 @@ data CompiledFrame os f s = CompiledFrame (s -> IO ())
 
 compileFrame :: (MonadIO m, MonadException m) => Frame os f x () -> ContextT os f m (CompiledFrame os f x)
 compileFrame (Frame (FrameM m)) =
-    let (adcs, FrameState _ _ s) = runState (runListT (runWriterT m)) newFrameState
+    let (adcs, FrameState _ s) = runState (runListT (runWriterT m)) newFrameState
     in do xs <- mapM (\(_,(dcs, disc)) -> do 
                                 runF <- compile dcs s
                                 return (disc, runF)) adcs

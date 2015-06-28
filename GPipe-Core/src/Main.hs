@@ -30,8 +30,32 @@ debugContext f = return $ ContextHandle
                 (putStrLn "Delete context")
                 
 main :: IO ()
-main = do runContextT debugContext (ContextFormatColorDepthStencil RGBA8 (DepthStencilFormat Depth16 Stencil8)) myProg
+main = do runContextT debugContext (ContextFormatColorDepthStencil RGBA8 (DepthStencilFormat Depth16 Stencil8)) $ myProg >> myProg1
           putStrLn "Finished!"
+
+myProg1 = do 
+            (myVertices1 :: Buffer os BFloat) <- newBuffer 12
+            myUniform1 <- newBuffer 45
+            f <- compileFrame myFrame1
+            render $ do
+                myVertArray1 <- newVertexArray myVertices1
+                let p1 = toPrimitiveArray TriangleList myVertArray1 
+                runFrame f (p1, (Nothing, 1))
+                runFrame f (p1, (Just myUniform1, 2))
+            swap
+         
+myFrame1 = do
+              p1 <- toPrimitiveStream fst
+              u <- chooseFrame
+                (\s -> case snd s of 
+                        (Nothing, i) -> Left i
+                        (Just u, i) -> Right (u,i))
+                        (return 2.8)
+                        (toUniformBlock id)
+              fragStream <- rasterize (const (Front,ViewPort (0,0) (9,9))) (fmap (\x -> ((u,u,x,x),u+x)) p1)
+              drawContextColor (fmap (\x -> RGBA x x x x) fragStream) (const (ColorOption NoBlending (RGBA True True True True)))
+         
+
 
 myProg = do (myVertices1 :: Buffer os BFloat) <- newBuffer 12
             (myVertices2) <- newBuffer 45

@@ -436,7 +436,7 @@ instance Num (S a Float) where
 
 instance Fractional (S a Float) where
   (/)          = binf "/"
-  fromRational = S . return . show
+  fromRational = S . return . show . (`asTypeOf` (undefined :: Float)) . fromRational
 
 instance Floating (S a Float) where
   pi    = S $ return $ show (pi :: Float)

@@ -68,17 +68,16 @@ drawContextColorDepthStencil fs sf = Frame $ tellDrawcalls fs $ \(c,d) -> let (s
             
 tellDrawcalls :: FragmentStream a -> (a -> (ShaderM (), ShaderGlobDeclM (), s -> IO ())) -> FrameM s ()
 tellDrawcalls (FragmentStream xs) f = do  
-                               dc <- getDrawcall
-                               let g (x, fd) = tellDrawcall $ makeDrawcall (orderth dc ++ " drawcall") (f x) fd
+                               let g (x, fd) = tellDrawcall $ makeDrawcall (f x) fd
                                mapM_ g xs
 
-makeDrawcall :: String -> (ShaderM (), ShaderGlobDeclM (), s -> IO ()) -> FragmentStreamData -> IO (Drawcall s)
-makeDrawcall err (sh, shd, io) (FragmentStreamData rastN shaderpos (PrimitiveStreamData primN) keep) =
+makeDrawcall :: (ShaderM (), ShaderGlobDeclM (), s -> IO ()) -> FragmentStreamData -> IO (Drawcall s)
+makeDrawcall (sh, shd, io) (FragmentStreamData rastN shaderpos (PrimitiveStreamData primN) keep) =
        do (fsource, funis, fsamps, _, prevDecls, prevS) <- runShaderM shd (discard keep >> sh)
           (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls (prevS >> shaderpos)
           let unis = orderedUnion funis vunis
               samps = orderedUnion fsamps vsamps
-          return $ Drawcall io err primN rastN vsource fsource vinps unis samps
+          return $ Drawcall io primN rastN vsource fsource vinps unis samps
 
 orderedUnion :: Ord a => [a] -> [a] -> [a]
 orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys 
@@ -102,16 +101,6 @@ setDepth :: FFloat -> ShaderM ()
 setDepth (S d) = do d' <- d
                     when (d' /= "gl_FragDepth") $
                         tellAssignment' "gl_FragDepth" d'  
-
-orderth :: Int -> String
-orderth x = let s = show x 
-            in s ++ case init s of
-                        xs@(_:_) | last xs == '1' -> "th" -- 11th through 19th"
-                        _ -> case last s of
-                                '1' -> "st"  
-                                '2' -> "nd"  
-                                '3' -> "rd"
-                                _ -> "th"  
 
 make3 :: (t, t1) -> t2 -> (t, t1, t2)
 make3 (a,b) c = (a,b,c)

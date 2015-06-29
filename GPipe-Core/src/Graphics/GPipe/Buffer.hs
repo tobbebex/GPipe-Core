@@ -46,6 +46,9 @@ data Buffer os b = Buffer {
                     bufWriter :: Ptr () -> HostFormat b -> IO ()
                     }
 
+instance Eq (Buffer os b) where
+    a == b = bufName a == bufName b
+
 bufSize :: forall os b. Buffer os b -> Int
 bufSize b = bufElementSize b * bufElementCount b
 

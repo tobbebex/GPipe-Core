@@ -40,8 +40,8 @@ myProg1 = do
             render $ do
                 myVertArray1 <- newVertexArray myVertices1
                 let p1 = toPrimitiveArray TriangleList myVertArray1 
-                runFrame f (p1, (Nothing, 1))
-                runFrame f (p1, (Just myUniform1, 2))
+                f (p1, (Nothing, 1))
+                f (p1, (Just myUniform1, 2))
             swap
          
 myFrame1 = do
@@ -73,10 +73,10 @@ myProg = do (myVertices1 :: Buffer os BFloat) <- newBuffer 12
                 let p1 = toPrimitiveArray TriangleList myVertArray1 <> toPrimitiveArray TriangleList myVertArray2
                 let p2 = toPrimitiveArrayInstanced TriangleList (VertexArray.zipWith (,) myVertArray2 myVertArray12) myVertArray11 (,)
                 let p2' = toPrimitiveArrayInstanced TriangleList (VertexArray.zipWith (,) myVertArray2' myVertArray12) myVertArray11 (,)
-                runFrame f ((p1, p2'), (myUniform1, (True, False)))
-                runFrame f ((p1, p2), (myUniform1, (True, True)))
-                runFrame f ((p1, p2), (myUniform1, (False, False)))
-                runFrame f ((p1, p2), (myUniform1, (False, True)))
+                f ((p1, p2'), (myUniform1, (True, False)))
+                f ((p1, p2), (myUniform1, (True, True)))
+                f ((p1, p2), (myUniform1, (False, False)))
+                f ((p1, p2), (myUniform1, (False, True)))
             swap
          
 myFrame = do
@@ -94,8 +94,8 @@ myFrame = do
               let fragStream3 = (\ f -> RGBA f u4 f 1) <$> filterFragments (<* 5) (fragStream2 <> fragStream)
               let fragStream4 = fmap (\f -> (RGBA (f*2) (f+u4) f 1, u4)) (fragStream <> fragStream2)
               maybeFrame (\ s -> if snd $ snd $ snd s then Just (fst $ snd $ snd s) else Nothing) $
-                  maybeFrame (\ s -> if s then Just 1 else Nothing)
-                      $ drawContextColor fragStream3 (\1 -> ColorOption NoBlending (RGBA True True True True))
+                    maybeFrame (\ s -> if s then Just 1 else Nothing) $
+                        drawContextColor fragStream3 (\1 -> ColorOption NoBlending (RGBA True True True True))
               draw fragStream4 $ \(a, d) -> do
                     drawColor a (const (Image RGBA8, ColorOption NoBlending (RGBA True True True True)))
                     drawColor a (const (Image RGBA4, ColorOption NoBlending (RGBA True True True True)))

@@ -11,7 +11,6 @@ module Graphics.GPipe.Frame (
     tellDrawcall,
     modifyRenderIO,
     render,
-    runFrame,
     compileFrame,
     mapFrame,
     guard',
@@ -30,7 +29,7 @@ import Control.Monad.Trans.Writer.Lazy (tell, WriterT(..), runWriterT)
 import Control.Monad.Exception (MonadException)
 import Control.Applicative (Applicative, Alternative, (<|>))
 import Control.Monad.Trans.Class (lift)
-import Data.Maybe (fromJust, isJust)
+import Data.Maybe (fromJust, isJust, isNothing)
 import Control.Monad (MonadPlus)
 import Control.Monad.Trans.List (ListT(..))
 import Data.Monoid (All(..), mempty)
@@ -68,13 +67,13 @@ mapFrame f (Frame (FrameM m)) = Frame $ FrameM $
             return $ map (\(a,(dcs, disc)) -> (a, (map (>>= (return . mapDrawcall f)) dcs, disc . f))) adcs
 
 maybeFrame :: (s -> Maybe s') -> Frame os f s' () -> Frame os f s ()
-maybeFrame f m = (guard' (isJust . f) >> mapFrame (fromJust . f) m) <|> return () 
+maybeFrame f m = (guard' (isJust . f) >> mapFrame (fromJust . f) m) <|> guard' (isNothing . f) 
 
 guard' :: (s -> Bool) -> Frame os f s ()
 guard' f = Frame $ FrameM $ tell (mempty, All . f) 
 
 chooseFrame :: (s -> Either s' s'') -> Frame os f s' a -> Frame os f s'' a -> Frame os f s a
-chooseFrame f a b = (guard' (isLeft . f) >> mapFrame (fromLeft . f) a) <|> mapFrame (fromRight . f) b 
+chooseFrame f a b = (guard' (isLeft . f) >> mapFrame (fromLeft . f) a) <|> (guard' (isRight . f) >> mapFrame (fromRight . f) b) 
     where fromLeft (Left x) = x
           fromRight (Right x) = x        
 
@@ -82,12 +81,11 @@ silenceFrame :: Frame os f' s a -> Frame os f s a
 silenceFrame (Frame (FrameM m)) = Frame $ FrameM $   
     do s <- lift $ lift get
        let (adcs, s') = runState (runListT (runWriterT m)) s
-       lift $ ListT $ do
-        put s' 
-        return $ map fst adcs
+       WriterT $ ListT $ do
+            put s' 
+            return $ map (\(a, (_, disc)) -> (a, ([], disc))) adcs
 
-data CompiledFrame os f s = CompiledFrame (s -> IO ())
-
+type CompiledFrame os f s = s -> Render os f ()
 
 compileFrame :: (MonadIO m, MonadException m) => Frame os f x () -> ContextT os f m (CompiledFrame os f x)
 compileFrame (Frame (FrameM m)) =
@@ -97,20 +95,10 @@ compileFrame (Frame (FrameM m)) =
                                 return (disc, runF)) adcs
           let g ((disc, runF):ys) e = if getAll (disc e) then runF e else g ys e
               g  [] _               = return ()
-          return $ CompiledFrame $ g xs    
+          return $ \e -> Render (g xs e)     
 
 newtype Render os f a = Render (IO a) deriving (Monad, Applicative, Functor)
 
 render :: (MonadIO m, MonadException m) => Render os f () -> ContextT os f m ()
 render (Render m) = liftContextIOAsync m
 
-runFrame :: CompiledFrame os f x -> x -> Render os f ()
-runFrame (CompiledFrame f) x = Render $ do
-                                   putStrLn "-------------------------------------------------------------------------------------------"
-                                   putStrLn "-------------------------------------------------------------------------------------------"
-                                   putStrLn "Running frame"
-                                   f x
-                                   putStrLn "-------------------------------------------------------------------------------------------"
-                                   putStrLn "-------------------------------------------------------------------------------------------"
-
-     

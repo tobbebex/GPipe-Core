@@ -1,80 +1,80 @@
 {-# LANGUAGE ScopedTypeVariables, GeneralizedNewtypeDeriving, TupleSections #-}
 module Graphics.GPipe.FrameBuffer where
 
-import Graphics.GPipe.Shader
+import Graphics.GPipe.Expr
 import Graphics.GPipe.FragmentStream
 import Graphics.GPipe.Format
-import Graphics.GPipe.Frame
-import Graphics.GPipe.VertexStream
-import Graphics.GPipe.FrameCompiler
+import Graphics.GPipe.Shader
+import Graphics.GPipe.PrimitiveStream
+import Graphics.GPipe.Compiler
 import Control.Applicative (Applicative)
 import Control.Monad (when)
 import Control.Monad.Trans.Writer.Lazy (Writer, tell, execWriter)
 import Data.List (intercalate)
 
-newtype DrawColors os s a = DrawColors (Writer [Int -> (ShaderM (), ShaderGlobDeclM (), s -> IO ())] a) deriving (Functor, Applicative, Monad)
+newtype DrawColors os s a = DrawColors (Writer [Int -> (ExprM (), GlobDeclM (), s -> IO ())] a) deriving (Functor, Applicative, Monad)
 
-runDrawColors :: DrawColors os s a -> (ShaderM (), ShaderGlobDeclM (), s -> IO ())
+runDrawColors :: DrawColors os s a -> (ExprM (), GlobDeclM (), s -> IO ())
 runDrawColors (DrawColors m) = foldl sf (return (), return (), const $ return ()) $ zip (execWriter m) [0..]
     where sf (ms, mg, mio) (f, n) = let (sh, g, io) = f n in (ms >> sh, mg >> g, \s -> mio s >> io s) 
 
 drawColor :: forall c s os. ColorRenderable c => FragColor c -> (s -> (Image c, ColorOption c)) -> DrawColors os s ()
 drawColor c sf = DrawColors $ tell [\ix -> make3  (setColor (undefined :: c) ix c) $ \s -> glBindOutputAndSetColorOptions (sf s)]
 
-draw :: forall a os f s. FragmentStream a -> (a -> DrawColors os s ()) -> Frame os f s ()
-drawDepth :: forall a os f s d. DepthRenderable d => FragmentStream (a, FragDepth) -> (s -> (Image d, DepthOption)) -> (a -> DrawColors os s ()) -> Frame os f s ()
-drawStencil :: forall a os f s st. StencilRenderable st => FragmentStream a -> (s -> (Image st, StencilOption)) -> (a -> DrawColors os s ()) -> Frame os f s ()
-drawDepthStencil :: forall a os f s d st. (DepthRenderable d, StencilRenderable st) => FragmentStream (a, FragDepth) -> (s -> (Image d, Image st, DepthStencilOption)) -> (a -> DrawColors os s ()) -> Frame os f s ()
+draw :: forall a os f s. FragmentStream a -> (a -> DrawColors os s ()) -> Shader os f s ()
+drawDepth :: forall a os f s d. DepthRenderable d => FragmentStream (a, FragDepth) -> (s -> (Image d, DepthOption)) -> (a -> DrawColors os s ()) -> Shader os f s ()
+drawStencil :: forall a os f s st. StencilRenderable st => FragmentStream a -> (s -> (Image st, StencilOption)) -> (a -> DrawColors os s ()) -> Shader os f s ()
+drawDepthStencil :: forall a os f s d st. (DepthRenderable d, StencilRenderable st) => FragmentStream (a, FragDepth) -> (s -> (Image d, Image st, DepthStencilOption)) -> (a -> DrawColors os s ()) -> Shader os f s ()
 
-draw fs m = Frame $ tellDrawcalls fs (runDrawColors . m)   
+draw fs m = Shader $ tellDrawcalls fs (runDrawColors . m)   
 
-drawDepth fs sf m = Frame $ tellDrawcalls fs $ \(c,d) -> let (s,g,ioc) = runDrawColors (m c) in (s >> setDepth d, g, \s -> ioc s >> iod s)
+drawDepth fs sf m = Shader $ tellDrawcalls fs $ \(c,d) -> let (s,g,ioc) = runDrawColors (m c) in (s >> setDepth d, g, \s -> ioc s >> iod s)
     where iod s = glBindOutputAndSetColorOptions (sf s)
 
-drawStencil fs sf m = Frame $ tellDrawcalls fs $ \c -> let (s,g,ioc) = runDrawColors (m c) in (s, g, \s -> ioc s >> ios s)
+drawStencil fs sf m = Shader $ tellDrawcalls fs $ \c -> let (s,g,ioc) = runDrawColors (m c) in (s, g, \s -> ioc s >> ios s)
     where ios s = glBindOutputAndSetColorOptions (sf s)
 
-drawDepthStencil fs sf m = Frame $ tellDrawcalls fs $ \(c,d) -> let (s,g,ioc) = runDrawColors (m c) in (s >> setDepth d, g, \s -> ioc s >> iods s)
+drawDepthStencil fs sf m = Shader $ tellDrawcalls fs $ \(c,d) -> let (s,g,ioc) = runDrawColors (m c) in (s >> setDepth d, g, \s -> ioc s >> iods s)
     where iods s = glBindOutputAndSetColorOptions (sf s)
 
-drawContextColor :: forall os s c ds. ColorRenderable c => FragmentStream (FragColor c) -> (s -> ColorOption c) -> Frame os (ContextFormat c ds) s ()
-drawContextDepth :: forall os s c ds. DepthRenderable ds => FragmentStream FragDepth -> (s -> DepthOption) -> Frame os (ContextFormat c ds) s ()
-drawContextColorDepth :: forall os s c ds. (ColorRenderable c, DepthRenderable ds) => FragmentStream (FragColor c, FragDepth) -> (s -> (ColorOption c, DepthOption)) -> Frame os (ContextFormat c ds) s ()
-drawContextStencil :: forall os s c ds. StencilRenderable ds => FragmentStream () -> (s -> StencilOption) -> Frame os (ContextFormat c ds) s ()
-drawContextColorStencil :: forall os s c ds. (ColorRenderable c, StencilRenderable ds) => FragmentStream (FragColor c) -> (s -> (ColorOption c, StencilOption)) -> Frame os (ContextFormat c ds) s ()
-drawContextDepthStencil :: forall os s c ds. (DepthRenderable ds, StencilRenderable ds) => FragmentStream FragDepth -> (s -> DepthStencilOption) -> Frame os (ContextFormat c ds) s ()
-drawContextColorDepthStencil :: forall os s c ds. (ColorRenderable c, DepthRenderable ds, StencilRenderable ds) => FragmentStream (FragColor c, FragDepth) -> (s -> (ColorOption c, DepthStencilOption)) -> Frame os (ContextFormat c ds) s ()
+drawContextColor :: forall os s c ds. ColorRenderable c => FragmentStream (FragColor c) -> (s -> ColorOption c) -> Shader os (ContextFormat c ds) s ()
+drawContextDepth :: forall os s c ds. DepthRenderable ds => FragmentStream FragDepth -> (s -> DepthOption) -> Shader os (ContextFormat c ds) s ()
+drawContextColorDepth :: forall os s c ds. (ColorRenderable c, DepthRenderable ds) => FragmentStream (FragColor c, FragDepth) -> (s -> (ColorOption c, DepthOption)) -> Shader os (ContextFormat c ds) s ()
+drawContextStencil :: forall os s c ds. StencilRenderable ds => FragmentStream () -> (s -> StencilOption) -> Shader os (ContextFormat c ds) s ()
+drawContextColorStencil :: forall os s c ds. (ColorRenderable c, StencilRenderable ds) => FragmentStream (FragColor c) -> (s -> (ColorOption c, StencilOption)) -> Shader os (ContextFormat c ds) s ()
+drawContextDepthStencil :: forall os s c ds. (DepthRenderable ds, StencilRenderable ds) => FragmentStream FragDepth -> (s -> DepthStencilOption) -> Shader os (ContextFormat c ds) s ()
+drawContextColorDepthStencil :: forall os s c ds. (ColorRenderable c, DepthRenderable ds, StencilRenderable ds) => FragmentStream (FragColor c, FragDepth) -> (s -> (ColorOption c, DepthStencilOption)) -> Shader os (ContextFormat c ds) s ()
 
-drawContextColor fs sf = Frame $ tellDrawcalls fs $ \a-> make3 (setColor (undefined :: c) 0 a) io 
+drawContextColor fs sf = Shader $ tellDrawcalls fs $ \a-> make3 (setColor (undefined :: c) 0 a) io 
                             where io s = glBindOutputAndSetColorOptions (sf s)
 
-drawContextDepth fs sf = Frame $ tellDrawcalls fs $ \a-> (setDepth a, return(), io)
+drawContextDepth fs sf = Shader $ tellDrawcalls fs $ \a-> (setDepth a, return(), io)
                             where io s = glBindOutputAndSetColorOptions (sf s)
 
-drawContextColorDepth fs sf = Frame $ tellDrawcalls fs $ \(c,d) -> let (s, g) = setColor (undefined :: c) 0 c in (s >> setDepth d, g, io)
+drawContextColorDepth fs sf = Shader $ tellDrawcalls fs $ \(c,d) -> let (s, g) = setColor (undefined :: c) 0 c in (s >> setDepth d, g, io)
                                 where io s = glBindOutputAndSetColorOptions (sf s)
     
-drawContextStencil fs sf = Frame $ tellDrawcalls fs $ const (return (), return (), io)
+drawContextStencil fs sf = Shader $ tellDrawcalls fs $ const (return (), return (), io)
                                 where io s = glBindOutputAndSetColorOptions (sf s)
     
-drawContextColorStencil fs sf = Frame $ tellDrawcalls fs $ \a-> make3 (setColor (undefined :: c) 0 a) io
+drawContextColorStencil fs sf = Shader $ tellDrawcalls fs $ \a-> make3 (setColor (undefined :: c) 0 a) io
                                     where io s = glBindOutputAndSetColorOptions (sf s)
     
-drawContextDepthStencil fs sf = Frame $ tellDrawcalls fs $ \a-> (setDepth a, return(), io)
+drawContextDepthStencil fs sf = Shader $ tellDrawcalls fs $ \a-> (setDepth a, return(), io)
                                     where io s = glBindOutputAndSetColorOptions (sf s)
         
-drawContextColorDepthStencil fs sf = Frame $ tellDrawcalls fs $ \(c,d) -> let (s, g) = setColor (undefined :: c) 0 c in (s >> setDepth d, g, io)
+drawContextColorDepthStencil fs sf = Shader $ tellDrawcalls fs $ \(c,d) -> let (s, g) = setColor (undefined :: c) 0 c in (s >> setDepth d, g, io)
                                         where io s = glBindOutputAndSetColorOptions (sf s)
             
-tellDrawcalls :: FragmentStream a -> (a -> (ShaderM (), ShaderGlobDeclM (), s -> IO ())) -> FrameM s ()
+tellDrawcalls :: FragmentStream a -> (a -> (ExprM (), GlobDeclM (), s -> IO ())) -> ShaderM s ()
 tellDrawcalls (FragmentStream xs) f = do  
                                let g (x, fd) = tellDrawcall $ makeDrawcall (f x) fd
                                mapM_ g xs
 
-makeDrawcall :: (ShaderM (), ShaderGlobDeclM (), s -> IO ()) -> FragmentStreamData -> IO (Drawcall s)
+makeDrawcall :: (ExprM (), GlobDeclM (), s -> IO ()) -> FragmentStreamData -> IO (Drawcall s)
 makeDrawcall (sh, shd, io) (FragmentStreamData rastN shaderpos (PrimitiveStreamData primN) keep) =
-       do (fsource, funis, fsamps, _, prevDecls, prevS) <- runShaderM shd (discard keep >> sh)
-          (vsource, vunis, vsamps, vinps, _, _) <- runShaderM prevDecls (prevS >> shaderpos)
+       do (fsource, funis, fsamps, _, prevDecls, prevS) <- runExprM shd (discard keep >> sh)
+          (vsource, vunis, vsamps, vinps, _, _) <- runExprM prevDecls (prevS >> shaderpos)
           let unis = orderedUnion funis vunis
               samps = orderedUnion fsamps vsamps
           return $ Drawcall io primN rastN vsource fsource vinps unis samps
@@ -87,7 +87,7 @@ orderedUnion xs [] = xs
 orderedUnion [] ys = ys
 
 
-setColor :: forall c. ColorFormat c => c -> Int -> FragColor c -> (ShaderM (), ShaderGlobDeclM ())
+setColor :: forall c. ColorFormat c => c -> Int -> FragColor c -> (ExprM (), GlobDeclM ())
 setColor ct n c = let    name = "out" ++ show n
                          typeS = typeStr ct
                   in (do xs <- mapM unS $ fromColor ct c
@@ -97,7 +97,7 @@ setColor ct n c = let    name = "out" ++ show n
                          tellGlobal " "
                          tellGlobalLn name)
 
-setDepth :: FFloat -> ShaderM ()
+setDepth :: FFloat -> ExprM ()
 setDepth (S d) = do d' <- d
                     when (d' /= "gl_FragDepth") $
                         tellAssignment' "gl_FragDepth" d'  
@@ -124,14 +124,14 @@ data DepthStencilOption = DepthStencilOption StencilOption DepthOption StencilOp
 
 data FrontBack a = FrontBack { front :: a, back :: a }
 
--- | 'True' for each color component that should be written to the 'FrameBuffer'.
+-- | 'True' for each color component that should be written to the 'ShaderBuffer'.
 type ColorMask f = Color f Bool
--- | 'True' if the depth component should be written to the 'FrameBuffer'.
+-- | 'True' if the depth component should be written to the 'ShaderBuffer'.
 type DepthMask = Bool
 -- | The function used to compare the fragment's depth and the depth buffers depth with.
 type DepthFunction = ComparisonFunction
 
--- | Sets how the painted colors are blended with the 'FrameBuffer's previous value.
+-- | Sets how the painted colors are blended with the 'ShaderBuffer's previous value.
 data Blending f = NoBlending -- ^ The painted fragment completely overwrites the previous value.
               | Blend (FrontBack BlendEquation)
                       (FrontBack (BlendingFactor, BlendingFactor))
@@ -188,7 +188,7 @@ data LogicOp =
    | Nand
    | Set
 
--- | Sets the operations that should be performed on the 'FrameBuffer's stencil value
+-- | Sets the operations that should be performed on the 'ShaderBuffer's stencil value
 data StencilOp =
      OpZero
    | OpKeep

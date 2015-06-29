@@ -3,11 +3,11 @@ module Graphics.GPipe.Texture where
 {--
 
 import Graphics.GPipe.Format
-import Graphics.GPipe.Shader
-import Graphics.GPipe.Shader.Operations
+import Graphics.GPipe.Expr
+import Graphics.GPipe.Expr.Operations
 import Graphics.GPipe.Context
 import Graphics.GPipe.Stream
-import Graphics.GPipe.Frame
+import Graphics.GPipe.Shader
 import Graphics.GPipe.Buffer
 import Control.Monad.IO.Class
 import Data.Word
@@ -226,7 +226,7 @@ instance BufferColorFormat (RGBA a) where
 type BufferPixel f a = BufferColor (Color f a)
 
 {-# INLINE useTexture #-}
-useTexture :: Texture t => Frame os f (t, Filter, EdgeMode) (Sampler t fr)
+useTexture :: Texture t => Shader os f (t, Filter, EdgeMode) (Sampler t fr)
 useTexture = dynInStatOut stateM dynF
     where
         stateM = do n <- getName

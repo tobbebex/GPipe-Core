@@ -3,10 +3,11 @@ module Graphics.GPipe.FragmentStream where
 
 import Control.Category hiding ((.))
 import Control.Arrow 
+import Graphics.GPipe.Expr
 import Graphics.GPipe.Shader
-import Graphics.GPipe.Frame
-import Graphics.GPipe.FrameCompiler
-import Graphics.GPipe.VertexStream
+import Graphics.GPipe.Compiler
+import Graphics.GPipe.PrimitiveStream
+import Graphics.GPipe.PrimitiveArray
 import Control.Monad.Trans.State.Lazy
 import Data.Monoid (Monoid)
 import Data.Boolean
@@ -15,9 +16,9 @@ import Data.IntMap.Lazy (insert)
 type VPos = (VFloat,VFloat,VFloat,VFloat)
 
 data Side = Front | Back | FrontAndBack
-type ShaderPos = ShaderM ()
+type ExprPos = ExprM ()
 type RasterizationName = Int
-data FragmentStreamData = FragmentStreamData RasterizationName ShaderPos PrimitiveStreamData FBool
+data FragmentStreamData = FragmentStreamData RasterizationName ExprPos PrimitiveStreamData FBool
 
 newtype FragmentStream a = FragmentStream [(a, FragmentStreamData)] deriving Monoid
 
@@ -41,8 +42,8 @@ instance FragmentInput VFloat where
 rasterize:: forall p a s os f. (PrimitiveTopology p, FragmentInput a)
           => (s -> (Side, ViewPort))
           -> PrimitiveStream p (VPos, a)
-          -> Frame os f s (FragmentStream (FragmentFormat a)) 
-rasterize sf (PrimitiveStream xs) = Frame $ do
+          -> Shader os f s (FragmentStream (FragmentFormat a)) 
+rasterize sf (PrimitiveStream xs) = Shader $ do
         n <- getName
         modifyRenderIO (\s -> s { rasterizationNameToRenderIO = insert n io (rasterizationNameToRenderIO s) } )
         return (FragmentStream $ map (f n) xs) 

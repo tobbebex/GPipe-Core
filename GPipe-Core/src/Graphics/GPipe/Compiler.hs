@@ -1,5 +1,5 @@
 {-# LANGUAGE PatternGuards #-}
-module Graphics.GPipe.FrameCompiler where
+module Graphics.GPipe.Compiler where
 
 import Graphics.GPipe.Context
 import Control.Monad.IO.Class (MonadIO, liftIO)

@@ -8,7 +8,7 @@ module Graphics.GPipe.IndexArray (
 ) where
 
 import Graphics.GPipe.Buffer
-import Graphics.GPipe.Frame
+import Graphics.GPipe.Shader
 import Prelude hiding (length, take, drop)
 
 class BufferFormat a => IndexFormat a where

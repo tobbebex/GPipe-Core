@@ -3,9 +3,9 @@
 module Graphics.GPipe.Uniform where
 
 import Graphics.GPipe.Buffer 
-import Graphics.GPipe.Frame
-import Graphics.GPipe.FrameCompiler
 import Graphics.GPipe.Shader
+import Graphics.GPipe.Compiler
+import Graphics.GPipe.Expr
 import Control.Arrow
 import Control.Monad.Trans.Writer
 import Control.Monad.Trans.Reader
@@ -21,10 +21,10 @@ class BufferFormat (UniformBufferFormat a) => Uniform a where
 
 type UniformHostFormat x = HostFormat (UniformBufferFormat x)
 
--- uniformBlock ::  forall os f b. Uniform b => Frame os f (UniformHostFormat b, Proxy b) b
+-- uniformBlock ::  forall os f b. Uniform b => Shader os f (UniformHostFormat b, Proxy b) b
  
-toUniformBlock :: forall os f s b. Uniform b => (s -> (Buffer os (BUniform (UniformBufferFormat b)), Int)) -> Frame os f s b
-toUniformBlock sf = Frame $ do 
+toUniformBlock :: forall os f s b. Uniform b => (s -> (Buffer os (BUniform (UniformBufferFormat b)), Int)) -> Shader os f s b
+toUniformBlock sf = Shader $ do 
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
                    doForUniform blockId $ \s bind -> let (ub, i) = sf s 
@@ -34,13 +34,13 @@ toUniformBlock sf = Frame $ do
             sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform (UniformBufferFormat b) b
             fromBUnifom (BUniform b) = b
-            shaderGen :: (Int -> ShaderM String) -> (b, OffsetToSType) -- Int is name of uniform block
+            shaderGen :: (Int -> ExprM String) -> (b, OffsetToSType) -- Int is name of uniform block
             shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
 
-            doForUniform :: Int -> (s -> Binding -> IO()) -> FrameM s ()
+            doForUniform :: Int -> (s -> Binding -> IO()) -> ShaderM s ()
             doForUniform n io = modifyRenderIO (\s -> s { uniformNameToRenderIO = insert n io (uniformNameToRenderIO s) } )
 
-buildUDecl :: OffsetToSType -> ShaderGlobDeclM ()
+buildUDecl :: OffsetToSType -> GlobDeclM ()
 buildUDecl = buildUDecl' 0 . Map.assocs 
     where buildUDecl' p ((off, stype):xs) | off == p = do tellGlobal $ stypeName stype
                                                           tellGlobal " u"
@@ -62,7 +62,7 @@ glBindBufferRange a b c d e = putStrLn $ "glBindBufferRange " ++ show (a,b,c,d,e
 
 glUNIFORM_ARRAY = 0
 
-newtype ToUniform a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader (Int -> ShaderM String))) a b) deriving (Category, Arrow) 
+newtype ToUniform a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader (Int -> ExprM String))) a b) deriving (Category, Arrow) 
 
 instance Uniform (S x Float) where
     type UniformBufferFormat (S x Float) = BFloat

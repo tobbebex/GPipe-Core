@@ -21,14 +21,15 @@ library
                    Graphics.GPipe.Context,
                    Graphics.GPipe.Format,
                    Graphics.GPipe.FragmentStream,
-                   Graphics.GPipe.Frame,
-                   Graphics.GPipe.Shader,
                    Graphics.GPipe.Texture,
                    Graphics.GPipe.Uniform,
                    Graphics.GPipe.VertexArray,
-                   Graphics.GPipe.VertexStream,
-                   Graphics.GPipe.FrameBuffer
-  other-modules:    Graphics.GPipe.FrameCompiler
+                   Graphics.GPipe.FrameBuffer,
+                   Graphics.GPipe.PrimitiveArray,
+                   Graphics.GPipe.Expr,
+                   Graphics.GPipe.Shader,
+                   Graphics.GPipe.PrimitiveStream
+  other-modules:    Graphics.GPipe.Compiler
 
 executable GPipe-Core-Test
   build-depends:   
@@ -48,12 +49,13 @@ executable GPipe-Core-Test
                    Graphics.GPipe.Context,
                    Graphics.GPipe.Format,
                    Graphics.GPipe.FragmentStream,
-                   Graphics.GPipe.Frame,
-                   Graphics.GPipe.Shader,
                    Graphics.GPipe.Texture,
                    Graphics.GPipe.Uniform,
                    Graphics.GPipe.VertexArray,
-                   Graphics.GPipe.VertexStream,
                    Graphics.GPipe.FrameBuffer,
-                   Graphics.GPipe.FrameCompiler
+                   Graphics.GPipe.PrimitiveArray,
+                   Graphics.GPipe.Expr,
+                   Graphics.GPipe.Shader,
+                   Graphics.GPipe.Compiler,
+                   Graphics.GPipe.PrimitiveStream
 

@@ -31,7 +31,7 @@ debugContext f = return $ ContextHandle
                 (putStrLn "Delete context")
                 
 main :: IO ()
-main = do runContextT debugContext (ContextFormatColorDepthStencil RGBA8 (DepthStencilFormat Depth16 Stencil8)) $ myProg >> myProg1
+main = do runContextT debugContext (ContextFormatColorDepthStencil RGB8 (DepthStencilFormat Depth16 Stencil8)) $ myProg >> myProg1
           putStrLn "Finished!"
 
 myProg1 = do 
@@ -54,8 +54,7 @@ myShader1 = do
                         (return 2.8)
                         (toUniformBlock id)
               fragStream <- rasterize (const (Front,ViewPort (0,0) (9,9))) (fmap (\x -> ((u,u,x,x),u+x)) p1)
-              drawContextColor (fmap (\x -> RGBA x x x x) fragStream) (const (ColorOption NoBlending (RGBA True True True True)))
-         
+              drawContextColor (fmap (\x -> RGB x x x) fragStream) (const (ColorOption NoBlending (RGB True True True)))
 
 
 myProg = do (myVertices1 :: Buffer os BFloat) <- newBuffer 12
@@ -92,15 +91,15 @@ myShader = do
               let p1' = fmap (func u1) p1
               fragStream <- rasterize (const (Front,ViewPort (0,0) (9,9))) (fmap (\x -> let y = x+u1 in ((x,cont (x+y),u1+x,u2), y+u1)) (p1 <> fmap (\((a,b),c) -> a + b + c) p2))
               fragStream2 <- rasterize (const (Front,ViewPort (0,0) (9,9))) (fmap (\x -> let y = x+u1 in ((x, sin x + cos y, u1 - x, u3), y+u1)) p1')
-              let fragStream3 = (\ f -> RGBA f u4 f 1) <$> filterFragments (<* 5) (fragStream2 <> fragStream)
-              let fragStream4 = fmap (\f -> (RGBA (f*2) (f+u4) f 1, u4)) (fragStream <> fragStream2)
+              let fragStream3 = (\ f -> RGB f u4 f) <$> filterFragments (<* 5) (fragStream2 <> fragStream)
+              let fragStream4 = fmap (\f -> (RGB (f+u4) f 1, u4)) (fragStream <> fragStream2)
               maybeShader (\ s -> if snd $ snd $ snd s then Just (fst $ snd $ snd s) else Nothing) $
                     maybeShader (\ s -> if s then Just 1 else Nothing) $
-                        drawContextColor fragStream3 (\1 -> ColorOption NoBlending (RGBA True True True True))
+                        drawContextColor fragStream3 (\1 -> ColorOption NoBlending (RGB True True True))
               draw fragStream4 $ \(a, d) -> do
-                    drawColor a (const (Image RGBA8, ColorOption NoBlending (RGBA True True True True)))
-                    drawColor a (const (Image RGBA4, ColorOption NoBlending (RGBA True True True True)))
-              drawContextColorDepthStencil fragStream4 (const (ColorOption NoBlending (RGBA True True True True), undefined))
+                    drawColor a (const (Image RGB8, ColorOption NoBlending (RGB True True True)))
+                    drawColor a (const (Image RGB4, ColorOption NoBlending (RGB True True True)))
+              drawContextColorDepthStencil fragStream4 (const (ColorOption NoBlending (RGB True True True), undefined))
                                                                                       
 printStableName x = (makeStableName $! x) >>= print . hashStableName
 

@@ -151,7 +151,51 @@ instance RenderBufferFormat DepthFormat
 instance RenderBufferFormat StencilFormat
 instance RenderBufferFormat DepthStencilFormat
  
+class ColorRenderable c => ContextColorFormat c where
+    redBits :: c -> Int
+    greenBits :: c -> Int
+    blueBits :: c -> Int
 
+instance ContextColorFormat RFloatFormat where
+    redBits R8 = 8
+    redBits R8S = 8
+    redBits R16 = 16
+    redBits R16S = 16
+    redBits R16F = 16
+    redBits R32F = 32
+    greenBits _ = 0
+    blueBits _ = 0          
+
+instance ContextColorFormat RGFloatFormat where
+    redBits RG8 = 8
+    redBits RG8S = 8
+    redBits RG16 = 16
+    redBits RG16S = 16
+    redBits RG16F = 16
+    redBits RG32F = 32
+    greenBits = redBits
+    blueBits _ = 0          
+    
+instance ContextColorFormat RGBFloatFormat where
+    redBits R3G3B2 = 3 
+    redBits RGB4 = 4
+    redBits RGB5 = 5
+    redBits RGB8 = 8
+    redBits RGB8S = 8
+    redBits RGB10 = 10
+    redBits RGB12 = 12
+    redBits RGB16 = 16
+    redBits RGB16S = 16
+    redBits RGB16F = 16
+    redBits RGB32F = 32
+    redBits R11FG11FB10F = 11 
+    redBits RGB9E5 = 14 -- hmm...
+    redBits SRGB8 = 8
+    greenBits = redBits
+    blueBits R3G3B2 = 2
+    blueBits R11FG11FB10F = 10
+    blueBits x = redBits x
+    
 --------------------------------------------------------------------------
 
 data DepthFormat = Depth16 | Depth24 | Depth32 | Depth32F 
@@ -168,10 +212,10 @@ instance StencilRenderable StencilFormat
 instance StencilRenderable DepthStencilFormat
 
 data ContextFormat c ds where
-    ContextFormatColor :: ColorRenderable c => c -> ContextFormat c ()  
-    ContextFormatColorDepth :: ColorRenderable c => c -> DepthFormat -> ContextFormat c DepthFormat  
-    ContextFormatColorStencil :: ColorRenderable c => c -> StencilFormat  -> ContextFormat c StencilFormat  
-    ContextFormatColorDepthStencil :: ColorRenderable c => c -> DepthStencilFormat -> ContextFormat c DepthStencilFormat  
+    ContextFormatColor :: ContextColorFormat c => c -> ContextFormat c ()  
+    ContextFormatColorDepth :: ContextColorFormat c => c -> DepthFormat -> ContextFormat c DepthFormat  
+    ContextFormatColorStencil :: ContextColorFormat c => c -> StencilFormat  -> ContextFormat c StencilFormat  
+    ContextFormatColorDepthStencil :: ContextColorFormat c => c -> DepthStencilFormat -> ContextFormat c DepthStencilFormat  
     ContextFormatDepth :: DepthFormat -> ContextFormat () DepthFormat  
     ContextFormatStencil :: StencilFormat  -> ContextFormat () StencilFormat  
     ContextFormatDepthStencil :: DepthStencilFormat -> ContextFormat () DepthStencilFormat  

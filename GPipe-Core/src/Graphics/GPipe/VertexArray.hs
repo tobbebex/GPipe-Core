@@ -8,13 +8,11 @@ data VertexArray t a = VertexArray  { length :: Int, bArrBFunc:: BInput -> a }
 
 data Instances
 
-newVertexArray :: Buffer os a -> Render os f (VertexArray x a)
+newVertexArray :: Buffer os a -> Render os f (VertexArray t a)
 newVertexArray buffer = Render $ return $ VertexArray (bufElementCount buffer) $ bufBElement buffer
 
 instance Functor (VertexArray t) where
     fmap f (VertexArray n g) = VertexArray n (f . g)
-
--- TODO: Add monad instance for VertexArray Instances
 
 zipWith :: (a -> b -> c) -> VertexArray t a -> VertexArray t b -> VertexArray t c 
 zipWith h (VertexArray n f) (VertexArray m g) = VertexArray (min n m) (\x -> h (f x) (g x))
@@ -30,5 +28,3 @@ drop n (VertexArray m f) = VertexArray n' g
 
 replicateEach :: Int -> VertexArray t a -> VertexArray Instances a
 replicateEach n (VertexArray m f) = VertexArray (n*m) (\x -> f $ x {bInInstanceDiv = bInInstanceDiv x * n})
-
--- TODO: add zipWithIndex to add gl_VertexId and gl_InstanceId

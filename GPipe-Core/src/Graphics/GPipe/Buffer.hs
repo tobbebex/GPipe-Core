@@ -180,6 +180,8 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
                 ((a', b', c'), d') <- toBuffer -< ((a, b, c), d)
                 returnA -< (a', b', c', d')
 
+-- TODO: Add packed pixelformats with special packing writers                
+
 newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT os f m (Buffer os b)
 newBuffer elementCount = do
     (buffer, name) <- liftContextIO $ do

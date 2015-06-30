@@ -11,33 +11,37 @@ class PrimitiveTopology p where
     --makeGeometry :: [a] -> Geometry p a  
    
 data Triangles = TriangleStrip | TriangleList
-data TrianglesWithAdjacency = TriangleStripWithAdjacency
 data Lines = LineStrip | LineList
-data LinesWithAdjacency = LinesWithAdjacencyList | LinesWithAdjacencyStrip   
 data Points = PointList
+--data TrianglesWithAdjacency = TriangleStripWithAdjacency
+--data LinesWithAdjacency = LinesWithAdjacencyList | LinesWithAdjacencyStrip   
 
 instance PrimitiveTopology Triangles where
     toGLtopology TriangleStrip = 0
     toGLtopology TriangleList = 1
     --data Geometry Triangles a = Triangle a a a
    
-instance PrimitiveTopology TrianglesWithAdjacency where
-    toGLtopology TriangleStripWithAdjacency = 0
-    --data Geometry TrianglesWithAdjacency a = TriangleWithAdjacency a a a a a a
-
 instance PrimitiveTopology Lines where
     toGLtopology LineStrip = 0
     toGLtopology LineList = 1
     --data Geometry Lines a = Line a a
 
-instance PrimitiveTopology LinesWithAdjacency where
-    toGLtopology LinesWithAdjacencyList = 0
-    toGLtopology LinesWithAdjacencyStrip = 1
-    --data Geometry LinesWithAdjacency a = LineWithAdjacency a a a a
-
 instance PrimitiveTopology Points where
     toGLtopology PointList = 0
     --data Geometry Points a = Point a
+
+{-
+Some day:
+
+instance PrimitiveTopology TrianglesWithAdjacency where
+    toGLtopology TriangleStripWithAdjacency = 0
+    data Geometry TrianglesWithAdjacency a = TriangleWithAdjacency a a a a a a
+
+instance PrimitiveTopology LinesWithAdjacency where
+    toGLtopology LinesWithAdjacencyList = 0
+    toGLtopology LinesWithAdjacencyStrip = 1
+    data Geometry LinesWithAdjacency a = LineWithAdjacency a a a a
+-}
 
 type InstanceCount = Int
 
@@ -63,7 +67,7 @@ toPrimitiveArray :: PrimitiveTopology p => p -> VertexArray () a -> PrimitiveArr
 toPrimitiveArray p va = PrimitiveArray [PrimitiveArraySimple p (VertexArray.length va) (bArrBFunc va (BInput 0 0))]
 toPrimitiveArrayIndexed :: PrimitiveTopology p => p -> IndexArray -> VertexArray () a -> PrimitiveArray p a
 toPrimitiveArrayIndexed p ia va = PrimitiveArray [PrimitiveArrayIndexed p ia (bArrBFunc va (BInput 0 0))]
-toPrimitiveArrayInstanced :: PrimitiveTopology p => p -> VertexArray () a -> VertexArray Instances b -> (a -> b -> c) -> PrimitiveArray p c
+toPrimitiveArrayInstanced :: PrimitiveTopology p => p -> VertexArray () a -> VertexArray t b -> (a -> b -> c) -> PrimitiveArray p c
 toPrimitiveArrayInstanced p va ina f = PrimitiveArray [PrimitiveArrayInstanced p (VertexArray.length ina) (VertexArray.length va) (f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1))]
-toPrimitiveArrayIndexedInstanced :: PrimitiveTopology p => p -> IndexArray -> VertexArray () a -> VertexArray Instances b -> (a -> b -> c) -> PrimitiveArray p c
+toPrimitiveArrayIndexedInstanced :: PrimitiveTopology p => p -> IndexArray -> VertexArray () a -> VertexArray t b -> (a -> b -> c) -> PrimitiveArray p c
 toPrimitiveArrayIndexedInstanced p ia va ina f = PrimitiveArray [PrimitiveArrayIndexedInstanced p ia (VertexArray.length ina) (f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1))]

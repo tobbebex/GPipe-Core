@@ -23,7 +23,7 @@ import Data.Boolean
 type NextTempVar = Int
 type NextGlobal = Int
 
-data SType = STypeFloat | STypeInt | STypeBool | STypeUInt | STypeDyn String
+data SType = STypeFloat | STypeInt | STypeBool | STypeUInt | STypeDyn String | STypeVec Int | STypeIVec Int | STypeUVec Int 
 
 stypeName :: SType -> String
 stypeName STypeFloat = "float"
@@ -31,12 +31,16 @@ stypeName STypeInt = "int"
 stypeName STypeBool = "bool"
 stypeName STypeUInt = "uint"
 stypeName (STypeDyn s) = s
+stypeName (STypeVec n) = "vec" ++ show n
+stypeName (STypeIVec n) = "ivec" ++ show n
+stypeName (STypeUVec n) = "uvec" ++ show n
 
 stypeSize :: SType -> Int
+stypeSize (STypeVec n) = n * 4
+stypeSize (STypeIVec n) = n * 4
+stypeSize (STypeUVec n) = n * 4
 stypeSize _ = 4
 
-stypeAlign :: SType -> Int
-stypeAlign _ = 4
 
 type ExprSource = Text
 
@@ -88,27 +92,31 @@ vec4S typ s = let m = tellAssignment typ s
                   f p = S $ fmap (++ p) m
               in (f ".x", f ".y", f".z", f ".w")
 
-
+scalarS' :: RValue -> S c a
+scalarS' = S . return
+ 
+vec2S' :: RValue -> (S c a, S c a)
+vec2S' s = let (x,y,_z,_w) = vec4S' s
+           in (x,y)
+vec3S' :: RValue -> (S c a, S c a, S c a)
+vec3S' s = let (x,y,z,_w) = vec4S' s
+           in (x,y,z)
+vec4S' :: RValue -> (S c a, S c a, S c a, S c a)
+vec4S' s = let f p = S $ return (s ++ p)
+           in (f ".x", f ".y", f".z", f ".w")
 
 data V
-data P
+--data P
 data F
 
 type VFloat = S V Float
-type VInt32 = S V Int32
-type VInt16 = S V Int16
-type VInt8 = S V Int8
-type VWord8 = S V Word8
-type VWord16 = S V Word16
-type VWord32 = S V Word32
+type VInt = S V Int32
+type VWord = S V Word32
+type VBool = S V Bool
 
 type FFloat = S F Float
-type FInt32 = S F Int32
-type FInt16 = S F Int16
-type FInt8 = S F Int8
-type FWord8 = S F Word8
-type FWord16 = S F Word16
-type FWord32 = S F Word32
+type FInt = S F Int32
+type FWord = S F Word32
 type FBool = S F Bool
 
 --getNextGlobal :: Monad m => StateT Int m Int

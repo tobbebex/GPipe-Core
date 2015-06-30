@@ -58,16 +58,19 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
         io s = let (side, vp) = sf s in putStrLn "glSetSideAndViewport"
 
 data ViewPort = ViewPort (Int,Int) (Int,Int)
-
--- TODO: Add scissor and viewport
  
 filterFragments :: (a -> FBool) -> FragmentStream a -> FragmentStream a 
 filterFragments f (FragmentStream xs) = FragmentStream $ map g xs
     where g (a,FragmentStreamData x y z w) = (a,FragmentStreamData x y z (w &&* f a))  
 
+data RasterizedInfo = RasterizedInfo {
+        rasterizedFragCoord :: (FFloat, FFloat, FFloat, FFloat),
+        rasterizedFrontFacing :: FBool,
+        rasterizedPointCoord :: (FFloat, FFloat)
+    }       
 
--- TODO: Add withRasterizedInfo to add depth, side, etc
- -- FBool {-- TODO make struct of all sorts of stuff --},
+withRasterizedInfo :: FragmentStream a -> FragmentStream (a, RasterizedInfo)
+withRasterizedInfo = fmap (\a -> (a, RasterizedInfo (vec4S' "gl_FragCoord") (scalarS' "gl_FrontFacing") (vec2S' "gl_PointCoord")) )
 
 
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, FlexibleContexts, GADTs, TypeSynonymInstances, ScopedTypeVariables, FlexibleInstances, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies, FlexibleContexts, GADTs, TypeSynonymInstances, ScopedTypeVariables, FlexibleInstances, GeneralizedNewtypeDeriving, Arrows #-}
 
 module Graphics.GPipe.Uniform where
 
@@ -13,6 +13,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Category hiding ((.))
 import qualified Data.IntMap as Map
 import Data.IntMap.Lazy (insert)
+import Data.Word (Word)
 
 
 class BufferFormat (UniformBufferFormat a) => Uniform a where
@@ -64,9 +65,40 @@ glUNIFORM_ARRAY = 0
 
 newtype ToUniform a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader (Int -> ExprM String))) a b) deriving (Category, Arrow) 
 
+makeUniform styp = ToUniform $ Kleisli $ \bIn -> do let offset = bOffset bIn
+                                                    tell $ Map.singleton offset STypeFloat
+                                                    useF <- lift ask
+                                                    return $ S $ useF offset
+
 instance Uniform (S x Float) where
     type UniformBufferFormat (S x Float) = BFloat
-    toUniform = ToUniform $ Kleisli $ \bIn -> do let offset = bOffset bIn
-                                                 tell $ Map.singleton offset STypeFloat
-                                                 useF <- lift ask
-                                                 return $ S $ useF offset  
+    toUniform = makeUniform STypeFloat
+
+instance Uniform (S x Int) where
+    type UniformBufferFormat (S x Int) = BInt32
+    toUniform = makeUniform STypeInt
+
+instance Uniform (S x Word) where
+    type UniformBufferFormat (S x Word) = BWord32
+    toUniform = makeUniform STypeUInt
+
+instance (Uniform a, Uniform b) => Uniform (a,b) where
+    type UniformBufferFormat (a,b) = (UniformBufferFormat a, UniformBufferFormat b)
+    toUniform = proc (a,b) -> do a' <- toUniform -< a
+                                 b' <- toUniform -< b
+                                 returnA -< (a', b')
+
+instance (Uniform a, Uniform b, Uniform c) => Uniform (a,b,c) where
+    type UniformBufferFormat (a,b,c) = (UniformBufferFormat a, UniformBufferFormat b, UniformBufferFormat c)
+    toUniform = proc (a,b,c) -> do a' <- toUniform -< a
+                                   b' <- toUniform -< b
+                                   c' <- toUniform -< c
+                                   returnA -< (a', b', c')
+
+instance (Uniform a, Uniform b, Uniform c, Uniform d) => Uniform (a,b,c,d) where
+    type UniformBufferFormat (a,b,c,d) = (UniformBufferFormat a, UniformBufferFormat b, UniformBufferFormat c, UniformBufferFormat d)
+    toUniform = proc (a,b,c,d) -> do a' <- toUniform -< a
+                                     b' <- toUniform -< b
+                                     c' <- toUniform -< c
+                                     d' <- toUniform -< d
+                                     returnA -< (a', b', c', d')                                                   

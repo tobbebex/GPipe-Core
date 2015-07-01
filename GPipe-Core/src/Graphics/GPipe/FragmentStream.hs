@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances, GeneralizedNewtypeDeriving  #-}
+{-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances, GeneralizedNewtypeDeriving, Arrows  #-}
 module Graphics.GPipe.FragmentStream where
 
 import Control.Category hiding ((.))
@@ -25,20 +25,12 @@ newtype FragmentStream a = FragmentStream [(a, FragmentStreamData)] deriving Mon
 instance Functor FragmentStream where
         fmap f (FragmentStream xs) = FragmentStream $ map (first f) xs
  
-
 newtype ToFragment a b = ToFragment (Kleisli (State Int) a b) deriving (Category, Arrow)
 
 class FragmentInput a where
     type FragmentFormat a
     toFragment :: ToFragment a (FragmentFormat a)  
     
-instance FragmentInput VFloat where
-        type FragmentFormat VFloat = FFloat
-        toFragment = ToFragment $ Kleisli $ \ (S s) -> do n <- get
-                                                          put (n+1)
-                                                          return $ S $ useFInput "vf" STypeFloat n s 
-               
-
 rasterize:: forall p a s os f. (PrimitiveTopology p, FragmentInput a)
           => (s -> (Side, ViewPort))
           -> PrimitiveStream p (VPos, a)
@@ -72,27 +64,58 @@ data RasterizedInfo = RasterizedInfo {
 withRasterizedInfo :: FragmentStream a -> FragmentStream (a, RasterizedInfo)
 withRasterizedInfo = fmap (\a -> (a, RasterizedInfo (vec4S' "gl_FragCoord") (scalarS' "gl_FrontFacing") (vec2S' "gl_PointCoord")) )
 
+data Flat a = Flat a
+data NoPerspective a = NoPerspective a
 
+makeFragment qual styp f = ToFragment $ Kleisli $ \ x -> do n <- get
+                                                            put (n+1)
+                                                            return $ S $ useFInput qual "vf" styp n $ f x
+unFlat (Flat s) = s
+unNPersp (NoPerspective s) = s
 
+instance FragmentInput VFloat where
+        type FragmentFormat VFloat = FFloat
+        toFragment = makeFragment "" STypeFloat unS
+         
+instance FragmentInput (Flat VFloat) where
+        type FragmentFormat (Flat VFloat) = FFloat
+        toFragment = makeFragment "flat" STypeFloat (unS . unFlat)
 
+instance FragmentInput (NoPerspective VFloat) where
+        type FragmentFormat (NoPerspective VFloat) = FFloat
+        toFragment = makeFragment "noperspective" STypeFloat (unS . unNPersp)
+              
+instance FragmentInput VInt where
+        type FragmentFormat VInt = FInt
+        toFragment = makeFragment "flat" STypeInt unS
 
+instance FragmentInput VWord where
+        type FragmentFormat VWord = FWord
+        toFragment = makeFragment "flat" STypeUInt unS
 
+instance FragmentInput VBool where
+        type FragmentFormat VBool = FBool
+        toFragment = proc b -> do i <- toFragment -< ifB b 1 0 :: VInt
+                                  returnA -< i ==* 1
+        
+instance (FragmentInput a, FragmentInput b) => FragmentInput (a,b) where
+    type FragmentFormat (a,b) = (FragmentFormat a, FragmentFormat b)
+    toFragment = proc (a,b) -> do a' <- toFragment -< a
+                                  b' <- toFragment -< b
+                                  returnA -< (a', b')
 
+instance (FragmentInput a, FragmentInput b, FragmentInput c) => FragmentInput (a,b,c) where
+    type FragmentFormat (a,b,c) = (FragmentFormat a, FragmentFormat b, FragmentFormat c)
+    toFragment = proc (a,b,c) -> do a' <- toFragment -< a
+                                    b' <- toFragment -< b
+                                    c' <- toFragment -< c
+                                    returnA -< (a', b', c')
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+instance (FragmentInput a, FragmentInput b, FragmentInput c, FragmentInput d) => FragmentInput (a,b,c,d) where
+    type FragmentFormat (a,b,c,d) = (FragmentFormat a, FragmentFormat b, FragmentFormat c, FragmentFormat d)
+    toFragment = proc (a,b,c,d) -> do a' <- toFragment -< a
+                                      b' <- toFragment -< b
+                                      c' <- toFragment -< c
+                                      d' <- toFragment -< d
+                                      returnA -< (a', b', c', d')
 

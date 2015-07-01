@@ -212,6 +212,7 @@ instance StencilRenderable StencilFormat
 instance StencilRenderable DepthStencilFormat
 
 data ContextFormat c ds where
+    ContextFormatNone :: ContextFormat () ()  
     ContextFormatColor :: ContextColorFormat c => c -> ContextFormat c ()  
     ContextFormatColorDepth :: ContextColorFormat c => c -> DepthFormat -> ContextFormat c DepthFormat  
     ContextFormatColorStencil :: ContextColorFormat c => c -> StencilFormat  -> ContextFormat c StencilFormat  

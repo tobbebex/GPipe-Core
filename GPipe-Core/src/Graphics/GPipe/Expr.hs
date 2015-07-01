@@ -63,16 +63,12 @@ runExprM d m = do
                               sequence_ uniDecls 
                               sequence_ sampDecls
                               sequence_ inpDecls
-                   prevDecl = sequence_ prevDecls
-                   prevS    = sequence_ prevSs
-               return (makeExpr decls body, unis, samps, inps, prevDecl, prevS)
-    where
-        makeExpr :: GlobDeclM () -> Builder -> Text 
-        makeExpr m b = toLazyText $ mconcat [
-                                execWriter m,
+                   source = toLazyText $ mconcat [
+                                execWriter decls,
                                 "main() {\n",
-                                b,
-                                "}"]                                      
+                                body,
+                                "}"]   
+               return (source, unis, samps, inps, sequence_ prevDecls, sequence_ prevSs)
 
 type GlobDeclM = Writer Builder
 
@@ -110,13 +106,13 @@ data V
 data F
 
 type VFloat = S V Float
-type VInt = S V Int32
-type VWord = S V Word32
+type VInt = S V Int
+type VWord = S V Word
 type VBool = S V Bool
 
 type FFloat = S F Float
-type FInt = S F Int32
-type FWord = S F Word32
+type FInt = S F Int
+type FWord = S F Word
 type FBool = S F Bool
 
 --getNextGlobal :: Monad m => StateT Int m Int
@@ -138,10 +134,10 @@ useVInput stype i =
                         tellGlobal " in"
                         tellGlobalLn $ show i
 
-useFInput :: String -> SType -> Int -> ExprM String -> ExprM String
-useFInput prefix stype i v =
+useFInput :: String -> String -> SType -> Int -> ExprM String -> ExprM String
+useFInput qual prefix stype i v =
              do s <- T.lift get
-                T.lift $ put $ s { shaderUsedInput = Map.insert i (gDecl "in ", (assignOutput, gDecl "out ")) $ shaderUsedInput s }                
+                T.lift $ put $ s { shaderUsedInput = Map.insert i (gDecl (qual ++ " in "), (assignOutput, gDecl (qual ++ " out "))) $ shaderUsedInput s }                
                 return $ prefix ++ show i
     where
         assignOutput = do val <- v
@@ -433,6 +429,22 @@ preopf = preop STypeFloat
 postopf :: String -> S c x -> S c Float
 postopf = postop STypeFloat
 
+bini :: String -> S c x -> S c y -> S c Int
+bini = bin STypeInt
+fun1i :: String -> S c x -> S c Int
+fun1i = fun1 STypeInt
+preopi :: String -> S c x -> S c Int
+preopi = preop STypeInt
+
+binu :: String -> S c x -> S c y -> S c Word
+binu = bin STypeUInt
+fun1u :: String -> S c x -> S c Word
+fun1u = fun1 STypeUInt
+preopu :: String -> S c x -> S c Word
+preopu = preop STypeUInt
+
+-- TODO: Implement all numeric classes for float int and word
+
 instance Num (S a Float) where
     (+) = binf "+"
     (-) = binf "-"
@@ -441,6 +453,24 @@ instance Num (S a Float) where
     (*) = binf "*"
     fromInteger = S . return . show
     negate = preopf "-"
+
+instance Num (S a Int) where
+    (+) = bini "+"
+    (-) = bini "-"
+    abs = fun1i "abs"
+    signum = fun1i "sign"
+    (*) = bini "*"
+    fromInteger = S . return . show
+    negate = preopi "-"
+    
+instance Num (S a Word) where
+    (+) = binu "+"
+    (-) = binu "-"
+    abs = fun1u "abs"
+    signum = fun1u "sign"
+    (*) = binu "*"
+    fromInteger x = S $ return $ show x ++ "u"
+    negate = preopu "-"   
 
 instance Fractional (S a Float) where
   (/)          = binf "/"
@@ -491,7 +521,7 @@ instance IfB (S a x) where
                                        
 -- | This class provides the GPU functions either not found in Prelude's numerical classes, or that has wrong types.
 --   Instances are also provided for normal 'Float's and 'Double's.
---   Minimal complete definition: 'floor'' and 'ceiling''.
+--   Minimal complete definition: 'floor'' or 'ceiling''.
 class (IfB a, OrdB a, Floating a) => Real' a where
   rsqrt :: a -> a
   exp2 :: a -> a
@@ -517,6 +547,102 @@ class (IfB a, OrdB a, Floating a) => Real' a where
                      in t*t*(3-2*t)
   fract' x = x - floor' x
   mod' x y = x - y* floor' (x/y)
+  floor' x = -ceiling' (-x)
+  ceiling' x = -floor' (-x)
+
+
+instance Real' Float where
+  clamp x a = min (max x a)
+  step a x | x < a     = 0
+           | otherwise = 1
+  floor' = fromIntegral . floor
+  ceiling' = fromIntegral . ceiling
+
+instance Real' Double where
+  clamp x a = min (max x a)
+  step a x | x < a     = 0
+           | otherwise = 1
+  floor' = fromIntegral . floor
+  ceiling' = fromIntegral . ceiling
+  
+instance Real' (S x Float) where
+  rsqrt = fun1f "inversesqrt"
+  exp2 = fun1f "exp2"
+  log2 = fun1f "log2"
+  floor' = fun1f "floor"
+  ceiling' = fun1f "ceil"
+  fract' = fun1f "fract"
+  mod' = fun2f "mod"
+  clamp = fun3f "clamp"
+  mix = fun3f "mix"
+  step = fun2f "step"
+  smoothstep = fun3f "smoothstep"
+
+
+-- | Provides a common way to convert numeric types to integer and floating point representations.
+class Convert a where
+    type ConvertFloat a
+    type ConvertInt a
+    type ConvertWord a
+    -- | Convert to a floating point number.
+    toFloat :: a -> ConvertFloat a
+    -- | Convert to an integral number, using truncation if necessary.
+    toInt :: a -> ConvertInt a
+    -- | Convert to an unsigned integral number, using truncation if necessary.
+    toWord :: a -> ConvertWord a
+
+instance Convert Float where
+    type ConvertFloat Float = Float
+    type ConvertInt Float = Int
+    type ConvertWord Float = Word
+    toFloat = id
+    toInt = truncate
+    toWord = truncate
+instance Convert Int where
+    type ConvertFloat Int = Float
+    type ConvertInt Int = Int
+    type ConvertWord Int = Word
+    toFloat = fromIntegral
+    toInt = id
+    toWord = fromIntegral
+instance Convert Word where
+    type ConvertFloat Word = Float
+    type ConvertInt Word = Int
+    type ConvertWord Word = Word
+    toFloat = fromIntegral
+    toInt = fromIntegral
+    toWord = id
+instance Convert (S x Float) where
+    type ConvertFloat (S x Float) = S x Float
+    type ConvertInt (S x Float) = S x Int
+    type ConvertWord (S x Float) = S x Word
+    toFloat = id
+    toInt = fun1i "int"
+    toWord = fun1u "uint"
+instance Convert (S x Int) where
+    type ConvertFloat (S x Int) = S x Float
+    type ConvertInt (S x Int) = S x Int
+    type ConvertWord (S x Int) = S x Word
+    toFloat = fun1f "float"
+    toInt = id
+    toWord = fun1u "uint"
+instance Convert (S x Word) where
+    type ConvertFloat (S x Word) = S x Float
+    type ConvertInt (S x Word) = S x Int
+    type ConvertWord (S x Word) = S x Word
+    toFloat = fun1f "float"
+    toInt = fun1i "int"
+    toWord = id
+  
+-- | The derivative in x using local differencing of the rasterized value.
+dFdx :: FFloat -> FFloat
+-- | The derivative in y using local differencing of the rasterized value.
+dFdy :: FFloat -> FFloat
+-- | The sum of the absolute derivative in x and y using local differencing of the rasterized value.
+fwidth :: FFloat -> FFloat
+dFdx = fun1f "dFdx"
+dFdy = fun1f "dFdy"
+fwidth = fun1f "fwidth"
 
 
                              

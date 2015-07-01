@@ -16,7 +16,7 @@ module Graphics.GPipe.Buffer
     copyBuffer,
     BFloat, BInt32, BInt16, BInt8, BWord32, BWord16, BWord8, 
     BInt32Norm, BInt16Norm, BInt8Norm, BWord32Norm, BWord16Norm, BWord8Norm,
-    bufSize, bufName, bufElementSize, bufElementCount, bufBElement, makeBuffer,
+    bufSize, bufName, bufElementSize, bufElementCount, bufBElement, makeBuffer, unB2, unB3, unB4
 ) where
 
 import Graphics.GPipe.Context
@@ -92,9 +92,9 @@ type BWord32Norm = BNormalized BWord32
 type BWord16Norm = BNormalized BWord16
 type BWord8Norm = BNormalized BWord8
 
-newtype B2 a = B2 a -- Internal
-newtype B3 a = B3 a -- Internal
-newtype B4 a = B4 a -- Internal
+newtype B2 a = B2 { unB2 :: a } -- Internal
+newtype B3 a = B3 { unB3 :: a } -- Internal
+newtype B4 a = B4 { unB4 :: a } -- Internal
 
 toB2B2 :: forall a. Storable a => B4 (B a) -> (B2 (B a), B2 (B a))
 toB3B1 :: forall a. Storable a => B4 (B a) -> (B3 (B a), B a)

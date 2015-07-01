@@ -88,7 +88,7 @@ makeVertexFx norm n f styp typ b = do
                              lift $ tell [\ix -> glBindBuffer (bName b) glVERTEX_ARRAY  >> glAttribPointer ix n typ norm (bStride b) (bStride b * bSkipElems b + bOffset b)]
                              return (f styp $ useVInput styp n)
 
-makeVertexFnorm n f styp typ (BNormalized b) = makeVertexFx True n f styp typ b 
+makeVertexFnorm n f styp typ b = makeVertexFx True n f styp typ b 
 makeVertexF = makeVertexFx False
 
 makeVertexI n f styp typ b = do 
@@ -97,31 +97,30 @@ makeVertexI n f styp typ b = do
                              lift $ tell [\ix -> glBindBuffer (bName b) glVERTEX_ARRAY  >> glAttribPointerI ix n typ (bStride b) (bStride b * bSkipElems b + bOffset b)]
                              return (f styp $ useVInput styp n) 
 
+-- scalars
 
+unBnorm (BNormalized a) = a
 instance VertexInput BFloat where
     type VertexFormat BFloat = VFloat
     toVertex = ToVertex $ Kleisli $ makeVertexF 1 (const S) STypeFloat glFLOAT
-       
 instance VertexInput BInt32Norm where
     type VertexFormat BInt32Norm = VFloat
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glINT32 
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glINT32 . unBnorm
 instance VertexInput BInt16Norm where
     type VertexFormat BInt16Norm = VFloat
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glINT16 
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glINT16 . unBnorm
 instance VertexInput BInt8Norm where
     type VertexFormat BInt8Norm = VFloat
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glINT8 
-
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glINT8 . unBnorm
 instance VertexInput BWord32Norm where
     type VertexFormat BWord32Norm = VFloat
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glUINT32 
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glUINT32 . unBnorm
 instance VertexInput BWord16Norm where
     type VertexFormat BWord16Norm = VFloat
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glUINT16 
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glUINT16 . unBnorm
 instance VertexInput BWord8Norm where
     type VertexFormat BWord8Norm = VFloat
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glUINT8 
-    
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat glUINT8 . unBnorm
 instance VertexInput BInt32 where
     type VertexFormat BInt32 = VInt
     toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeInt glINT32
@@ -131,18 +130,143 @@ instance VertexInput BInt16 where
 instance VertexInput BInt8 where
     type VertexFormat BInt8 = VInt
     toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeInt glINT8
-
 instance VertexInput BWord32 where
     type VertexFormat BWord32 = VWord
-    toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeInt glUINT32
+    toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeUInt glUINT32
 instance VertexInput BWord16 where
     type VertexFormat BWord16 = VWord
-    toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeInt glUINT16
+    toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeUInt glUINT16
 instance VertexInput BWord8 where
     type VertexFormat BWord8 = VWord
-    toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeInt glUINT8
+    toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeUInt glUINT8
 
--- TODO: B2 B3 B4 instances
+       
+-- B2
+
+unB2norm = unB2 . unBnorm
+instance VertexInput (B2 BFloat) where
+    type VertexFormat (B2 BFloat) = (VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexF 2 vec2S STypeFloat glFLOAT . unB2
+instance VertexInput (BNormalized (B2 BInt32)) where
+    type VertexFormat (BNormalized (B2 BInt32)) = (VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat glINT32 . unB2norm
+instance VertexInput (BNormalized (B2 BInt16)) where
+    type VertexFormat (BNormalized (B2 BInt16)) = (VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat glINT16 . unB2norm
+instance VertexInput (BNormalized (B2 BInt8)) where
+    type VertexFormat (BNormalized (B2 BInt8)) = (VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat glINT8 . unB2norm
+instance VertexInput (BNormalized (B2 BWord32)) where
+    type VertexFormat (BNormalized (B2 BWord32)) = (VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat glUINT32 . unB2norm
+instance VertexInput (BNormalized (B2 BWord16)) where
+    type VertexFormat (BNormalized (B2 BWord16)) = (VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat glUINT16 . unB2norm
+instance VertexInput (BNormalized (B2 BWord8)) where
+    type VertexFormat (BNormalized (B2 BWord8)) = (VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat glUINT8 . unB2norm
+instance VertexInput  (B2 BInt32) where
+    type VertexFormat  (B2 BInt32) = (VInt, VInt)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S STypeInt glINT32 . unB2
+instance VertexInput  (B2 BInt16) where
+    type VertexFormat  (B2 BInt16) = (VInt, VInt)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S STypeInt glINT16 . unB2
+instance VertexInput  (B2 BInt8) where
+    type VertexFormat  (B2 BInt8) = (VInt, VInt)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S STypeInt glINT8 . unB2
+instance VertexInput  (B2 BWord32) where
+    type VertexFormat  (B2 BWord32) = (VWord, VWord)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S STypeUInt glUINT32 . unB2
+instance VertexInput  (B2 BWord16) where
+    type VertexFormat  (B2 BWord16) = (VWord, VWord)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S STypeUInt glUINT16 . unB2
+instance VertexInput  (B2 BWord8) where
+    type VertexFormat  (B2 BWord8) = (VWord, VWord)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S STypeUInt glUINT8 . unB2
+
+-- B3
+
+instance VertexInput (B3 BFloat) where
+    type VertexFormat (B3 BFloat) = (VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexF 3 vec3S STypeFloat glFLOAT . unB3
+instance VertexInput (BNormalized (B3 BInt32)) where
+    type VertexFormat (BNormalized (B3 BInt32)) = (VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat glINT32 . unB3 . unBnorm
+instance VertexInput (BNormalized (B3 BInt16)) where
+    type VertexFormat (BNormalized (B3 BInt16)) = (VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat glINT16 . unB3 . unBnorm
+instance VertexInput (BNormalized (B3 BInt8)) where
+    type VertexFormat (BNormalized (B3 BInt8)) = (VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat glINT8 . unB3 . unBnorm
+instance VertexInput (BNormalized (B3 BWord32)) where
+    type VertexFormat (BNormalized (B3 BWord32)) = (VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat glUINT32 . unB3 . unBnorm
+instance VertexInput (BNormalized (B3 BWord16)) where
+    type VertexFormat (BNormalized (B3 BWord16)) = (VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat glUINT16 . unB3 . unBnorm
+instance VertexInput (BNormalized (B3 BWord8)) where
+    type VertexFormat (BNormalized (B3 BWord8)) = (VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat glUINT8 . unB3 . unBnorm
+instance VertexInput  (B3 BInt32) where
+    type VertexFormat  (B3 BInt32) = (VInt, VInt, VInt)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeInt glINT32 . unB3
+instance VertexInput  (B3 BInt16) where
+    type VertexFormat  (B3 BInt16) = (VInt, VInt, VInt)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeInt glINT16 . unB3
+instance VertexInput  (B3 BInt8) where
+    type VertexFormat  (B3 BInt8) = (VInt, VInt, VInt)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeInt glINT8 . unB3
+instance VertexInput  (B3 BWord32) where
+    type VertexFormat  (B3 BWord32) = (VWord, VWord, VWord)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeUInt glUINT32 . unB3
+instance VertexInput  (B3 BWord16) where
+    type VertexFormat  (B3 BWord16) = (VWord, VWord, VWord)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeUInt glUINT16 . unB3
+instance VertexInput  (B3 BWord8) where
+    type VertexFormat  (B3 BWord8) = (VWord, VWord, VWord)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeUInt glUINT8 . unB3
+
+-- B4
+
+instance VertexInput (B4 BFloat) where
+    type VertexFormat (B4 BFloat) = (VFloat, VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexF 4 vec4S STypeFloat glFLOAT . unB4
+instance VertexInput (BNormalized (B4 BInt32)) where
+    type VertexFormat (BNormalized (B4 BInt32)) = (VFloat, VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat glINT32 . unB4 . unBnorm
+instance VertexInput (BNormalized (B4 BInt16)) where
+    type VertexFormat (BNormalized (B4 BInt16)) = (VFloat, VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat glINT16 . unB4 . unBnorm
+instance VertexInput (BNormalized (B4 BInt8)) where
+    type VertexFormat (BNormalized (B4 BInt8)) = (VFloat, VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat glINT8 . unB4 . unBnorm
+instance VertexInput (BNormalized (B4 BWord32)) where
+    type VertexFormat (BNormalized (B4 BWord32)) = (VFloat, VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat glUINT32 . unB4 . unBnorm
+instance VertexInput (BNormalized (B4 BWord16)) where
+    type VertexFormat (BNormalized (B4 BWord16)) = (VFloat, VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat glUINT16 . unB4 . unBnorm
+instance VertexInput (BNormalized (B4 BWord8)) where
+    type VertexFormat (BNormalized (B4 BWord8)) = (VFloat, VFloat, VFloat, VFloat)
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat glUINT8 . unB4 . unBnorm
+instance VertexInput  (B4 BInt32) where
+    type VertexFormat  (B4 BInt32) = (VInt, VInt, VInt, VInt)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeInt glINT32 . unB4
+instance VertexInput  (B4 BInt16) where
+    type VertexFormat  (B4 BInt16) = (VInt, VInt, VInt, VInt)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeInt glINT16 . unB4
+instance VertexInput  (B4 BInt8) where
+    type VertexFormat  (B4 BInt8) = (VInt, VInt, VInt, VInt)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeInt glINT8 . unB4
+instance VertexInput  (B4 BWord32) where
+    type VertexFormat  (B4 BWord32) = (VWord, VWord, VWord, VWord)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeUInt glUINT32 . unB4
+instance VertexInput  (B4 BWord16) where
+    type VertexFormat  (B4 BWord16) = (VWord, VWord, VWord, VWord)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeUInt glUINT16 . unB4
+instance VertexInput  (B4 BWord8) where
+    type VertexFormat  (B4 BWord8) = (VWord, VWord, VWord, VWord)
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeUInt glUINT8 . unB4
 
                                              
 instance (VertexInput a, VertexInput b) => VertexInput (a,b) where

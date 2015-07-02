@@ -1,23 +1,97 @@
 {-# LANGUAGE TypeFamilies, FlexibleContexts, FlexibleInstances, GADTs, MultiParamTypeClasses, ScopedTypeVariables, AllowAmbiguousTypes #-}
 module Graphics.GPipe.Texture where
-{--
 
 import Graphics.GPipe.Format
 import Graphics.GPipe.Expr
-import Graphics.GPipe.Expr.Operations
 import Graphics.GPipe.Context
-import Graphics.GPipe.Stream
 import Graphics.GPipe.Shader
 import Graphics.GPipe.Buffer
-import Control.Monad.IO.Class
-import Data.Word
-import Data.Int
+
+-- | The type of a color sample made by a texture t 
+type ColorSample x t = Color (TextureFormat t) (S x (ColorElement (TextureFormat t)))
+
+data SampleLod x where
+    SampleBias :: FFloat -> SampleLod F   
+    SampleLod :: S x Float -> SampleLod x
+    SampleGrad :: S x Float -> SampleLod x
+
+data SampleDetails t x =
+    SampleDetails {
+            sampleLod :: Maybe (SampleLod x),
+            sampleProj :: Maybe (S x Float),
+            sampleOffset :: Maybe (TextureOffsetCoord t (S x Int))
+        }
+
+class ColorFormat (TextureFormat t) => Texture t where
+    type TextureOS t
+    -- | The color format of the texture, affects the type of the samples from the texture 
+    type TextureFormat t
+    -- | The type that is used for the dimension of the texture with elements e 
+    type TextureSize t e
+    -- | The type for sample coordinates with elements e
+    type TextureCoord t e
+    -- | The type for sample offset coordinates with elements e
+    type TextureOffsetCoord t e
+    -- | The type for indexing 2D images in the texture
+    type TextureImageIndex t
+
+    -- | Samples the texture with automatic lod   
+    sample :: Sampler t -> TextureCoord t (S x Float) -> ColorSample x t
+    sample = sample' (SampleDetails Nothing Nothing Nothing) 
+        
+    -- | Samples the texture with specified details 
+    sample' :: SampleDetails t x -> Sampler t -> TextureCoord t (S x Float) -> ColorSample x t
+    
+    fetch :: Sampler t -> TextureCoord t (S x Int) -> ColorSample x t   
+    
+    fetchOffseted :: Sampler t -> TextureOffsetCoord t (S x Int) -> TextureCoord t (S x Int) -> ColorSample x t
+
+    queryLod :: Sampler t -> TextureCoord t FFloat -> ColorSample F t
+    
+    -- | Queries the size of a texture 
+    querySize :: Sampler t -> S x Int -> TextureSize t (S x Int)
+    
+type TextureElement t = ColorElement (TextureFormat t)
 
 -- | A structure describing how a texture is sampled
---data Sampler = Sampler Filter EdgeMode deriving (Eq, Ord)
+data SamplerMode = SamplerSamplerMode Filter EdgeMode deriving (Eq)
+data Filter = Point | Linear deriving (Eq, Enum)
+data EdgeMode = Wrap | Mirror | Clamp deriving (Eq, Enum)
 
+data Sampler t = Sampler t -- Internal
 
-type TextureName = Int
+newSampler :: (Texture t, TextureOS t ~ os) => (s -> (t, SamplerMode)) -> Shader os f s (Sampler t)  
+newSampler = undefined
+
+data Image f = Image -- Internal
+type ImageCoordinate = (Int, Int)
+
+getImage :: (Texture t, TextureOS t ~ os) => t -> TextureImageIndex t -> Render os f (Image (TextureFormat t)) 
+getImage t i = return Image 
+
+getImages :: (Texture t, TextureOS t ~ os) => t -> Render os f [(TextureImageIndex t, Image (TextureFormat t))] 
+getImages t = return [(undefined, Image)] 
+
+subImage :: (ImageCoordinate, ImageCoordinate) -> Image f -> Image f
+subImage = undefined
+
+data Proxy t = Proxy
+
+newTexture :: (Monad m, Texture t, TextureOS t ~ os) => TextureFormat t -> TextureSize t Int -> ContextT os f m (t)
+newTexture = undefined 
+
+writeTexture :: (Monad m, Texture t, BaseShaderFormat b ~ TextureElement t, TextureOS t ~ os) => t -> TextureImageIndex t -> (ImageCoordinate, ImageCoordinate) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+writeTexture = undefined
+
+writeTexture' :: (Monad m, Texture t, BaseShaderFormat b ~ TextureElement t, TextureOS t ~ os) => t -> TextureImageIndex t -> (ImageCoordinate, ImageCoordinate) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
+writeTexture' = undefined
+
+imageIndices :: (Monad m, Texture t, TextureOS t ~ os) => t -> ContextT os f m [TextureImageIndex t] 
+imageIndices t = return [undefined] 
+
+---------
+
+type TextureName = Int -- Internal
 
 data Texture1D os a = Texture1D TextureName Int
 data Texture1DArray os a = Texture1DArray TextureName (Int, Int) 
@@ -26,9 +100,18 @@ data Texture2DRect os a = Texture2DRect TextureName (Int, Int)
 data Texture2DArray os a = Texture2DArray TextureName (Int, Int, Int)
 data Texture3D os a = Texture3D TextureName (Int, Int, Int)
 data TextureCube os a = TextureCube TextureName Int
+    
+{--
 
--- | The type of a color sample made by a texture t in a context c 
-type ColorSample c t = Color (TextureFormat t) (S c (ColorElement (TextureFormat t)))
+import Control.Monad.IO.Class
+import Data.Word
+import Data.Int
+
+
+
+type TextureName = Int
+
+
 
 class Texture t where
     -- | The object space (gl context) of the texture  

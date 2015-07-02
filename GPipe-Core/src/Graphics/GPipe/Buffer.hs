@@ -4,6 +4,7 @@
 module Graphics.GPipe.Buffer 
 (
     BufferFormat(..),
+    BaseBufferFormat(..),
     Buffer(),
     ToBuffer(),
     B(..), B2(..), B3(..), B4(..),
@@ -112,6 +113,12 @@ toB1B1 (B2 b) = (b, b { bOffset = bOffset b + sizeOf (undefined :: a) })
 
 newtype BUniform a = BUniform a
 newtype BNormalized a = BNormalized a
+
+class BufferFormat a => BaseBufferFormat a where
+    type BaseShaderFormat a  
+
+instance BaseBufferFormat BInt32 where
+    type BaseShaderFormat BInt32 = Int  
 
 instance Storable a => BufferFormat (B a) where
     type HostFormat (B a) = a

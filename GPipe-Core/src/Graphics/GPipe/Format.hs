@@ -41,13 +41,13 @@ instance ColorFormat RFloatFormat where
     fromColor _ (R r) = [r]
 instance ColorFormat RIntFormat where
     type Color RIntFormat = R
-    type ColorElement RIntFormat = Int32 
+    type ColorElement RIntFormat = Int
     typeStr _ = "int"    
     toColor _ [r] = R r
     fromColor _ (R r) = [r]
 instance ColorFormat RUIntFormat where
     type Color RUIntFormat = R
-    type ColorElement RUIntFormat = Word32
+    type ColorElement RUIntFormat = Word
     typeStr _ = "uint"    
     toColor _ [r] = R r
     fromColor _ (R r) = [r]
@@ -59,13 +59,13 @@ instance ColorFormat RGFloatFormat where
     fromColor _ (RG r g) = [r,g]
 instance ColorFormat RGIntFormat where
     type Color RGIntFormat = RG
-    type ColorElement RGIntFormat = Int32 
+    type ColorElement RGIntFormat = Int
     typeStr _ = "ivec2"    
     toColor _ [r,g] = RG r g
     fromColor _ (RG r g) = [r,g]
 instance ColorFormat RGUIntFormat where
     type Color RGUIntFormat = RG
-    type ColorElement RGUIntFormat = Word32
+    type ColorElement RGUIntFormat = Word
     typeStr _ = "uvec2"    
     toColor _ [r,g] = RG r g
     fromColor _ (RG r g) = [r,g]
@@ -77,13 +77,13 @@ instance ColorFormat RGBFloatFormat where
     fromColor _ (RGB r g b) = [r,g,b]
 instance ColorFormat RGBIntFormat where
     type Color RGBIntFormat = RGB
-    type ColorElement RGBIntFormat = Int32 
+    type ColorElement RGBIntFormat = Int
     typeStr _ = "ivec3"    
     toColor _ [r,g,b] = RGB r g b
     fromColor _ (RGB r g b) = [r,g,b]
 instance ColorFormat RGBUIntFormat where
     type Color RGBUIntFormat = RGB
-    type ColorElement RGBUIntFormat = Word32
+    type ColorElement RGBUIntFormat = Word
     typeStr _ = "uvec3"    
     toColor _ [r,g,b] = RGB r g b
     fromColor _ (RGB r g b) = [r,g,b]
@@ -95,13 +95,13 @@ instance ColorFormat RGBAFloatFormat where
     fromColor _ (RGBA r g b a) = [r,g,b,a]
 instance ColorFormat RGBAIntFormat where
     type Color RGBAIntFormat = RGBA
-    type ColorElement RGBAIntFormat = Int32 
+    type ColorElement RGBAIntFormat = Int
     typeStr _ = "ivec4"    
     toColor _ [r,g,b,a] = RGBA r g b a
     fromColor _ (RGBA r g b a) = [r,g,b,a]
 instance ColorFormat RGBAUIntFormat where
     type Color RGBAUIntFormat = RGBA
-    type ColorElement RGBAUIntFormat = Word32
+    type ColorElement RGBAUIntFormat = Word
     typeStr _ = "uvec4"    
     toColor _ [r,g,b,a] = RGBA r g b a
     fromColor _ (RGBA r g b a) = [r,g,b,a]

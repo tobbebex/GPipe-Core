@@ -202,6 +202,23 @@ data DepthFormat = Depth16 | Depth24 | Depth32 | Depth32F
 data StencilFormat = Stencil1 | Stencil4 | Stencil8 | Stencil16
 data DepthStencilFormat = DepthStencilFormat DepthFormat StencilFormat | Depth32FStencil8 | Depth24Stencil8 
 
+depthBits :: DepthFormat -> Int
+depthBits Depth16 = 16
+depthBits Depth24 = 16
+depthBits Depth32 = 32
+depthBits Depth32F = 32 -- F
+
+stencilBits :: StencilFormat -> Int
+stencilBits Stencil1 = 1
+stencilBits Stencil4 = 4
+stencilBits Stencil8 = 8
+stencilBits Stencil16 = 16
+
+depthStencilBits :: DepthStencilFormat -> (Int, Int)
+depthStencilBits (DepthStencilFormat d s) = (depthBits d, stencilBits s)
+depthStencilBits Depth32FStencil8 = (32, 8) -- F
+depthStencilBits Depth24Stencil8 = (24, 8)
+
 class RenderBufferFormat f => DepthRenderable f 
 class RenderBufferFormat f => StencilRenderable f
 

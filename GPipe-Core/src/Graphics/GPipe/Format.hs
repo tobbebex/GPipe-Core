@@ -155,6 +155,7 @@ class ColorRenderable c => ContextColorFormat c where
     redBits :: c -> Int
     greenBits :: c -> Int
     blueBits :: c -> Int
+    isSrgb :: c -> Bool
 
 instance ContextColorFormat RFloatFormat where
     redBits R8 = 8
@@ -165,6 +166,7 @@ instance ContextColorFormat RFloatFormat where
     redBits R32F = 32
     greenBits _ = 0
     blueBits _ = 0          
+    isSrgb _ = False
 
 instance ContextColorFormat RGFloatFormat where
     redBits RG8 = 8
@@ -175,6 +177,7 @@ instance ContextColorFormat RGFloatFormat where
     redBits RG32F = 32
     greenBits = redBits
     blueBits _ = 0          
+    isSrgb _ = False
     
 instance ContextColorFormat RGBFloatFormat where
     redBits R3G3B2 = 3 
@@ -195,21 +198,41 @@ instance ContextColorFormat RGBFloatFormat where
     blueBits R3G3B2 = 2
     blueBits R11FG11FB10F = 10
     blueBits x = redBits x
+    isSrgb SRGB8 = True 
+    isSrgb _ = False
     
 --------------------------------------------------------------------------
+
+colorBits :: ContextColorFormat c => c -> (Int, Int, Int, Bool)
+colorBits f = (redBits f, greenBits f, blueBits f, isSrgb f)
 
 data DepthFormat = Depth16 | Depth24 | Depth32 | Depth32F 
 data StencilFormat = Stencil1 | Stencil4 | Stencil8 | Stencil16
 data DepthStencilFormat = DepthStencilFormat DepthFormat StencilFormat | Depth32FStencil8 | Depth24Stencil8 
 
-class RenderBufferFormat f => DepthRenderable f 
-class RenderBufferFormat f => StencilRenderable f
+class RenderBufferFormat f => DepthRenderable f where
+    depthBits :: f -> Int 
+class RenderBufferFormat f => StencilRenderable f where
+    stencilBits :: f -> Int 
 
-instance DepthRenderable DepthFormat
-instance DepthRenderable DepthStencilFormat
+instance DepthRenderable DepthFormat where
+    depthBits Depth16 = 16
+    depthBits Depth24 = 24
+    depthBits Depth32 = 32
+    depthBits Depth32F = 32
+instance DepthRenderable DepthStencilFormat where
+    depthBits (DepthStencilFormat d _) = depthBits d
+    depthBits Depth32FStencil8 = 32
+    depthBits Depth24Stencil8 = 24
 
-instance StencilRenderable StencilFormat
-instance StencilRenderable DepthStencilFormat
+instance StencilRenderable StencilFormat where
+    stencilBits Stencil1 = 1
+    stencilBits Stencil4 = 4
+    stencilBits Stencil8 = 8
+    stencilBits Stencil16 = 16
+instance StencilRenderable DepthStencilFormat where
+    stencilBits (DepthStencilFormat _ s) = stencilBits s
+    stencilBits _ = 8
 
 data ContextFormat c ds where
     ContextFormatNone :: ContextFormat () ()  
@@ -220,4 +243,13 @@ data ContextFormat c ds where
     ContextFormatDepth :: DepthFormat -> ContextFormat () DepthFormat  
     ContextFormatStencil :: StencilFormat  -> ContextFormat () StencilFormat  
     ContextFormatDepthStencil :: DepthStencilFormat -> ContextFormat () DepthStencilFormat  
-    
+
+contextBits :: ContextFormat c ds -> ((Int,Int,Int,Bool),Int,Int)
+contextBits ContextFormatNone = ((0,0,0, False),0,0)
+contextBits (ContextFormatColor c) = (colorBits c, 0, 0)
+contextBits (ContextFormatColorDepth c d) = (colorBits c, depthBits d, 0)
+contextBits (ContextFormatColorStencil c s) = (colorBits c, 0, stencilBits s)
+contextBits (ContextFormatColorDepthStencil c ds) = (colorBits c, depthBits ds, stencilBits ds)
+contextBits (ContextFormatDepth d) = ((0,0,0, False), depthBits d, 0)
+contextBits (ContextFormatStencil s) = ((0,0,0, False), 0, stencilBits s)
+contextBits (ContextFormatDepthStencil ds) = ((0,0,0, False), depthBits ds, stencilBits ds)

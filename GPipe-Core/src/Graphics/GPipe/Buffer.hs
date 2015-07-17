@@ -21,6 +21,7 @@ module Graphics.GPipe.Buffer
 ) where
 
 import Graphics.GPipe.Context
+import Data.Vec
 
 import Prelude hiding ((.), id)
 import Control.Monad.Trans.State
@@ -93,16 +94,16 @@ type BWord32Norm = BNormalized BWord32
 type BWord16Norm = BNormalized BWord16
 type BWord8Norm = BNormalized BWord8
 
-newtype B2 a = B2 { unB2 :: a } -- Internal
-newtype B3 a = B3 { unB3 :: a } -- Internal
-newtype B4 a = B4 { unB4 :: a } -- Internal
+newtype B2 a = B2 { unB2 :: B a } -- Internal
+newtype B3 a = B3 { unB3 :: B a } -- Internal
+newtype B4 a = B4 { unB4 :: B a } -- Internal
 
-toB2B2 :: forall a. Storable a => B4 (B a) -> (B2 (B a), B2 (B a))
-toB3B1 :: forall a. Storable a => B4 (B a) -> (B3 (B a), B a)
-toB1B3 :: forall a. Storable a => B4 (B a) -> (B a, B3 (B a))
-toB2B1 :: forall a. Storable a => B3 (B a) -> (B2 (B a), B a)
-toB1B2 :: forall a. Storable a => B3 (B a) -> (B a, B2 (B a))
-toB1B1 :: forall a. Storable a => B2 (B a) -> (B a, B a)
+toB2B2 :: forall a. Storable a => B4 a -> (B2 a, B2 a)
+toB3B1 :: forall a. Storable a => B4 a -> (B3 a, B a)
+toB1B3 :: forall a. Storable a => B4 a -> (B a, B3 a)
+toB2B1 :: forall a. Storable a => B3 a -> (B2 a, B a)
+toB1B2 :: forall a. Storable a => B3 a -> (B a, B2 a)
+toB1B1 :: forall a. Storable a => B2 a -> (B a, B a)
 
 toB2B2 (B4 b) = (B2 b, B2 $ b { bOffset = bOffset b + 2 * sizeOf (undefined :: a) }) 
 toB3B1 (B4 b) = (B3 b, b { bOffset = bOffset b + 3 * sizeOf (undefined :: a) }) 
@@ -154,19 +155,19 @@ instance BufferFormat a => BufferFormat (BNormalized a) where
     type HostFormat (BNormalized a) = HostFormat a
     toBuffer = arr BNormalized . toBuffer
                                    
-instance Storable a => BufferFormat (B2 (B a)) where
-    type HostFormat (B2 (B a)) = (a, a)
-    toBuffer = proc (a, b) -> do
+instance Storable a => BufferFormat (B2 a) where
+    type HostFormat (B2 a) = V2 a
+    toBuffer = proc (V2 a b) -> do
             (a', _::B a) <- toBuffer . align (2 * sizeOf (undefined :: a)) -< (a, b)
             returnA -< B2 a'
-instance Storable a => BufferFormat (B3 (B a)) where
-    type HostFormat (B3 (B a)) = (a, a, a)
-    toBuffer = proc (a, b, c) -> do
+instance Storable a => BufferFormat (B3 a) where
+    type HostFormat (B3 a) = V3 a
+    toBuffer = proc (V3 a b c) -> do
             (a', _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c)
             returnA -< B3 a'
-instance Storable a => BufferFormat (B4 (B a)) where
-    type HostFormat (B4 (B a)) = (a, a, a, a)
-    toBuffer = proc (a, b, c, d) -> do
+instance Storable a => BufferFormat (B4 a) where
+    type HostFormat (B4 a) = V4 a
+    toBuffer = proc (V4 a b c d) -> do
             (a', _::B a, _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c, d)
             returnA -< B4 a'
     
@@ -247,7 +248,8 @@ align x = ToBuffer (Kleisli return) (Kleisli return) (Kleisli setElemAlignM) (Kl
 makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> Buffer os b
 makeBuffer name elementCount =
     let ToBuffer a b _ _ = toBuffer :: ToBuffer (HostFormat b) b
-        elementM = runStateT (runKleisli a (undefined :: HostFormat b)) 0
+        err = error "toBuffer or toVertex are creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders" :: HostFormat b
+        elementM = runStateT (runKleisli a err) 0
         elementSize = snd $ runReader elementM (name, undefined, undefined)
         elementF bIn = fst $ runReader elementM (name, elementSize, bIn)
         writer ptr x = void $ runReaderT (runStateT (runKleisli b x) ptr) ptr

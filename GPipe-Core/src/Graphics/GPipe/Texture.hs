@@ -1,349 +1,368 @@
-{-# LANGUAGE TypeFamilies, FlexibleContexts, FlexibleInstances, GADTs, MultiParamTypeClasses, ScopedTypeVariables, AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeFamilies, FlexibleContexts, FlexibleInstances, GADTs, MultiParamTypeClasses, ScopedTypeVariables, AllowAmbiguousTypes, EmptyDataDecls #-}
 module Graphics.GPipe.Texture where
 
 import Graphics.GPipe.Format
 import Graphics.GPipe.Expr
 import Graphics.GPipe.Context
 import Graphics.GPipe.Shader
+import Graphics.GPipe.Compiler
 import Graphics.GPipe.Buffer
+import Control.Monad.IO.Class (MonadIO)
+import Data.IntMap.Lazy (insert)
+import Data.Functor ((<$>))
+import Data.Vec
 
--- | The type of a color sample made by a texture t 
-type ColorSample x t = Color (TextureFormat t) (S x (ColorElement (TextureFormat t)))
+data Texture1D os a = Texture1D TexName (V1 Int)
+data Texture1DArray os a = Texture1DArray TexName (V2 Int) 
+data Texture2D os a = Texture2D TexName (V2 Int) | RenderBuffer2D TexName (V2 Int)
+data Texture2DArray os a = Texture2DArray TexName (V1 Int)
+data Texture3D os a = Texture3D TexName (Int, Int, Int)
+data TextureCube os a = TextureCube TexName Int
 
-data SampleLod x where
-    SampleBias :: FFloat -> SampleLod F   
-    SampleLod :: S x Float -> SampleLod x
-    SampleGrad :: S x Float -> SampleLod x
+newTexture1D :: (ColorSampleable c, Monad m) => c -> V1 Int -> ContextT os f m (Texture1D os c)
+newTexture1DArray :: (ColorSampleable c, Monad m) => c -> V2 Int -> ContextT os f m (Texture1DArray os c)
+newTexture2D :: (TextureFormat c, MonadIO m) => c -> V2 Int-> ContextT os f m (Texture2D os c)
+newTexture2DArray :: (ColorSampleable c, Monad m) => c -> V3 Int -> ContextT os f m (Texture2DArray os c)
+newTexture3D :: (ColorSampleable c, Monad m) => c -> V3 Int -> ContextT os f m (Texture3D os c)
+newTextureCube :: (ColorSampleable c, Monad m) => c -> Int -> ContextT os f m (TextureCube os c)
 
-data SampleDetails t x =
-    SampleDetails {
-            sampleLod :: Maybe (SampleLod x),
-            sampleProj :: Maybe (S x Float),
-            sampleOffset :: Maybe (TextureOffsetCoord t (S x Int))
-        }
+setTexture1DLevels :: Texture1D os c -> Int -> ContextT os f m ()
+setTexture1DArrayLevels :: Texture1DArray os c -> Int -> ContextT os f m ()
+setTexture2DLevels :: ColorSampleable c => Texture2D os c -> Int -> ContextT os f m ()
+setTexture2DArrayLevels :: Texture2DArray os c -> Int -> ContextT os f m ()
+setTexture3DLevels :: Texture3D os c -> Int -> ContextT os f m ()
+setTextureCubeLevels :: TextureCube os c -> Int -> ContextT os f m ()
 
-class ColorFormat (TextureFormat t) => Texture t where
-    type TextureOS t
-    -- | The color format of the texture, affects the type of the samples from the texture 
-    type TextureFormat t
-    -- | The type that is used for the dimension of the texture with elements e 
-    type TextureSize t e
-    -- | The type for sample coordinates with elements e
-    type TextureCoord t e
-    -- | The type for sample offset coordinates with elements e
-    type TextureOffsetCoord t e
-    -- | The type for indexing 2D images in the texture
-    type TextureImageIndex t
+getTexture1DLevels :: Texture1D os c -> ContextT os f m Int 
+getTexture1DArrayLevels :: Texture1DArray os c -> ContextT os f m Int 
+getTexture2DLevels :: Texture2D os c -> ContextT os f m Int 
+getTexture2DArrayLevels :: Texture2DArray os c -> ContextT os f m Int 
+getTexture3DLevels :: Texture3D os c -> ContextT os f m Int 
+getTextureCubeLevels :: TextureCube os c -> ContextT os f m Int 
 
-    -- | Samples the texture with automatic lod   
-    sample :: Sampler t -> TextureCoord t (S x Float) -> ColorSample x t
-    sample = sample' (SampleDetails Nothing Nothing Nothing) 
-        
-    -- | Samples the texture with specified details 
-    sample' :: SampleDetails t x -> Sampler t -> TextureCoord t (S x Float) -> ColorSample x t
-    
-    fetch :: Sampler t -> TextureCoord t (S x Int) -> ColorSample x t   
-    
-    fetchOffseted :: Sampler t -> TextureOffsetCoord t (S x Int) -> TextureCoord t (S x Int) -> ColorSample x t
+maxTexture1DLevels :: Texture1D os c -> Int 
+maxTexture1DArrayLevels :: Texture1DArray os c -> Int 
+maxTexture2DLevels :: Texture2D os c -> Int 
+maxTexture2DArrayLevels :: Texture2DArray os c -> Int 
+maxTexture3DLevels :: Texture3D os c -> Int 
+maxTextureCubeLevels :: TextureCube os c -> Int 
 
-    queryLod :: Sampler t -> TextureCoord t FFloat -> ColorSample F t
-    
-    -- | Queries the size of a texture 
-    querySize :: Sampler t -> S x Int -> TextureSize t (S x Int)
-    
-type TextureElement t = ColorElement (TextureFormat t)
+getTexture1DLevels = undefined 
+getTexture1DArrayLevels = undefined 
+getTexture2DLevels = undefined 
+getTexture2DArrayLevels = undefined 
+getTexture3DLevels = undefined 
+getTextureCubeLevels = undefined 
 
--- | A structure describing how a texture is sampled
-data SamplerMode = SamplerSamplerMode Filter EdgeMode deriving (Eq)
-data Filter = Point | Linear deriving (Eq, Enum)
-data EdgeMode = Wrap | Mirror | Clamp deriving (Eq, Enum)
+maxTexture1DLevels = undefined 
+maxTexture1DArrayLevels = undefined 
+maxTexture2DLevels (Texture2D _ (V2 w h)) = 1 + truncate (logBase 2.0 (fromIntegral (min w h) :: Double))
+maxTexture2DLevels (RenderBuffer2D _ _) = 1
+maxTexture2DArrayLevels = undefined 
+maxTexture3DLevels = undefined 
+maxTextureCubeLevels = undefined 
 
-data Sampler t = Sampler t -- Internal
 
-newSampler :: (Texture t, TextureOS t ~ os) => (s -> (t, SamplerMode)) -> Shader os f s (Sampler t)  
-newSampler = undefined
+newTexture1D = undefined  
+newTexture1DArray = undefined
+newTexture2D f s@(V2 w h) | getGlFormat f == glSTENCIL_INDEX = do
+                               glCreateRenderBuffer
+                          | otherwise = do
+                               t <- makeTex
+                               withTex t glTEXTURE_2D $ glTexImage2D glTEXTURE_2D (0::Int) (getGlInternalFormat f) w h (0::Int) (getGlFormat f) glBYTE (0::Int)
+                               return $ Texture2D t s   
 
-data Image f = Image -- Internal
-type ImageCoordinate = (Int, Int)
+newTexture2DArray = undefined
+newTexture3D  = undefined
+newTextureCube  = undefined
 
-getImage :: (Texture t, TextureOS t ~ os) => t -> TextureImageIndex t -> Render os f (Image (TextureFormat t)) 
-getImage t i = return Image 
+glSTENCIL_INDEX = -999 
+glCreateRenderBuffer = undefined
 
-getImages :: (Texture t, TextureOS t ~ os) => t -> Render os f [(TextureImageIndex t, Image (TextureFormat t))] 
-getImages t = return [(undefined, Image)] 
+texture1Dsize :: Texture1D os c -> Level -> V1 Int 
+texture1DArraySize :: Texture1DArray os c -> Level -> V2 Int 
+texture2Dsize :: Texture2D os c -> Level -> V2 Int 
+texture2DArraySize :: Texture2DArray os c -> Level -> V3 Int 
+texture3Dsize :: Texture1D os c -> Level -> V3 Int 
+textureCubeSize :: Texture1D os c -> Level -> Int 
 
-subImage :: (ImageCoordinate, ImageCoordinate) -> Image f -> Image f
-subImage = undefined
+texture1Dsize = undefined 
+texture1DArraySize = undefined 
+texture2DArraySize = undefined 
+texture3Dsize = undefined 
+textureCubeSize = undefined 
+
+texture2Dsize (Texture2D _ (V2 w h)) l = V2 (calcLevelSize w l) (calcLevelSize h l)
+texture2Dsize (RenderBuffer2D _ (V2 w h)) 0 = V2 (calcLevelSize w 0) (calcLevelSize h 0)
+texture2Dsize (RenderBuffer2D _ _) _ = V2 0 0
+
+calcLevelSize :: Int -> Int -> Int
+calcLevelSize size0 level = size0 `div` (2 ^ level)
+
+data TexName = TexName { getTexName :: Int } 
+
+makeTex :: MonadIO m => ContextT os f m TexName 
+makeTex = do
+    name <- liftContextIO genTexGl
+    let tex = TexName name 
+    addContextFinalizer tex $ glDeleteTex name
+    return tex 
+
+withTex (TexName n) t f = liftContextIO $ do glActiveTexture (glMAXSamplers-1) -- Use last for all sync actions, keeping 0.. for async drawcalls
+                                             glBindTexture t n
+                                             f
+glTEXTURE_2D = 1
+glTexImage2D a b c d e f g h i = putStrLn $ "glTexImage2D " ++ show [a,b,c,d,e,f,g,h,i]  
+glBYTE = 0
+glActiveTexture _ = putStrLn "glActiveTexture"
+glBindTexture t n = putStrLn "glBindTexture "
+genTexGl = return 1
+glDeleteTex _ = putStrLn "glDelTex"
+
+setTexture1DLevels  = undefined
+setTexture1DArrayLevels  = undefined
+setTexture2DLevels = undefined
+setTexture2DArrayLevels  = undefined
+setTexture3DLevels  = undefined
+setTextureCubeLevels  = undefined
+
+
+type Level = Int
+type Slice = Int
+data CubeSide = CubePosX | CubeNegX | CubePosY | CubeNegY | CubePosZ | CubeNegZ
 
 data Proxy t = Proxy
 
-newTexture :: (Monad m, Texture t, TextureOS t ~ os) => TextureFormat t -> TextureSize t Int -> ContextT os f m (t)
-newTexture = undefined 
+writeTexture1D :: (ColorElement c ~ BaseShaderFormat b) => Texture1D os c -> Level -> (V1 Int, V1 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+writeTexture1DArray :: (ColorElement c ~ BaseShaderFormat b) => Texture1DArray os c -> Level -> Slice -> (V1 Int, V1 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+writeTexture2D :: (ColorElement c ~ BaseShaderFormat b) => Texture2D os c -> Level -> (V2 Int, V2 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+writeTexture2DArray :: (ColorElement c ~ BaseShaderFormat b) => Texture2DArray os c -> Level -> Slice -> (V2 Int, V2 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+writeTexture3D :: (ColorElement c ~ BaseShaderFormat b) => Texture3D os c -> Level -> (V3 Int, V3 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+writeTextureCube :: (ColorElement c ~ BaseShaderFormat b) => TextureCube os c -> Level -> CubeSide -> (V2 Int, V2 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
 
-writeTexture :: (Monad m, Texture t, BaseShaderFormat b ~ TextureElement t, TextureOS t ~ os) => t -> TextureImageIndex t -> (ImageCoordinate, ImageCoordinate) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
-writeTexture = undefined
+writeTexture1D' :: (ColorElement c ~ BaseShaderFormat b) => Texture1D os c -> Level -> (V1 Int, V1 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
+writeTexture1DArray' :: (ColorElement c ~ BaseShaderFormat b) => Texture1DArray os c -> Level -> Slice -> (V1 Int, V1 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
+writeTexture2D' :: (ColorElement c ~ BaseShaderFormat b) => Texture2D os c -> Level -> (V2 Int, V2 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
+writeTexture2DArray' :: (ColorElement c ~ BaseShaderFormat b) => Texture2DArray os c -> Level -> Slice -> (V2 Int, V2 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
+writeTexture3D' :: (ColorElement c ~ BaseShaderFormat b) => Texture3D os c -> Level -> (V3 Int, V3 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
+writeTextureCube' :: (ColorElement c ~ BaseShaderFormat b) => TextureCube os c -> Level -> CubeSide -> (V2 Int, V2 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
 
-writeTexture' :: (Monad m, Texture t, BaseShaderFormat b ~ TextureElement t, TextureOS t ~ os) => t -> TextureImageIndex t -> (ImageCoordinate, ImageCoordinate) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
-writeTexture' = undefined
 
-imageIndices :: (Monad m, Texture t, TextureOS t ~ os) => t -> ContextT os f m [TextureImageIndex t] 
-imageIndices t = return [undefined] 
+writeTexture1D = undefined
+writeTexture1DArray = undefined
+writeTexture2D = undefined
+writeTexture2DArray = undefined
+writeTexture3D = undefined
+writeTextureCube = undefined
 
----------
+writeTexture1D' = undefined
+writeTexture1DArray' = undefined
+writeTexture2D' = undefined
+writeTexture2DArray' = undefined
+writeTexture3D' = undefined
+writeTextureCube' = undefined
 
-type TextureName = Int -- Internal
+----------------------------------------------------------------------
+-- Samplers
 
-data Texture1D os a = Texture1D TextureName Int
-data Texture1DArray os a = Texture1DArray TextureName (Int, Int) 
-data Texture2D os a = Texture2D TextureName (Int, Int)
-data Texture2DRect os a = Texture2DRect TextureName (Int, Int)
-data Texture2DArray os a = Texture2DArray TextureName (Int, Int, Int)
-data Texture3D os a = Texture3D TextureName (Int, Int, Int)
-data TextureCube os a = TextureCube TextureName Int
+data Filter = Point | Linear  deriving (Eq, Enum)
+data EdgeMode = Wrap | Mirror | Clamp deriving (Eq, Enum)
+
+type Filter2 = (Filter, Filter)
+type Filter3 = (Filter, Filter, Filter)
+type EdgeMode2 = (EdgeMode, EdgeMode)
+type EdgeMode3 = (EdgeMode, EdgeMode, EdgeMode)
+
+newSampler1D :: ColorSampleable c => (s -> (Texture1D os c, Filter, Filter, EdgeMode)) -> Shader os f s (Sampler1D c)
+newSampler1DShadow :: DepthRenderable d => (s -> (Texture1D os d, Filter, Filter, EdgeMode)) -> Shader os f s (Sampler1D Shadow)
+newSampler1DArray :: ColorSampleable c => (s -> (Texture1DArray os c, Filter, Filter, EdgeMode)) -> Shader os f s (Sampler1DArray c)
+newSampler1DArrayShadow :: DepthRenderable d => (s -> (Texture1DArray os d, Filter, Filter, EdgeMode)) -> Shader os f s (Sampler1DArray Shadow)
+newSampler2D :: ColorSampleable c => (s -> (Texture2D os c, Filter2, Filter, EdgeMode2)) -> Shader os f s (Sampler2D c)
+newSampler2DShadow :: DepthRenderable d => (s -> (Texture2D os d, Filter2, Filter, EdgeMode2)) -> Shader os f s (Sampler2D Shadow)
+newSampler2DArray :: ColorSampleable c => (s -> (Texture2DArray os c, Filter2, Filter, EdgeMode2)) -> Shader os f s (Sampler2DArray c)
+newSampler2DArrayShadow :: DepthRenderable d => (s -> (Texture2DArray os d, Filter2, Filter, EdgeMode2)) -> Shader os f s (Sampler2DArray Shadow)
+newSampler3D :: ColorSampleable c => (s -> (Texture3D os c, Filter3, Filter, EdgeMode3)) -> Shader os f s (Sampler3D c)
+newSamplerCube :: ColorSampleable c => (s -> (TextureCube os c, Filter2, Filter, EdgeMode2)) -> Shader os f s (SamplerCube c)
+newSamplerCubeShadow :: DepthRenderable d => (s -> (TextureCube os d, Filter2, Filter, EdgeMode2)) -> Shader os f s (SamplerCube Shadow)
+
+newSampler1D = undefined
+newSampler1DShadow = undefined
+newSampler1DArray = undefined
+newSampler1DArrayShadow = undefined
+newSampler2D sf = Shader $ do 
+                   sampId <- getName
+                   doForSampler sampId $ \s bind -> let (t, a,b,c) = sf s 
+                                                    in  glBindSampler t a b c 
+                   return $ Sampler2D sampId
+
+newSampler2DShadow = undefined
+newSampler2DArray = undefined
+newSampler2DArrayShadow = undefined
+newSampler3D = undefined
+newSamplerCube = undefined
+newSamplerCubeShadow = undefined
+
+doForSampler :: Int -> (s -> Binding -> IO()) -> ShaderM s ()
+doForSampler n io = modifyRenderIO (\s -> s { samplerNameToRenderIO = insert n io (samplerNameToRenderIO s) } )
+
+glBindSampler t a b c = putStrLn "glBindSampler" 
+
+data Shadow
+data Sampler1D c
+data Sampler1DArray c
+data Sampler2D c = Sampler2D Int
+data Sampler2DArray c
+data Sampler3D c
+data SamplerCube c
+
+data SampleLod v x where
+    SampleAuto :: SampleLod v F
+    SampleBias :: FFloat -> SampleLod v F   
+    SampleLod :: S x Float -> SampleLod v x
+    SampleGrad :: v (S x Float) -> SampleLod v x
+
+data SampleLod' v x where
+    SampleAuto' :: SampleLod' v F
+    SampleBias' :: FFloat -> SampleLod' v F   
+    SampleGrad' :: v (S x Float) -> SampleLod' v x
+
+fromLod' SampleAuto' = SampleAuto
+fromLod' (SampleBias' x) = SampleBias x
+fromLod' (SampleGrad' x) = SampleGrad x
+
+type SampleProj x = Maybe (S x Float)
+type SampleOffset v x = Maybe (v (S x Int)) 
+
+-- | The type of a color sample made by a texture t 
+type ColorSample x f = Color f (S x (ColorElement f))
+
+sample1D            :: forall c x. ColorSampleable c =>  Sampler1D c          -> SampleLod V1 x -> SampleProj x -> SampleOffset V1 x -> V1 (S x Float) -> ColorSample x c
+sample2D            :: forall c x. ColorSampleable c => Sampler2D c          -> SampleLod V2 x -> SampleProj x -> SampleOffset V2 x -> V2 (S x Float) -> ColorSample x c
+sample3D            :: forall c x. ColorSampleable c =>  Sampler3D c          -> SampleLod V3 x -> SampleProj x -> SampleOffset V3 x -> V3 (S x Float) -> ColorSample x c
+sample1DArray       :: forall c x. ColorSampleable c =>  Sampler1DArray c     -> SampleLod V1 x -> SampleOffset V1 x -> V2 (S x Float) -> ColorSample x c
+sample2DArray       :: forall c x. ColorSampleable c =>  Sampler2DArray c     -> SampleLod V2 x -> SampleOffset V2 x -> V3 (S x Float) -> ColorSample x c
+sampleCube          :: forall c x. ColorSampleable c =>  SamplerCube c        -> SampleLod V2 x -> V2 (S x Float) -> ColorSample x c
+
+sample1DShadow      :: forall x. Sampler1D Shadow     -> SampleLod V1 x -> SampleProj x -> SampleOffset V1 x -> S x Float -> V1 (S x Float) -> S x Float
+sample2DShadow      :: forall x. Sampler2D Shadow     -> SampleLod V2 x -> SampleProj x -> SampleOffset V2 x -> S x Float -> V2 (S x Float) -> S x Float
+sample1DArrayShadow :: forall x. Sampler1DArray Shadow-> SampleLod V1 x -> SampleOffset V1 x -> S x Float -> V2 (S x Float) -> S x Float
+sample2DArrayShadow :: forall x. Sampler2DArray Shadow-> SampleLod' V2 x -> SampleOffset V2 x -> S x Float -> V3 (S x Float)-> S x Float
+sampleCubeShadow    :: forall x. SamplerCube Shadow   -> SampleLod' V2 x -> S x Float -> V2 (S x Float) -> S x Float
+
+texelFetch1D        :: forall c x. ColorSampleable c =>  Sampler1D c          -> SampleOffset V1 x -> S x Level -> V1 (S x Int) -> ColorSample x c
+texelFetch2D        :: forall c x. ColorSampleable c =>  Sampler2D c          -> SampleOffset V2 x -> S x Level -> V2 (S x Int) -> ColorSample x c
+texelFetch3D        :: forall c x. ColorSampleable c =>  Sampler3D c          -> SampleOffset V3 x -> S x Level -> V3 (S x Int) -> ColorSample x c
+texelFetch1DArray   :: forall c x. ColorSampleable c =>  Sampler1DArray c     -> SampleOffset V1 x -> S x Level -> V2 (S x Int) -> ColorSample x c
+texelFetch2DArray   :: forall c x. ColorSampleable c =>  Sampler2DArray c     -> SampleOffset V2 x -> S x Level -> V3 (S x Int) -> ColorSample x c
+
+sampler1Dsize      :: forall c x. Sampler1D c -> S x Level -> V1 (S x Int)
+sampler2Dsize      :: forall c x. Sampler2D c -> S x Level -> V2 (S x Int)
+sampler3Dsize      :: forall c x. Sampler3D c -> S x Level -> V3 (S x Int)
+sampler1DArraysize :: forall c x. Sampler1DArray c -> S x Level -> V2 (S x Int)
+sampler2DArraysize :: forall c x. Sampler2DArray c -> S x Level -> V3 (S x Int)
+samplerCubesize    :: forall c x. SamplerCube c -> S x Level -> S x Int
+
+sampler1Dsize = undefined
+sampler2Dsize = undefined
+sampler3Dsize = undefined
+sampler1DArraysize = undefined
+sampler2DArraysize = undefined
+samplerCubesize = undefined    
+
+sample1D = undefined
+sample2D (Sampler2D sampId) lod proj off coord = sample (undefined :: c) "2D" sampId lod proj off coord v2toF iv2toF pv2toF 
+sample3D = undefined
+sampleCube = undefined
+sample1DShadow = undefined
+sample2DShadow = undefined
+sampleCubeShadow = undefined
+sample1DArray = undefined
+sample2DArray = undefined
+sample1DArrayShadow = undefined
+sample2DArrayShadow = undefined
+
+texelFetch1D        = undefined
+texelFetch2D        = undefined
+texelFetch3D        = undefined
+texelFetch1DArray   = undefined
+texelFetch2DArray   = undefined
+
+sample f sName sampId lod proj off coord vToS ivToS pvToS =
+    toColor f $ vec4S (STypeVec 4) $ do s <- useSampler sName sampId
+                                        sampleFunc s proj lod off coord vToS ivToS pvToS 
+
+v2toF (V2 x y) = do x' <- unS x
+                    y' <- unS y
+                    return $ "vec2(" ++ x' ++ ',':y' ++ ")"   
+iv2toF (V2 x y) = do x' <- unS x
+                     y' <- unS y
+                     return $ "ivec2(" ++ x' ++ ',':y' ++ ")"   
+pv2toF (V2 x y) z = do x' <- unS x
+                       y' <- unS y
+                       z' <- unS z
+                       return $ "vec3(" ++ x' ++ ',':y' ++ ',':z' ++ ")"
+
+sampleFunc s proj lod off coord vToS ivToS pvToS = do
+    pc <- projCoordParam proj coord vToS pvToS 
+    l <- lodParam lod vToS
+    o <- offParam off ivToS
+    b <- biasParam lod
+    return $ "texture" ++ projName proj ++ lodName lod ++ offName off ++ '(' : s ++ ',' : pc ++ l ++ o ++ b ++ ")"  
+
+projName Nothing = ""
+projName _ = "Proj"
+
+projCoordParam Nothing coord vToS pvToS = vToS coord
+projCoordParam (Just p) coord vToS pvToS = pvToS coord p
+
+lodParam (SampleLod x) _ = fmap (',':) (unS x)
+lodParam (SampleGrad x) vToS = fmap (',':) (vToS x)
+lodParam _ _ = return ""
+
+biasParam :: SampleLod v x -> ExprM String 
+biasParam (SampleBias (S x)) = do x' <- x
+                                  return $ ',':x'
+biasParam _ = return ""
+
+offParam Nothing _ = return ""
+offParam (Just x) ivToS = fmap (',':) (ivToS x)
     
-{--
+lodName (SampleLod _) = "Lod"
+lodName (SampleGrad _) = "Grad"
+lodName _ = ""
 
-import Control.Monad.IO.Class
-import Data.Word
-import Data.Int
+offName Nothing = ""
+offName _ = "Offset"
 
+----------------------------------------------------------------------------------
 
+data Image f = Image TexName (V2 Int) (Int -> IO ()) -- Internal
 
-type TextureName = Int
+getImageName (Image tn _ _) = getTexName tn
 
+getImageBinding (Image _ _ io) = io
 
+imageSize :: Image f -> V2 Int
+imageSize (Image _ s _) = s
 
-class Texture t where
-    -- | The object space (gl context) of the texture  
-    type TextureObjectSpace t
-    -- | The color format of the texture, affects the type of the samples from the texture. 
-    type TextureFormat t
-    -- | The type that is used for the dimension of the texture. 
-    type TextureSize t
-    -- | The type that is used to specify a region of the texture. 
-    type TextureRegion t
-    -- | The type for sample coordinates in a context c
-    type TextureCoord c t
-    -- | Calculates the byte size of all regions for a texture, which eases the useage of
-    -- setting up texture data.
-    textureByteSize :: ColorFormat (TextureFormat t) => t -> [(TextureRegion t, Int)]
-    -- | Samples the texture using mipmaps in a 'Fragment'. 
-    sample :: Sampler t fr -> TextureCoord F t -> ColorSample F t
-    -- | Samples the texture using mipmaps in a 'Fragment', with a bias to add to the mipmap level. 
-    sampleBias :: Sampler t fr -> t -> FFloat -> TextureCoord F t -> ColorSample F t
-    -- | Samples the texture using a specific mipmap in a 'Vertex'. 
-    sampleLod :: Sampler t fr -> t -> VFloat -> TextureCoord V t -> ColorSample V t
+getTexture1DImage :: Texture1D os f -> Level -> Render os f (Image f) 
+getTexture2DImage :: Texture2D os f -> Level -> Render os f (Image f) 
+getTexture3DImage :: Texture3D os f -> Level -> Int -> Render os f (Image f) 
+getTexture1DArray :: Texture1DArray os f -> Level -> Slice -> Render os f (Image f) 
+getTexture2DArray :: Texture2DArray os f -> Level -> Slice -> Render os f (Image f) 
+getTextureCube :: TextureCube os f -> Level -> CubeSide -> Render os f (Image f) 
 
-    mkTexture :: ColorFormat (TextureFormat t) => TextureFormat t -> TextureSize t -> IO t
-    textureName :: t -> TextureName
-    samplerTypeName :: t -> String
-
-instance Texture (Texture1D os a) where
-        type TextureObjectSpace (Texture1D os a) = os
-        type TextureFormat (Texture1D os a) = a
-        type TextureSize (Texture1D os a) = Int
-        type TextureRegion (Texture1D os a) = (Int, Int, Int)
-        type TextureCoord c (Texture1D os a) = S c Float
-        samplerTypeName _ = "1D"
-instance Texture (Texture1DArray os a) where
-        type TextureObjectSpace (Texture1DArray os a) = os
-        type TextureFormat (Texture1DArray os a) = a
-        type TextureSize (Texture1DArray os a) = (Int, Int)
-        type TextureRegion (Texture1DArray os a) = ((Int, Int), (Int, Int), Int)
-        type TextureCoord c (Texture1DArray os a) = (S c Float, S c Float)
-        samplerTypeName _ = "1DArray"
-instance ColorFormat a => Texture (Texture2D os a) where
-        type TextureObjectSpace (Texture2D os a) = os
-        type TextureFormat (Texture2D os a) = a
-        type TextureSize (Texture2D os a) = (Int, Int)
-        type TextureRegion (Texture2D os a) = ((Int, Int), (Int, Int), Int)
-        type TextureCoord c (Texture2D os a) = (S c Float, S c Float)
-        samplerTypeName _ = "2D"
-        sample s (S x, S y) = let prefix = typePrefix (undefined :: a)
-                                  m = do sName <- useSampler (samplerName s)
-                                         x' <- x
-                                         y' <- y 
-                                         tellAssignment 
-                                                (STypeDyn $ prefix:"vec4") 
-                                                ("texture(" ++ sName  ++ ", vec2(" ++ x' ++ ',' : y' ++ "))")
-                                  f p = S $ fmap (++ p) m
-                              in toColor (undefined :: a) (f ".r", f ".g", f".b", f ".a")
-instance Texture (Texture2DRect os a) where
-        type TextureObjectSpace (Texture2DRect os a) = os
-        type TextureFormat (Texture2DRect os a) = a
-        type TextureSize (Texture2DRect os a) = (Int, Int)
-        type TextureRegion (Texture2DRect os a) = ((Int, Int), (Int, Int))
-        type TextureCoord c (Texture2DRect os a) = (S c Float, S c Float)
-        samplerTypeName _ = "2DRect"
-instance Texture (Texture2DArray os a) where
-        type TextureObjectSpace (Texture2DArray os a) = os
-        type TextureFormat (Texture2DArray os a) = a
-        type TextureSize (Texture2DArray os a) = (Int, Int, Int)
-        type TextureRegion (Texture2DArray os a) = ((Int, Int, Int), (Int, Int, Int), Int)
-        type TextureCoord c (Texture2DArray os a) = (S c Float, S c Float, S c Float)
-        samplerTypeName _ = "2DArray"
-instance Texture (Texture3D os a) where
-        type TextureObjectSpace (Texture3D os a) = os
-        type TextureFormat (Texture3D os a) = a
-        type TextureSize (Texture3D os a) = (Int, Int, Int)
-        type TextureRegion (Texture3D os a) = ((Int, Int, Int), (Int, Int, Int), Int)
-        type TextureCoord c (Texture3D os a) = (S c Float, S c Float, S c Float)
-        samplerTypeName _ = "3D"
-instance Texture (TextureCube os a) where
-        type TextureObjectSpace (TextureCube os a) = os
-        type TextureFormat (TextureCube os a) = a
-        type TextureSize (TextureCube os a) = Int
-        type TextureRegion (TextureCube os a) = ((Int, Int), (Int, Int), TextureCubeSide, Int)
-        type TextureCoord c (TextureCube os a) = (S c Float, S c Float, S c Float)
-        samplerTypeName _ = "Cube"
-
-data TextureCubeSide = TextureCubePosX | TextureCubeNegX | TextureCubePosY | TextureCubeNegY | TextureCubePosZ | TextureCubeNegZ
-
-data RenderTarget os f where
-    RenderBuffer :: RenderBuffer os f -> RenderTarget os f 
-    RenderTexture :: (Texture t, TextureObjectSpace t ~ os) => t -> TextureRegion t -> RenderTarget os (TextureFormat f) 
-
-type RenderTargetRegion = ((Int, Int), (Int, Int))
-
-data RenderBuffer os f = RB
-
-data DepthStencil os cd where
-    Depth :: DepthRenderable d => RenderTarget os d -> DepthStencil os DepthFormat   
-    Stencil :: StencilRenderable s => RenderTarget os s -> DepthStencil os StencilFormat
-    DepthStencil :: (DepthRenderable d , StencilRenderable s) => RenderTarget os d -> RenderTarget os s -> DepthStencil os DepthStencilFormat
-    NoDepthStencil :: DepthStencil os ()
-   
-newTexture :: (MonadIO m, ColorFormat (TextureFormat t), TextureObjectSpace t ~ os) => TextureFormat t -> TextureSize t -> ContextT os f m t
-newTexture = undefined
--- glGenTEx, glTexImageXD(NULL)
-
-writeTexture :: (MonadIO m, ColorFormat (TextureFormat t), PixelElementFormat (ColorElement (TextureFormat t)) a, TextureObjectSpace t ~ os) => t -> TextureRegion t -> [Color (TextureFormat t) a] -> ContextT os f m ()
-writeTexture = undefined
--- glSubTexImageXD
-
-writeTextureFromBuffer :: (MonadIO m, ColorFormat (TextureFormat t), PixelElementFormat (ColorElement (TextureFormat t)) a, TextureObjectSpace t ~ os) => t -> TextureRegion t -> Int -> Buffer os (BufferPixel (TextureFormat t) a) -> ContextT os f m ()
-writeTextureFromBuffer = undefined
--- glBindBuffer PIXEL_UNPACK, glSubTexImageXD
-
-newRenderBuffer :: RenderBufferFormat f => f -> ContextT os f2 m (RenderBuffer os f)   
-newRenderBuffer = undefined 
-
-
-readRenderTarget :: (MonadIO m, ColorFormat f, PixelElementFormat (ColorElement f) a) => RenderTarget os f -> RenderTargetRegion -> ([Color f a] -> m x) -> ContextT os f2 m x
-readRenderTarget = undefined
--- glReadPixels
-
-writeBufferFromRenderTarget ::  (MonadIO m, ColorFormat f, PixelElementFormat (ColorElement f) a) => RenderTarget os f -> RenderTargetRegion -> Buffer os (BufferPixel f a) -> Int -> ContextT os f2 m ()
-writeBufferFromRenderTarget = undefined
--- glBindBuffer PIXEL_PACK, glReadPixels
-
-
-writeTextureFromRenderTarget :: (MonadIO m, Texture t, ColorFormat (TextureFormat t), TextureObjectSpace t ~ os) =>
-                                        RenderTarget os (TextureFormat t) -> (Int, Int) -> t -> TextureRegion t -> ContextT os f m ()
-                                        -- Too restrictive format? Enable conversion?
-writeTextureFromRenderTarget = undefined
--- glCopySubTexImageXD
-writeTextureFromDepthRenderTarget :: (MonadIO m, Texture t, TextureFormat t ~ DepthFormat, TextureObjectSpace t ~ os, DepthRenderable ds) =>
-                                        RenderTarget os ds -> (Int, Int) -> t -> TextureRegion t -> ContextT os f m ()
-writeTextureFromDepthRenderTarget = undefined
--- glCopySubTexImageXD
-
-
-readStencilRenderTarget :: (MonadIO m, StencilRenderable f, PixelElementFormat Word32 a) => RenderTarget os f -> RenderTargetRegion -> ([a] -> m x) -> ContextT os f2 m x
-readStencilRenderTarget = undefined
--- glReadPixels
-writeBufferFromStencilRenderTarget ::  (MonadIO m, StencilRenderable f, PixelElementFormat Word32 a) => RenderTarget os f -> RenderTargetRegion -> Buffer os a -> Int -> ContextT os f2 m ()
-writeBufferFromStencilRenderTarget = undefined
--- glBindBuffer PIXEL_PACK, glReadPixels
-
-writeBufferFromContextColor  ::  (MonadIO m, ColorFormat c, PixelElementFormat (ColorElement c) a) => RenderTargetRegion -> Buffer os (BufferPixel c a) -> Int -> ContextT os (ContextFormat c ds) m ()
-writeBufferFromContextColor = undefined
-writeBufferFromContextDepth  ::  (MonadIO m, DepthRenderable ds, PixelElementFormat Float a) => RenderTargetRegion -> Buffer os a -> Int -> ContextT os (ContextFormat c ds) m ()
-writeBufferFromContextDepth = undefined
-writeBufferFromContextStencil  ::  (MonadIO m, StencilRenderable ds, PixelElementFormat Word32 a) => RenderTargetRegion -> Buffer os a -> Int -> ContextT os (ContextFormat c ds) m ()
-writeBufferFromContextStencil = undefined
-
-readContextColor :: (MonadIO m, ColorFormat c, PixelElementFormat (ColorElement c) a) => RenderTargetRegion -> ([Color c a] -> m x) -> ContextT os (ContextFormat c ds) m x
-readContextColor = undefined
-readContextDepth :: (MonadIO m, DepthRenderable ds, PixelElementFormat Float a) => RenderTargetRegion -> ([a] -> m x) -> ContextT os (ContextFormat c ds) m x
-readContextDepth = undefined
-readContextStencil :: (MonadIO m, StencilRenderable ds, PixelElementFormat Word32 a) => RenderTargetRegion -> ([a] -> m x) -> ContextT os (ContextFormat c ds) m x
-readContextStencil = undefined
-
-writeTextureFromContextColor :: (MonadIO m, Texture t, ColorFormat (TextureFormat t), TextureObjectSpace t ~ os) =>
-                                        (Int, Int) -> t -> TextureRegion t -> ContextT os (ContextFormat (TextureFormat t) ds) m ()
-writeTextureFromContextColor = undefined
-
-writeTextureFromContextDepth :: (MonadIO m, Texture t, TextureFormat t ~ DepthFormat, TextureObjectSpace t ~ os, DepthRenderable ds) =>
-                                        (Int, Int) -> t -> TextureRegion t -> ContextT os (ContextFormat c ds) m ()
-writeTextureFromContextDepth = undefined
-
-
-class PixelElementFormat f a 
-instance PixelElementFormat Float Int32
-instance PixelElementFormat Float Int16
-instance PixelElementFormat Float Int8
-instance PixelElementFormat Float Word32
-instance PixelElementFormat Float Word16
-instance PixelElementFormat Float Word8
-instance PixelElementFormat Float Float
-instance PixelElementFormat Int32 Int32
-instance PixelElementFormat Int32 Int16
-instance PixelElementFormat Int32 Int8
-instance PixelElementFormat Word32 Word32
-instance PixelElementFormat Word32 Word16
-instance PixelElementFormat Word32 Word8
-
-
-class BufferColorFormat a where
-        type BufferColor a
-instance BufferColorFormat (R a) where
-        type BufferColor (R a) = B a
-instance BufferColorFormat (RG a) where
-        type BufferColor (RG a) = B2 (B a)
-instance BufferColorFormat (RGB a) where
-        type BufferColor (RGB a) = B3 (B a)
-instance BufferColorFormat (RGBA a) where
-        type BufferColor (RGBA a) = B4 (B a)
-
-type BufferPixel f a = BufferColor (Color f a)
-
-{-# INLINE useTexture #-}
-useTexture :: Texture t => Shader os f (t, Filter, EdgeMode) (Sampler t fr)
-useTexture = dynInStatOut stateM dynF
-    where
-        stateM = do n <- getName
-                    return (n, Sampler n)
-        dynF n (_t, _f, _e) = liftIO do 
-                                    -- load texture _t, filter _f, edgemode _e into name n
-                                    return ()
-
-{--                 
-        let fa (a, blockId, sampId) = (fmap ((,) (Sampler sampId)) a, blockId, sampId+1)
-            mfa = map fa
-            fd (a, blockId, sampId, x) = undefined --(fmap ((,) (Sampler sampId)) a, blockId, sampId+1, undefined {- TODO -}, x)
-        in \ (Stream sa sd) (_t, _f, _e)  ->         
-            let sIO sampId cs = do binding <- getNext
-                                   return ()
-                                    -- bind texture t to texunit binding and give uniform with name sampId value binding
-                                    -- and set f and e to it 
-                g (a, blockId, sampId, decl, PrimitiveStreamData x uBinds sBinds) = (a, blockId, sampId, PrimitiveStreamData x uBinds ((decl, sIO sampId):sBinds))
-                -- TODO: More StreamData types, eg FragmentStreams
-            in Stream (mfa sa) undefined -- (map (g . f) sd)
---}
-
-newtype Sampler t fr = Sampler { samplerName :: Int }
-
-
---}
+getTexture1DImage = undefined 
+getTexture2DImage t@(Texture2D tn _) l = return $ Image tn (texture2Dsize t l) $ glAttachTexture2D (getTexName tn) l 
+getTexture3DImage = undefined 
+getTexture1DArray = undefined 
+getTexture2DArray = undefined 
+getTextureCube = undefined 
 
 
 
 
-
-
-
-
+glAttachTexture2D = undefined
 
 
 

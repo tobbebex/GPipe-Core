@@ -78,16 +78,17 @@ compile dcs s = do
                               putStrLn "FRAGMENTSHADER:"
                               putStr fsource
                               putStrLn "-------------"
-                              
+
                               mapM_ (\(name, ix) -> putStrLn $ "INPUT BindNameToIndex in" ++ show name ++ " " ++ show ix) $ zip inps [0..]
-                              mapM_ (\(name, ix) -> putStrLn $ "UNI BindNameToIndex uBlock" ++ show name ++ " " ++ show ix) $ zip unis [0..]
-                              mapM_ (\(name, ix) -> putStrLn $ "SAMP BindNameToIndex s" ++ show name ++ " " ++ show ix) $ zip samps [0..]
-                              
+
+                              pName <- glGenProg                             
                               putStrLn "---- LINK ---"
-                              pName <- glGenProg
                               
-                              mapM_ (\(bind, ix) -> putStrLn $ "glUniformBlockBinding p ix bind " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) $ zip ubinds [0..]
-                              mapM_ (\(bind, ix) -> putStrLn $ "samplerBinds " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) $ zip sbinds [0..]
+                              uixs <- mapM (\name -> (putStrLn $ "UNI QueryNameToIndex uBlock" ++ show name) >> return 111 ) unis
+                              mapM_ (\(bind, ix) -> putStrLn $ "glUniformBlockBinding p ix bind " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) $ zip ubinds uixs
+
+                              sixs <- mapM (\name -> (putStrLn $ "SAMP QueryNameToIndex s" ++ show name) >> return 211 ) samps                             
+                              mapM_ (\(bind, ix) -> putStrLn $ "glUniformI set samplerBinds " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) $ zip sbinds sixs
                               putStrLn "-------------------------------------------------------------------------------------------"
                               putStrLn "-------------------------------------------------------------------------------------------"
                               

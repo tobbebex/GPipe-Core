@@ -28,7 +28,8 @@ library
                    Graphics.GPipe.PrimitiveArray,
                    Graphics.GPipe.Expr,
                    Graphics.GPipe.Shader,
-                   Graphics.GPipe.PrimitiveStream
+                   Graphics.GPipe.PrimitiveStream,
+                   Data.Vec
   other-modules:    Graphics.GPipe.Compiler
 
 executable GPipe-Core-Test
@@ -57,5 +58,6 @@ executable GPipe-Core-Test
                    Graphics.GPipe.Expr,
                    Graphics.GPipe.Shader,
                    Graphics.GPipe.Compiler,
-                   Graphics.GPipe.PrimitiveStream
+                   Graphics.GPipe.PrimitiveStream,
+                   Data.Vec
 

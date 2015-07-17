@@ -8,12 +8,13 @@ import Graphics.GPipe.Shader
 import Graphics.GPipe.Compiler
 import Graphics.GPipe.PrimitiveStream
 import Graphics.GPipe.PrimitiveArray
+import Data.Vec
 import Control.Monad.Trans.State.Lazy
 import Data.Monoid (Monoid)
 import Data.Boolean
 import Data.IntMap.Lazy (insert)
 
-type VPos = (VFloat,VFloat,VFloat,VFloat)
+type VPos = V4 VFloat
 
 data Side = Front | Back | FrontAndBack
 type ExprPos = ExprM ()
@@ -42,7 +43,8 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
     where        
         ToFragment (Kleisli m) = toFragment :: ToFragment a (FragmentFormat a)
         f n ((p, x),s) = (evalState (m x) 0, FragmentStreamData n (makePos p) s true)
-        makePos (S x,S y,S z,S w) = do x' <- x
+        makePos (V4 (S x) (S y) (S z) (S w)) = do
+                                       x' <- x
                                        y' <- y
                                        z' <- z
                                        w' <- w

@@ -164,12 +164,15 @@ useUniform decls blockI offset =
                 tellGlobal "} u"
                 tellGlobalLn blockStr
 
-useSampler :: Int -> ExprM String
-useSampler name = 
-             do T.lift $ modify $ \ s -> s { shaderUsedSamplers = Map.insert name (gDeclSampler name) $ shaderUsedUniformBlocks s } 
+useSampler :: String -> Int -> ExprM String
+useSampler str name = 
+             do T.lift $ modify $ \ s -> s { shaderUsedSamplers = Map.insert name gDeclSampler $ shaderUsedSamplers s } 
                 return $ 's':show name
     where
-        gDeclSampler name = error "gDeclSampler not implemented"                
+        gDeclSampler = do tellGlobal "sampler"
+                          tellGlobal str
+                          tellGlobal " s"
+                          tellGlobalLn $ show name 
 
 getNext :: Monad m => StateT Int m Int
 getNext = do

@@ -102,3 +102,5 @@ instance (Uniform a, Uniform b, Uniform c, Uniform d) => Uniform (a,b,c,d) where
                                      c' <- toUniform -< c
                                      d' <- toUniform -< d
                                      returnA -< (a', b', c', d')                                                   
+
+-- TODO: Add B3 -> V3 vec instances

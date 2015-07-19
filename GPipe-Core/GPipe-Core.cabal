@@ -13,7 +13,8 @@ library
                    containers,
                    text >= 0.11.2,
                    Boolean >= 0.2.3 && <0.3,
-                   hashtables >= 1.2.0.2 && < 1.3
+                   hashtables >= 1.2.0.2 && < 1.3,
+                   OpenGLRaw >= 2.5.0.0 && < 2.6
   ghc-options:      -Wall
   exposed-modules:  
                    Data.SNMap,
@@ -31,33 +32,3 @@ library
                    Graphics.GPipe.PrimitiveStream,
                    Data.Vec
   other-modules:    Graphics.GPipe.Compiler
-
-executable GPipe-Core-Test
-  build-depends:   
-                   base >= 4,
-                   transformers,
-                   exception-transformers,
-                   containers,
-                   text >= 0.11.2,
-                   Boolean >= 0.2.3 && <0.3,
-                   hashtables >= 1.2.0.2 && < 1.3
-  hs-source-dirs:  src
-  ghc-options:     -Wall -rtsopts -O2
-  main-is:         Main.hs
-  other-modules:   
-                   Data.SNMap,
-                   Graphics.GPipe.Buffer,
-                   Graphics.GPipe.Context,
-                   Graphics.GPipe.Format,
-                   Graphics.GPipe.FragmentStream,
-                   Graphics.GPipe.Texture,
-                   Graphics.GPipe.Uniform,
-                   Graphics.GPipe.VertexArray,
-                   Graphics.GPipe.FrameBuffer,
-                   Graphics.GPipe.PrimitiveArray,
-                   Graphics.GPipe.Expr,
-                   Graphics.GPipe.Shader,
-                   Graphics.GPipe.Compiler,
-                   Graphics.GPipe.PrimitiveStream,
-                   Data.Vec
-

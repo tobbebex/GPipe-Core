@@ -23,10 +23,15 @@ module Graphics.GPipe.Buffer
 import Graphics.GPipe.Context
 import Data.Vec
 
+import Graphics.Rendering.OpenGL.Raw.Core33
+import Foreign.Marshal.Utils
+import Foreign.Marshal.Alloc
+
 import Prelude hiding ((.), id)
 import Control.Monad.Trans.State
 import Control.Category
 import Control.Arrow
+import Control.Applicative
 import Control.Monad (void)
 import Foreign.Storable
 import Foreign.Ptr
@@ -149,7 +154,7 @@ instance BufferFormat a => BufferFormat (BUniform a) where
                     elementBuilderA
                     writerA
         where
-            ToBuffer _ _ elementBuilderA writerA = align glUNIFORM_BUFFER_ALIGNMENT . (toBuffer :: ToBuffer (HostFormat a) a)
+            ToBuffer _ _ elementBuilderA writerA = align (fromIntegral gl_UNIFORM_BUFFER_OFFSET_ALIGNMENT) . (toBuffer :: ToBuffer (HostFormat a) a)
     
 instance BufferFormat a => BufferFormat (BNormalized a) where
     type HostFormat (BNormalized a) = HostFormat a
@@ -193,29 +198,30 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
 newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT os f m (Buffer os b)
 newBuffer elementCount = do
     (buffer, name) <- liftContextIO $ do
-                       name <- genBufferGl
-                       let buffer = makeBuffer name elementCount  
-                       setBufferStorageGl name (bufSize buffer)
+                       name <- fromIntegral <$> alloca (\ptr -> glGenBuffers 1 ptr >> peek ptr) 
+                       let buffer = makeBuffer name elementCount
+                       glBindBuffer gl_COPY_WRITE_BUFFER (fromIntegral $ bufName buffer)  
+                       glBufferData gl_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr gl_DYNAMIC_DRAW
                        return (buffer, name)
-    addContextFinalizer buffer $ glDeleteBuffer name
+    addContextFinalizer buffer $ with (fromIntegral name) (glDeleteBuffers 1)
     return buffer 
 
 writeBuffer :: MonadIO m => [HostFormat f] -> Int -> Buffer os f -> ContextT os f2 m ()
 writeBuffer elems offset buffer = 
     let maxElems = max 0 $ bufElementCount buffer - offset
         elemSize = bufElementSize buffer
-        off = offset * elemSize
+        off = fromIntegral $ offset * elemSize
         writeElem = bufWriter buffer 
         write ptr 0 _ = return ptr
         write ptr n (x:xs) = do writeElem ptr x
                                 write (ptr `plusPtr` elemSize) (n-1) xs
         write ptr _ [] = return ptr
     in liftContextIOAsync $ do 
-                          glBindBuffer glCOPY_WRITE_BUFFER (bufName buffer)
-                          ptr <- glMapBufferRange glCOPY_WRITE_BUFFER off (maxElems * elemSize) (glMAP_WRITE_BIT + glMAP_FLUSH_EXPLICIT_BIT)
+                          glBindBuffer gl_COPY_WRITE_BUFFER (fromIntegral $ bufName buffer)
+                          ptr <- glMapBufferRange gl_COPY_WRITE_BUFFER off (fromIntegral $ maxElems * elemSize) (gl_MAP_WRITE_BIT + gl_MAP_FLUSH_EXPLICIT_BIT)
                           end <- write ptr maxElems elems
-                          glFlushMappedBufferRange glCOPY_WRITE_BUFFER off (end `minusPtr` ptr) 
-                          glUnmapBuffer glCOPY_WRITE_BUFFER 
+                          glFlushMappedBufferRange gl_COPY_WRITE_BUFFER off (fromIntegral $ end `minusPtr` ptr) 
+                          void $ glUnmapBuffer gl_COPY_WRITE_BUFFER 
 
 readBufferM :: MonadIO m => Int -> Int -> Buffer os f -> (HostFormat f -> a -> m a) -> a ->  ContextT os f2 m a
 readBufferM = undefined
@@ -225,10 +231,10 @@ readBuffer x y z f = readBufferM x y z (\ a b -> return $ f a b)
 
 copyBuffer :: MonadIO m => Int -> Int -> Buffer os f -> Int -> Buffer os f -> ContextT os f2 m ()
 copyBuffer len from bFrom to bTo = liftContextIOAsync $ do 
-                                                      glBindBuffer glCOPY_READ_BUFFER (bufName bFrom)
-                                                      glBindBuffer glCOPY_WRITE_BUFFER (bufName bTo)
+                                                      glBindBuffer gl_COPY_READ_BUFFER (fromIntegral $ bufName bFrom)
+                                                      glBindBuffer gl_COPY_WRITE_BUFFER (fromIntegral $ bufName bTo)
                                                       let elemSize = bufElementSize bFrom -- same as for bTo
-                                                      glCopyBufferSubData glCOPY_READ_BUFFER glCOPY_WRITE_BUFFER (from * elemSize) (to * elemSize) (len * elemSize)   
+                                                      glCopyBufferSubData gl_COPY_READ_BUFFER gl_COPY_WRITE_BUFFER (fromIntegral $ from * elemSize) (fromIntegral $ to * elemSize) (fromIntegral $ len * elemSize)   
 
 ----------------------------------------------
 
@@ -256,43 +262,5 @@ makeBuffer name elementCount =
     in Buffer name elementSize elementCount elementF writer
 
     
-glBindBuffer :: Int -> Int -> IO ()
-glBindBuffer _ _ = return ()                                
-
-glCOPY_READ_BUFFER :: Int
-glCOPY_READ_BUFFER = 0
-
-glCOPY_WRITE_BUFFER :: Int
-glCOPY_WRITE_BUFFER = 0 
-
-glCopyBufferSubData :: Int -> Int -> Int -> Int -> Int -> IO ()
-glCopyBufferSubData _ _ _ _ _ = return ()
-
-glStoreBufferGl :: Int -> Ptr () -> Int -> Int -> IO () 
-glStoreBufferGl _ _ _ _ = return ()
-                       
-genBufferGl :: IO Int
-genBufferGl = do putStrLn "genBuffer"
-                 return 987
-
-glDeleteBuffer :: Int -> IO ()     
-glDeleteBuffer n = putStrLn $ "gldelbuffer " ++ show n
-
-setBufferStorageGl :: Int -> Int -> IO ()
-setBufferStorageGl _ s = putStrLn $ "setBufferStorageGl " ++ show s
-
-
-glUNIFORM_BUFFER_ALIGNMENT :: Int
-glUNIFORM_BUFFER_ALIGNMENT = 256
-
-glMapBufferRange :: Int -> Int -> Int -> Int -> IO (Ptr()) 
-glMapBufferRange _ _ _ _ = return nullPtr                        
-glFlushMappedBufferRange :: Int -> Int -> Int -> IO ()
-glFlushMappedBufferRange _ _ _ = return ()
-glUnmapBuffer :: Int -> IO ()
-glUnmapBuffer _ = return ()
-glMAP_WRITE_BIT :: Int
-glMAP_WRITE_BIT = 0
-glMAP_FLUSH_EXPLICIT_BIT :: Int
-glMAP_FLUSH_EXPLICIT_BIT = 0                          
+                     
     

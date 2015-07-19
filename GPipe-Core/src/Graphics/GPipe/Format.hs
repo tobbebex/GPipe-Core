@@ -11,6 +11,8 @@ import           Data.Int
 import           Data.Word
 import           Data.Vec
 
+import Graphics.Rendering.OpenGL.Raw.Core33
+
 data RFloatFormat = R8 | R8S | R16 | R16S | R16F | R32F
 data RIntFormat = R8I | R16I | R32I
 data RUIntFormat = R8UI | R16UI | R32UI
@@ -29,92 +31,119 @@ data RGBAUIntFormat = RGBA8UI | RGBA16UI | RGBA32UI
 
 data DepthFormat = Depth16 | Depth24 | Depth32 | Depth32F
 data StencilFormat = Stencil1 | Stencil4 | Stencil8 | Stencil16
-data DepthStencilFormat = DepthStencilFormat DepthFormat StencilFormat | Depth32FStencil8 | Depth24Stencil8
+data DepthStencilFormat = DepthStencilFormat DepthFormat StencilFormat | Depth24Stencil8 | Depth32FStencil8
 
 class TextureFormat f where
-    getGlInternalFormat :: f -> Int
-    getGlFormat  :: f -> Int
+    getGlInternalFormat :: f -> GLenum
+    getGlFormat  :: f -> GLenum
 
 instance TextureFormat RFloatFormat where
-    getGlInternalFormat R8 = 90 
-    getGlInternalFormat R8S = 91
-    getGlInternalFormat R16 = 92
-    getGlInternalFormat R16S = 93
-    getGlInternalFormat R16F = 94
-    getGlInternalFormat R32F = 95
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat R8 = gl_R8 
+    getGlInternalFormat R8S = gl_R8_SNORM
+    getGlInternalFormat R16 = gl_R16
+    getGlInternalFormat R16S = gl_R16_SNORM
+    getGlInternalFormat R16F = gl_R16F
+    getGlInternalFormat R32F = gl_R32F
+    getGlFormat _ = gl_RED
 instance TextureFormat RIntFormat where
-    getGlInternalFormat R8I = 0 
-    getGlInternalFormat R16I = 0
-    getGlInternalFormat R32I = 0
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat R8I = gl_R8I 
+    getGlInternalFormat R16I = gl_R16I
+    getGlInternalFormat R32I = gl_R32I
+    getGlFormat _ = gl_RED_INTEGER
 instance TextureFormat RUIntFormat where
-    getGlInternalFormat R8UI = 0 
-    getGlInternalFormat R16UI = 0
-    getGlInternalFormat R32UI = 0
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat R8UI = gl_R8UI 
+    getGlInternalFormat R16UI = gl_R16UI
+    getGlInternalFormat R32UI = gl_R32UI
+    getGlFormat _ = gl_RED_INTEGER
 
 instance TextureFormat RGFloatFormat where
-    getGlInternalFormat RG8 = 90 
-    getGlInternalFormat RG8S = 91
-    getGlInternalFormat RG16 = 92
-    getGlInternalFormat RG16S = 93
-    getGlInternalFormat RG16F = 94
-    getGlInternalFormat RG32F = 95
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat RG8 = gl_RG8 
+    getGlInternalFormat RG8S = gl_RG8_SNORM
+    getGlInternalFormat RG16 = gl_RG16
+    getGlInternalFormat RG16S = gl_RG16_SNORM
+    getGlInternalFormat RG16F = gl_RG16F
+    getGlInternalFormat RG32F = gl_RG32F
+    getGlFormat _ = gl_RG
 instance TextureFormat RGIntFormat where
-    getGlInternalFormat RG8I = 0 
-    getGlInternalFormat RG16I = 0
-    getGlInternalFormat RG32I = 0
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat RG8I = gl_RG8I 
+    getGlInternalFormat RG16I = gl_RG16I
+    getGlInternalFormat RG32I = gl_RG32I
+    getGlFormat _ = gl_RG_INTEGER
 instance TextureFormat RGUIntFormat where
-    getGlInternalFormat RG8UI = 0 
-    getGlInternalFormat RG16UI = 0
-    getGlInternalFormat RG32UI = 0
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat RG8UI = gl_RG8UI
+    getGlInternalFormat RG16UI = gl_RG16UI    
+    getGlInternalFormat RG32UI = gl_RG32UI
+    getGlFormat _ = gl_RG_INTEGER
 
 instance TextureFormat RGBFloatFormat where
-    getGlInternalFormat R3G3B2 = 0
-    getGlInternalFormat RGB4 = 0
-    getGlInternalFormat RGB5 = 0
-    getGlInternalFormat RGB8 = 0
-    getGlInternalFormat RGB8S = 0
-    getGlInternalFormat RGB10 = 0
-    getGlInternalFormat RGB12 = 0
-    getGlInternalFormat RGB16 = 0
-    getGlInternalFormat RGB16S = 0
-    getGlInternalFormat RGB16F = 0
-    getGlInternalFormat RGB32F = 0
-    getGlInternalFormat R11FG11FB10F = 0 
-    getGlInternalFormat RGB9E5 = 0
-    getGlInternalFormat SRGB8 = 0
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat R3G3B2 = gl_R3_G3_B2
+    getGlInternalFormat RGB4 = gl_RGB4
+    getGlInternalFormat RGB5 = gl_RGB5
+    getGlInternalFormat RGB8 = gl_RGB8
+    getGlInternalFormat RGB8S = gl_RGB8_SNORM
+    getGlInternalFormat RGB10 = gl_RGB10
+    getGlInternalFormat RGB12 = gl_RGB12
+    getGlInternalFormat RGB16 = gl_RGB16
+    getGlInternalFormat RGB16S = gl_RGB16_SNORM
+    getGlInternalFormat RGB16F = gl_RGB16F
+    getGlInternalFormat RGB32F = gl_RGB32F
+    getGlInternalFormat R11FG11FB10F = gl_R11F_G11F_B10F
+    getGlInternalFormat RGB9E5 = gl_RGB9_E5
+    getGlInternalFormat SRGB8 = gl_SRGB8
+    getGlFormat _ = gl_RGB
 instance TextureFormat RGBIntFormat where
-    getGlInternalFormat RGB8I = 0 
-    getGlInternalFormat RGB16I = 0
-    getGlInternalFormat RGB32I = 0
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat RGB8I = gl_RGB8I
+    getGlInternalFormat RGB16I = gl_RGB16I
+    getGlInternalFormat RGB32I = gl_RGB32I
+    getGlFormat _ = gl_RGB_INTEGER
 instance TextureFormat RGBUIntFormat where
-    getGlInternalFormat RGB8UI = 0 
-    getGlInternalFormat RGB16UI = 0
-    getGlInternalFormat RGB32UI = 0
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat RGB8UI = gl_RGB8UI
+    getGlInternalFormat RGB16UI = gl_RGB16UI
+    getGlInternalFormat RGB32UI = gl_RGB32UI
+    getGlFormat _ = gl_RGB_INTEGER
 
 instance TextureFormat RGBAFloatFormat where
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat RGBA2 = gl_RGBA2 
+    getGlInternalFormat RGBA4 = gl_RGBA4 
+    getGlInternalFormat RGB5A1 = gl_RGB5_A1 
+    getGlInternalFormat RGBA8 = gl_RGBA8 
+    getGlInternalFormat RGBA8S = gl_RGBA8_SNORM 
+    getGlInternalFormat RGB10A2 = gl_RGB10_A2 
+    getGlInternalFormat RGBA12 = gl_RGBA12 
+    getGlInternalFormat RGBA16 = gl_RGBA16 
+    getGlInternalFormat RGBA16S = gl_RGBA16_SNORM 
+    getGlInternalFormat RGBA16F = gl_RGBA16F 
+    getGlInternalFormat RGBA32F = gl_RGBA32F 
+    getGlInternalFormat SRGB8A8 = gl_SRGB8_ALPHA8 
+    getGlFormat _ = gl_RGBA
 instance TextureFormat RGBAIntFormat where
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat RGBA8I = gl_RGBA8I 
+    getGlInternalFormat RGBA16I = gl_RGBA16I 
+    getGlInternalFormat RGBA32I = gl_RGBA32I
+    getGlFormat _ = gl_RGBA_INTEGER
 instance TextureFormat RGBAUIntFormat where
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat RGBA8UI = gl_RGBA8UI 
+    getGlInternalFormat RGBA16UI = gl_RGBA16UI 
+    getGlInternalFormat RGBA32UI = gl_RGBA32UI
+    getGlFormat _ = gl_RGBA_INTEGER
 
 instance TextureFormat DepthFormat where
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat Depth16 = gl_DEPTH_COMPONENT16
+    getGlInternalFormat Depth24 = gl_DEPTH_COMPONENT24
+    getGlInternalFormat Depth32 = gl_DEPTH_COMPONENT32
+    getGlInternalFormat Depth32F = gl_DEPTH_COMPONENT32F
+    getGlFormat _ = gl_DEPTH_COMPONENT
 instance TextureFormat StencilFormat where
-    getGlFormat _ = 900 -- GL_RED
+    getGlInternalFormat Stencil1 = gl_STENCIL_INDEX1
+    getGlInternalFormat Stencil4 = gl_STENCIL_INDEX4
+    getGlInternalFormat Stencil8 = gl_STENCIL_INDEX8
+    getGlInternalFormat Stencil16 = gl_STENCIL_INDEX16
+    getGlFormat _ = gl_STENCIL_INDEX
 instance TextureFormat DepthStencilFormat where
-    getGlFormat _ = 900 -- GL_RED
-
-
+    getGlInternalFormat Depth24Stencil8 = gl_DEPTH24_STENCIL8
+    getGlInternalFormat Depth32FStencil8 = gl_DEPTH32F_STENCIL8
+    getGlInternalFormat _ = gl_DEPTH_STENCIL -- Not to be used
+    getGlFormat _ = gl_DEPTH_STENCIL
 
 class TextureFormat f => ColorSampleable f where
     type Color f :: * -> *
@@ -216,7 +245,6 @@ instance ColorSampleable DepthStencilFormat where
 class ColorSampleable c => ColorRenderable c
 class TextureFormat f => DepthRenderable f
 class TextureFormat f => StencilRenderable f
-
 
 instance ColorRenderable RFloatFormat
 instance ColorRenderable RIntFormat

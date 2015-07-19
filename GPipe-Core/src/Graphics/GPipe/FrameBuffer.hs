@@ -26,11 +26,6 @@ drawColor c sf = DrawColors $ do n <- get
                                  put $ n+1
                                  lift $ tell [\ix -> make3  (setColor (undefined :: c) ix c) $ \s -> let (i, o) = sf s in getImageBinding i (glColorAttachment + n) >> glSetOptions o]
 
-glColorAttachment = 0
-glDepthAttachment = 1 
-glStencilAttachment = 2
-glDepthStencilAttachment = 3 
-
 draw :: forall a os f s. FragmentStream a -> (a -> DrawColors os s ()) -> Shader os f s ()
 drawDepth :: forall a os f s d. DepthRenderable d => FragmentStream (a, FragDepth) -> (s -> (Image d, DepthOption)) -> (a -> DrawColors os s ()) -> Shader os f s ()
 drawStencil :: forall a os f s st. StencilRenderable st => FragmentStream a -> (s -> (Image st, StencilOption)) -> (a -> DrawColors os s ()) -> Shader os f s ()
@@ -209,15 +204,6 @@ data StencilOp =
    | OpDecrWrap
    | OpInvert
 
-data ComparisonFunction =
-     Never
-   | Less
-   | Equal
-   | Lequal
-   | Greater
-   | Notequal
-   | Gequal
-   | Always
-   deriving ( Eq, Ord, Show )
+
    
    --------------------

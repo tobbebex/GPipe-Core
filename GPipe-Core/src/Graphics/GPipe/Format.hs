@@ -7,7 +7,6 @@
 
 module Graphics.GPipe.Format where
 
-import           Data.Int
 import           Data.Word
 import           Data.Vec
 

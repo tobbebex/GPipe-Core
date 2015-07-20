@@ -15,10 +15,8 @@ import Graphics.GPipe.IndexArray
 import qualified Graphics.GPipe.IndexArray as IndexArray (length)
 import Control.Category
 import Control.Arrow
-import Data.Foldable (forM_)
 import Data.Monoid (Monoid(..))
 import Data.IntMap.Lazy (insert)
-import Foreign.Storable (Storable)
 import Data.Word
 import Data.Int
 

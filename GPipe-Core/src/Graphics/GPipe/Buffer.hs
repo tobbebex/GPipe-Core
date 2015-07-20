@@ -17,7 +17,7 @@ module Graphics.GPipe.Buffer
     copyBuffer,
     BFloat, BInt32, BInt16, BInt8, BWord32, BWord16, BWord8, 
     BInt32Norm, BInt16Norm, BInt8Norm, BWord32Norm, BWord16Norm, BWord8Norm,
-    bufSize, bufName, bufElementSize, bufElementCount, bufBElement, makeBuffer, unB2, unB3, unB4
+    bufSize, bufName, bufElementSize, bufElementCount, bufBElement, makeBuffer
 ) where
 
 import Graphics.GPipe.Context
@@ -31,7 +31,6 @@ import Prelude hiding ((.), id)
 import Control.Monad.Trans.State
 import Control.Category
 import Control.Arrow
-import Control.Applicative
 import Control.Monad (void)
 import Foreign.Storable
 import Foreign.Ptr

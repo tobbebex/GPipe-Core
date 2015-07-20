@@ -129,9 +129,11 @@ makeRenderBuff = do
     addContextFinalizer tex $ with (fromIntegral name) (glDeleteRenderbuffers 1)
     return tex 
     
+useTex :: Integral a => TexName -> GLenum -> a -> IO ()
 useTex (TexName n) t bind = do glActiveTexture (gl_TEXTURE0 + fromIntegral bind)
                                glBindTexture t n
                                              
+useTexSync :: TexName -> GLenum -> IO ()
 useTexSync tn t = do maxUnits <- alloca (\ptr -> glGetIntegerv gl_MAX_COMBINED_TEXTURE_IMAGE_UNITS ptr >> peek ptr)  -- Use last for all sync actions, keeping 0.. for async drawcalls
                      useTex tn t (maxUnits-1)
                                  
@@ -266,7 +268,7 @@ setSamplerMode t (SamplerMode magf minf lodf a e bc) f g = do
                     Nearest -> gl_NEAREST                                                                            
                     Linear -> gl_LINEAR
           (se,te,re) = f e
-          glwrap x Nothing = return ()
+          glwrap _ Nothing = return ()
           glwrap x (Just Repeat) = glTexParameteri t x (fromIntegral gl_REPEAT)
           glwrap x (Just Mirror) = glTexParameteri t x (fromIntegral gl_MIRRORED_REPEAT)
           glwrap x (Just ClampToEdge) = glTexParameteri t x (fromIntegral gl_CLAMP_TO_EDGE)
@@ -379,41 +381,44 @@ pv2toF (V2 x y) z = do x' <- unS x
 sampleFunc s proj lod off coord vToS ivToS pvToS = do
     pc <- projCoordParam proj coord vToS pvToS 
     l <- lodParam lod vToS
-    let o = offParam off ivToS
     b <- biasParam lod
     return $ "texture" ++ projName proj ++ lodName lod ++ offName off ++ '(' : s ++ ',' : pc ++ l ++ o ++ b ++ ")"  
-
-projName Nothing = ""
-projName _ = "Proj"
-
-projCoordParam Nothing coord vToS pvToS = vToS coord
-projCoordParam (Just p) coord vToS pvToS = pvToS coord p
-
-lodParam (SampleLod x) _ = fmap (',':) (unS x)
-lodParam (SampleGrad x) vToS = fmap (',':) (vToS x)
-lodParam _ _ = return ""
-
-biasParam :: SampleLod v x -> ExprM String 
-biasParam (SampleBias (S x)) = do x' <- x
-                                  return $ ',':x'
-biasParam _ = return ""
-
-offParam Nothing _ = ""
-offParam (Just x) ivToS = ',' : ivToS x
+  where 
+    o = offParam off ivToS
     
-lodName (SampleLod _) = "Lod"
-lodName (SampleGrad _) = "Grad"
-lodName _ = ""
+    projName Nothing = ""
+    projName _ = "Proj"
 
-offName Nothing = ""
-offName _ = "Offset"
+    projCoordParam Nothing coord vToS pvToS = vToS coord
+    projCoordParam (Just p) coord vToS pvToS = pvToS coord p
+    
+    lodParam (SampleLod x) _ = fmap (',':) (unS x)
+    lodParam (SampleGrad x) vToS = fmap (',':) (vToS x)
+    lodParam _ _ = return ""
+    
+    biasParam :: SampleLod v x -> ExprM String 
+    biasParam (SampleBias (S x)) = do x' <- x
+                                      return $ ',':x'
+    biasParam _ = return ""
+    
+    offParam Nothing _ = ""
+    offParam (Just x) ivToS = ',' : ivToS x
+        
+    lodName (SampleLod _) = "Lod"
+    lodName (SampleGrad _) = "Grad"
+    lodName _ = ""
+    
+    offName Nothing = ""
+    offName _ = "Offset"
 
 ----------------------------------------------------------------------------------
 
 data Image f = Image TexName (V2 Int) (CUInt -> IO ()) -- Internal
 
+getImageName :: Image t -> CUInt
 getImageName (Image tn _ _) = getTexName tn
 
+getImageBinding :: Image t -> CUInt -> IO ()
 getImageBinding (Image _ _ io) = io
 
 imageSize :: Image f -> V2 Int
@@ -426,13 +431,14 @@ getTexture1DArray :: Texture1DArray os f -> Level -> Slice -> Render os f (Image
 getTexture2DArray :: Texture2DArray os f -> Level -> Slice -> Render os f (Image f) 
 getTextureCube :: TextureCube os f -> Level -> CubeSide -> Render os f (Image f) 
 
-getTexture1DImage t@(Texture1D tn _) l = return $ Image tn (V2 (fromV1 (texture1DSize t l)) 1) $ \ap -> glFramebufferTexture1D gl_DRAW_FRAMEBUFFER ap gl_TEXTURE_1D (getTexName tn) (fromIntegral l)
-getTexture2DImage t@(Texture2D tn _) l = return $ Image tn (texture2DSize t l) $ \ap -> glFramebufferTexture2D gl_DRAW_FRAMEBUFFER ap gl_TEXTURE_2D (getTexName tn) (fromIntegral l)
-getTexture3DImage t@(Texture3D tn _) l z' = let V3 x y z = texture3DSize t l in return $ Image tn (V2 x y) $ \ap -> glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER ap (getTexName tn) (fromIntegral l) (fromIntegral $ min z' (z-1))
-getTexture1DArray t@(Texture1DArray tn _) l y' = let V2 x y = texture1DArraySize t l in return $ Image tn (V2 x 1) $ \ap -> glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER ap (getTexName tn) (fromIntegral l) (fromIntegral $ min y' (y-1)) 
-getTexture2DArray t@(Texture2DArray tn _) l z' = let V3 x y z = texture2DArraySize t l in return $ Image tn (V2 x y) $ \ap -> glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER ap (getTexName tn) (fromIntegral l) (fromIntegral $ min z' (z-1)) 
-getTextureCube t@(TextureCube tn _) l s = let x = textureCubeSize t l in return $ Image tn (V2 x x) $ \ap -> glFramebufferTexture2D gl_DRAW_FRAMEBUFFER ap (getGlCubeSide s) (getTexName tn) (fromIntegral l)
+getTexture1DImage t@(Texture1D tn _) l = return $ Image tn (V2 (fromV1 (texture1DSize t l)) 1) $ \attP -> glFramebufferTexture1D gl_DRAW_FRAMEBUFFER attP gl_TEXTURE_1D (getTexName tn) (fromIntegral l)
+getTexture2DImage t@(Texture2D tn _) l = return $ Image tn (texture2DSize t l) $ \attP -> glFramebufferTexture2D gl_DRAW_FRAMEBUFFER attP gl_TEXTURE_2D (getTexName tn) (fromIntegral l)
+getTexture3DImage t@(Texture3D tn _) l z' = let V3 x y z = texture3DSize t l in return $ Image tn (V2 x y) $ \attP -> glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP (getTexName tn) (fromIntegral l) (fromIntegral $ min z' (z-1))
+getTexture1DArray t@(Texture1DArray tn _) l y' = let V2 x y = texture1DArraySize t l in return $ Image tn (V2 x 1) $ \attP -> glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP (getTexName tn) (fromIntegral l) (fromIntegral $ min y' (y-1)) 
+getTexture2DArray t@(Texture2DArray tn _) l z' = let V3 x y z = texture2DArraySize t l in return $ Image tn (V2 x y) $ \attP -> glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP (getTexName tn) (fromIntegral l) (fromIntegral $ min z' (z-1)) 
+getTextureCube t@(TextureCube tn _) l s = let x = textureCubeSize t l in return $ Image tn (V2 x x) $ \attP -> glFramebufferTexture2D gl_DRAW_FRAMEBUFFER attP (getGlCubeSide s) (getTexName tn) (fromIntegral l)
 
+getGlCubeSide :: CubeSide -> GLenum
 getGlCubeSide CubePosX = gl_TEXTURE_CUBE_MAP_POSITIVE_X 
 getGlCubeSide CubeNegX = gl_TEXTURE_CUBE_MAP_NEGATIVE_X 
 getGlCubeSide CubePosY = gl_TEXTURE_CUBE_MAP_POSITIVE_Y

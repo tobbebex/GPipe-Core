@@ -5,7 +5,6 @@
 module Graphics.GPipe.Expr where
 
 import Prelude hiding ((.), id)
-import Data.Int
 import Data.Word
 import Control.Category
 import Control.Monad (void, when)

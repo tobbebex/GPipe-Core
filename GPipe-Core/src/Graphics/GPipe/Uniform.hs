@@ -15,6 +15,7 @@ import qualified Data.IntMap as Map
 import Data.IntMap.Lazy (insert)
 import Data.Word (Word)
 
+import Graphics.Rendering.OpenGL.Raw.Core33
 
 class BufferFormat (UniformBufferFormat a) => Uniform a where
     type UniformBufferFormat a
@@ -29,7 +30,7 @@ toUniformBlock sf = Shader $ do
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
                    doForUniform blockId $ \s bind -> let (ub, i) = sf s 
-                                                     in  glBindBufferRange glUNIFORM_ARRAY bind (bufName ub) (i * bufElementSize ub) (bufElementSize ub)
+                                                     in  glBindBufferRange gl_UNIFORM_BUFFER (fromIntegral bind) (bufName ub) (fromIntegral $ i * bufElementSize ub) (fromIntegral $ bufElementSize ub)
                    return u
     where
             sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))
@@ -54,19 +55,13 @@ buildUDecl = buildUDecl' 0 . Map.assocs
           buildUDecl' _ [] = return ()
 
 type OffsetToSType = Map.IntMap SType  
-
-glUniformBlockBinding :: Int -> Int -> Int -> IO ()
-glUniformBlockBinding a b c = putStrLn $ "glUniformBlockBinding " ++ show (a,b,c)
-
-glBindBufferRange :: Int -> Int -> Int -> Int -> Int -> IO ()
-glBindBufferRange a b c d e = putStrLn $ "glBindBufferRange " ++ show (a,b,c,d,e)                            
-
-glUNIFORM_ARRAY = 0
+                    
 
 newtype ToUniform a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader (Int -> ExprM String))) a b) deriving (Category, Arrow) 
 
+makeUniform :: SType -> ToUniform (B a) (S c b)
 makeUniform styp = ToUniform $ Kleisli $ \bIn -> do let offset = bOffset bIn
-                                                    tell $ Map.singleton offset STypeFloat
+                                                    tell $ Map.singleton offset styp
                                                     useF <- lift ask
                                                     return $ S $ useF offset
 

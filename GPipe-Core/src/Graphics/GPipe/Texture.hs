@@ -212,6 +212,15 @@ data ComparisonFunction =
    | Gequal
    | Always
    deriving ( Eq, Ord, Show )
+
+getGlCompFunc Never = gl_NEVER
+getGlCompFunc Less = gl_LESS
+getGlCompFunc Equal = gl_EQUAL
+getGlCompFunc Lequal = gl_LEQUAL
+getGlCompFunc Greater = gl_GREATER
+getGlCompFunc Notequal = gl_NOTEQUAL
+getGlCompFunc Gequal = gl_GEQUAL
+getGlCompFunc Always = gl_ALWAYS
    
 newSampler1D :: ColorSampleable c => (s -> (Texture1D os c, SamplerMode V1 c)) -> Shader os f s (Sampler1D c)
 newSampler1DArray :: ColorSampleable c => (s -> (Texture1DArray os c, SamplerMode V1 c)) -> Shader os f s (Sampler1DArray c)

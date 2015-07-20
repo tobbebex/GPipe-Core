@@ -7,8 +7,6 @@ module Graphics.GPipe.Expr where
 import Prelude hiding ((.), id)
 import Data.Int
 import Data.Word
-import Data.Text.Lazy (Text)
-import Data.Text.Lazy.Builder
 import Control.Category
 import Control.Monad (void, when)
 import Control.Monad.Trans.Writer
@@ -41,17 +39,14 @@ stypeSize (STypeIVec n) = n * 4
 stypeSize (STypeUVec n) = n * 4
 stypeSize _ = 4
 
-
-type ExprSource = Text
-
-type ExprM = SNMapReaderT [String] (StateT ExprState (WriterT Builder (StateT NextTempVar IO))) -- IO for stable names
+type ExprM = SNMapReaderT [String] (StateT ExprState (WriterT String (StateT NextTempVar IO))) -- IO for stable names
 data ExprState = ExprState { 
                 shaderUsedUniformBlocks :: Map.IntMap (GlobDeclM ()), 
                 shaderUsedSamplers :: Map.IntMap (GlobDeclM ()),
                 shaderUsedInput :: Map.IntMap (GlobDeclM (), (ExprM (), GlobDeclM ())) -- For vertex shaders, the shaderM is always undefined and the int is the parameter name, for later shader stages it uses some name local to the transition instead    
                  }
                 
-runExprM :: GlobDeclM () -> ExprM () -> IO (Text, [Int], [Int], [Int], GlobDeclM (), ExprM ())
+runExprM :: GlobDeclM () -> ExprM () -> IO (String, [Int], [Int], [Int], GlobDeclM (), ExprM ())
 runExprM d m = do
                (st, body) <- evalStateT (runWriterT (execStateT (runSNMapReaderT (m :: ExprM ())) (ExprState Map.empty Map.empty Map.empty))) 0
                let (unis, uniDecls) = unzip $ Map.toAscList (shaderUsedUniformBlocks st)
@@ -63,14 +58,14 @@ runExprM d m = do
                               sequence_ uniDecls 
                               sequence_ sampDecls
                               sequence_ inpDecls
-                   source = toLazyText $ mconcat [
+                   source = mconcat [
                                 execWriter decls,
                                 "main() {\n",
                                 body,
                                 "}"]   
                return (source, unis, samps, inps, sequence_ prevDecls, sequence_ prevSs)
 
-type GlobDeclM = Writer Builder
+type GlobDeclM = Writer String
 
 newtype S c a = S { unS :: ExprM String } 
 
@@ -190,31 +185,22 @@ tellAssignment typ m = fmap head . memoizeM $ do
                                  val <- m
                                  var <- T.lift $ T.lift $ T.lift getNext
                                  let name = 't' : show var
-                                 T.lift $ T.lift $ tell (fromString $ stypeName typ ++ " ")
+                                 T.lift $ T.lift $ tell (stypeName typ ++ " ")
                                  tellAssignment' name val
                                  return [name]
 
 tellAssignment' :: String -> RValue -> ExprM ()
-tellAssignment' name string = T.lift $ T.lift $ tell $ mconcat [
-                                       fromString name,
-                                       fromString " = ",
-                                       fromString string,
-                                       fromString ";\n"
-                                       ]
+tellAssignment' name string = T.lift $ T.lift $ tell $ mconcat [name, " = ", string, ";\n"]
 
 discard (S m) = do b <- m
-                   when (b /= "true") $ T.lift $ T.lift $ tell $ mconcat [
-                                       fromString "if (!(",
-                                       fromString b,
-                                       fromString ")) discard;\n"
-                                       ]
+                   when (b /= "true") $ T.lift $ T.lift $ tell $ mconcat ["if (!(", b, ")) discard;\n"]
                                        
 --
 tellGlobalLn :: String -> GlobDeclM ()
-tellGlobalLn string = tell $ fromString string `mappend` fromString ";\n"
+tellGlobalLn string = tell $ string `mappend` ";\n"
 --
 tellGlobal :: String -> GlobDeclM ()
-tellGlobal = tell . fromString
+tellGlobal = tell
 
 
 data CompiledExpr = CompiledExpr { cshaderName :: Int, cshaderUniBlockNameToIndex :: Map.IntMap Int, cshaderSamplerNameToIndex :: Map.IntMap Int } 
@@ -240,11 +226,7 @@ instance (ShaderBase a x, ShaderBase b x) => ShaderBase (a, b) x where
 instance ShaderBase (S c Int) c where
     shaderbaseDeclare _ _ = do var <- T.lift $ T.lift $ T.lift $ T.lift getNext
                                let root = 't' : show var
-                               T.lift $ T.lift $ T.lift $ tell $ mconcat [
-                                                           fromString $ stypeName STypeInt,
-                                                           fromString " ",
-                                                           fromString root,
-                                                           fromString ";\n"]
+                               T.lift $ T.lift $ T.lift $ tell $ mconcat [stypeName STypeInt, ' ':root, ";\n"]
                                tell [root]
                                return $ S $ return root
     shaderbaseAssign _ (S shaderM) = do ul <- T.lift shaderM
@@ -259,11 +241,7 @@ instance ShaderBase (S c Int) c where
 instance ShaderBase (S c Float) c where
     shaderbaseDeclare _ _ = do var <- T.lift $ T.lift $ T.lift $ T.lift getNext
                                let root = 't' : show var
-                               T.lift $ T.lift $ T.lift $ tell $ mconcat [
-                                                           fromString $ stypeName STypeFloat,
-                                                           fromString " ",
-                                                           fromString root,
-                                                           fromString ";\n"]
+                               T.lift $ T.lift $ T.lift $ tell $ mconcat [stypeName STypeFloat, ' ':root, ";\n"]
                                tell [root]
                                return $ S $ return root
     shaderbaseAssign _ (S shaderM) = do ul <- T.lift shaderM
@@ -325,9 +303,9 @@ ifThenElse c t e i = fromBase x $ ifThenElse_ c (toBase x . t . fromBase x) (toB
                            decls <- execWriterT $ shaderbaseDeclare x (undefined :: ShaderBaseType b)
                            tellIf boolStr                
                            void $ evalStateT (shaderbaseAssign x $ thn lifted) decls                                    
-                           T.lift $ T.lift $ tell $ fromString "} else {\n"                   
+                           T.lift $ T.lift $ tell "} else {\n"                   
                            void $ evalStateT (shaderbaseAssign x $ els lifted) decls
-                           T.lift $ T.lift $ tell $ fromString "}\n"                                                 
+                           T.lift $ T.lift $ tell "}\n"                                                 
                            return decls
             in evalState (runReaderT (shaderbaseReturn x undefined) ifM) 0
 
@@ -343,17 +321,13 @@ ifThen c t i = fromBase x $ ifThen_ c (toBase x . t . fromBase x) (toBase x i)
                            void $ evalStateT (shaderbaseAssign x a) decls
                            tellIf boolStr
                            void $ evalStateT (shaderbaseAssign x $ thn lifted) decls                                    
-                           T.lift $ T.lift $ tell $ fromString "}\n"
+                           T.lift $ T.lift $ tell "}\n"
                            return decls
             in evalState (runReaderT (shaderbaseReturn x undefined) ifM) 0
     
 
 tellIf :: RValue -> ExprM ()
-tellIf boolStr = T.lift $ T.lift $ tell $ mconcat [
-                                               fromString "if(",
-                                               fromString boolStr,
-                                               fromString "){\n"
-                                               ]
+tellIf boolStr = T.lift $ T.lift $ tell $ mconcat ["if(", boolStr, "){\n" ]
 while :: forall a x. (ShaderType a x) => (a -> S x Bool) -> (a -> a) -> a -> a
 while c f i = fromBase x $ while_ (c . fromBase x) (toBase x . f . fromBase x) (toBase x i)            
     where
@@ -363,16 +337,12 @@ while c f i = fromBase x $ while_ (c . fromBase x) (toBase x . f . fromBase x) (
                                            (lifted, decls) <- runWriterT $ shaderbaseDeclare x a
                                            void $ evalStateT (shaderbaseAssign x a) decls
                                            boolDecl <- tellAssignment STypeBool (unS $ bool a)
-                                           T.lift $ T.lift $ tell $ mconcat [
-                                                                       fromString "while(",
-                                                                       fromString boolDecl,
-                                                                       fromString "){\n"
-                                                                       ]
+                                           T.lift $ T.lift $ tell $ mconcat ["while(", boolDecl, "){\n" ]
                                            let looped = loopF lifted                                
                                            void $ evalStateT (shaderbaseAssign x looped) decls 
                                            loopedBoolStr <- unS $ bool looped
                                            tellAssignment' boolDecl loopedBoolStr
-                                           T.lift $ T.lift $ tell $ fromString "}\n"
+                                           T.lift $ T.lift $ tell "}\n"
                                            return decls
                              in evalState (runReaderT (shaderbaseReturn x undefined) whileM) 0
 

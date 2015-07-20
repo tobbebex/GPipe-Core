@@ -25,6 +25,7 @@ import Control.Monad.Trans.Class
 import Control.Applicative (Applicative)
 import Data.Typeable (Typeable)
 import System.Mem.Weak (addFinalizer)
+import Graphics.Rendering.OpenGL.Raw.Core33
 
 type ContextFactory c ds = ContextFormat c ds -> IO ContextHandle
 
@@ -50,14 +51,17 @@ runContextT cf f (ContextT m) =
     bracket 
         (liftIO $ cf f)
         (liftIO . contextDelete)
-        (runReaderT m)
+        (runReaderT (i >> m)) where ContextT i = initGlState
 
 runSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFormat c ds -> ContextT os (ContextFormat c ds) (ContextT os f m) a -> ContextT os f m a
 runSharedContextT f (ContextT m) =
     bracket
         (ContextT ask >>= liftIO . ($ f) . newSharedContext)
         (liftIO . contextDelete)
-        (runReaderT m)
+        (runReaderT (i >> m)) where ContextT i = initGlState 
+
+initGlState :: MonadIO m => ContextT os f m ()
+initGlState = liftContextIOAsync $ glEnable gl_FRAMEBUFFER_SRGB
 
 liftContextIO :: MonadIO m => IO a -> ContextT os f m a
 liftContextIO m = ContextT ask >>= liftIO . flip contextDoSync m

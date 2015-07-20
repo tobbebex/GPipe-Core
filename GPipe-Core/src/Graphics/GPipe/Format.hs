@@ -242,7 +242,9 @@ instance ColorSampleable DepthStencilFormat where
     toColor _ (r,_,_,_) = V1 r
     fromColor _ (V1 r) = [r]
 
-class ColorSampleable c => ColorRenderable c
+class ColorSampleable c => ColorRenderable c where
+    isSrgb :: c -> Bool
+    isSrgb _ = False
 class TextureFormat f => DepthRenderable f
 class TextureFormat f => StencilRenderable f
 
@@ -252,10 +254,14 @@ instance ColorRenderable RUIntFormat
 instance ColorRenderable RGFloatFormat
 instance ColorRenderable RGIntFormat
 instance ColorRenderable RGUIntFormat
-instance ColorRenderable RGBFloatFormat
+instance ColorRenderable RGBFloatFormat where
+    isSrgb SRGB8 = True
+    isSrgb _ = False
 instance ColorRenderable RGBIntFormat
 instance ColorRenderable RGBUIntFormat
-instance ColorRenderable RGBAFloatFormat
+instance ColorRenderable RGBAFloatFormat where
+    isSrgb SRGB8A8 = True
+    isSrgb _ = False
 instance ColorRenderable RGBAIntFormat
 instance ColorRenderable RGBAUIntFormat
 
@@ -270,7 +276,7 @@ class ColorRenderable c => ContextColorFormat c where
     redBits :: c -> Int
     greenBits :: c -> Int
     blueBits :: c -> Int
-    isSrgb :: c -> Bool
+    alphaBits :: c -> Int
 
 instance ContextColorFormat RFloatFormat where
     redBits R8 = 8
@@ -281,7 +287,7 @@ instance ContextColorFormat RFloatFormat where
     redBits R32F = 32
     greenBits _ = 0
     blueBits _ = 0
-    isSrgb _ = False
+    alphaBits _ = 0
 
 instance ContextColorFormat RGFloatFormat where
     redBits RG8 = 8
@@ -292,7 +298,7 @@ instance ContextColorFormat RGFloatFormat where
     redBits RG32F = 32
     greenBits = redBits
     blueBits _ = 0
-    isSrgb _ = False
+    alphaBits _ = 0
 
 instance ContextColorFormat RGBFloatFormat where
     redBits R3G3B2 = 3
@@ -313,13 +319,31 @@ instance ContextColorFormat RGBFloatFormat where
     blueBits R3G3B2 = 2
     blueBits R11FG11FB10F = 10
     blueBits x = redBits x
-    isSrgb SRGB8 = True
-    isSrgb _ = False
+    alphaBits _ = 0
 
+instance ContextColorFormat RGBAFloatFormat where
+    redBits RGBA2 = 2
+    redBits RGBA4 = 4
+    redBits RGB5A1 = 5
+    redBits RGBA8 = 8
+    redBits RGBA8S = 8
+    redBits RGB10A2 = 10
+    redBits RGBA12 = 12
+    redBits RGBA16 = 16
+    redBits RGBA16S = 16
+    redBits RGBA16F = 16
+    redBits RGBA32F = 32
+    redBits SRGB8A8 = 8   
+    greenBits = redBits
+    blueBits = redBits
+    alphaBits RGB5A1 = 1
+    alphaBits RGB10A2 = 2
+    alphaBits x = redBits x
+    
 --------------------------------------------------------------------------
 
-colorBits :: ContextColorFormat c => c -> (Int, Int, Int, Bool)
-colorBits f = (redBits f, greenBits f, blueBits f, isSrgb f)
+colorBits :: ContextColorFormat c => c -> (Int, Int, Int, Int, Bool)
+colorBits f = (redBits f, greenBits f, blueBits f, alphaBits f, isSrgb f)
 
 depthBits :: DepthFormat  -> Int
 depthBits Depth16 = 16
@@ -348,12 +372,12 @@ data ContextFormat c ds where
     ContextFormatStencil :: StencilFormat  -> ContextFormat () StencilFormat
     ContextFormatDepthStencil :: DepthStencilFormat -> ContextFormat () DepthStencilFormat
 
-contextBits :: ContextFormat c ds -> ((Int,Int,Int,Bool),Int,Int)
-contextBits ContextFormatNone = ((0,0,0, False),0,0)
+contextBits :: ContextFormat c ds -> ((Int,Int,Int,Int,Bool),Int,Int)
+contextBits ContextFormatNone = ((0,0,0,0, False),0,0)
 contextBits (ContextFormatColor c) = (colorBits c, 0, 0)
 contextBits (ContextFormatColorDepth c d) = (colorBits c, depthBits d, 0)
 contextBits (ContextFormatColorStencil c s) = (colorBits c, 0, stencilBits s)
 contextBits (ContextFormatColorDepthStencil c ds) = let (d,s) = depthStencilBits ds in (colorBits c, d, s)
-contextBits (ContextFormatDepth d) = ((0,0,0, False), depthBits d, 0)
-contextBits (ContextFormatStencil s) = ((0,0,0, False), 0, stencilBits s)
-contextBits (ContextFormatDepthStencil ds) = let (d,s) = depthStencilBits ds in ((0,0,0, False), d, s)
+contextBits (ContextFormatDepth d) = ((0,0,0,0, False), depthBits d, 0)
+contextBits (ContextFormatStencil s) = ((0,0,0,0, False), 0, stencilBits s)
+contextBits (ContextFormatDepthStencil ds) = let (d,s) = depthStencilBits ds in ((0,0,0,0, False), d, s)

@@ -4,9 +4,10 @@ import Graphics.GPipe.Buffer
 import Graphics.GPipe.IndexArray
 import Graphics.GPipe.VertexArray as VertexArray
 import Data.Monoid
+import Foreign.C.Types
 
 class PrimitiveTopology p where
-    toGLtopology :: p -> Int
+    toGLtopology :: p -> CUInt
     --data Geometry p :: * -> *
     --makeGeometry :: [a] -> Geometry p a  
    

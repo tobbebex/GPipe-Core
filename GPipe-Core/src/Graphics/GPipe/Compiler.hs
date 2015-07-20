@@ -1,4 +1,4 @@
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE PatternGuards, DeriveDataTypeable #-}
 module Graphics.GPipe.Compiler where
 
 import Graphics.GPipe.Context
@@ -6,23 +6,32 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Exception (MonadException)
 import qualified Data.IntMap as Map
 import Data.IntMap ((!))
-import Prelude hiding (putStr)
-import Data.Text.Lazy.IO (putStr)
-import Data.Text.Lazy (Text)
-import Data.Maybe (isJust)
-import Control.Monad (mapAndUnzipM)
+import Data.Maybe
+import Control.Monad
 import Control.Monad.Trans.State.Lazy (evalStateT, get, put)
 import Control.Monad.Trans.Class (lift)
+
+import Graphics.Rendering.OpenGL.Raw.Core33
+import Foreign.Marshal.Utils
+import Foreign.Marshal.Alloc (alloca)
+import Foreign.Storable (peek)
+import Foreign.C.String
+import Foreign.Marshal.Array
+import Foreign.Ptr (nullPtr)
+import Data.Either
+import Control.Exception (throwIO, Exception)
+import Data.Dynamic (Typeable)
 
 data Drawcall s = Drawcall {
                     runDrawcall :: s -> IO (),
                     drawcallName :: Int,
                     rasterizationName :: Int,
-                    vertexsSource :: Text,
-                    fragmentSource :: Text,
+                    vertexsSource :: String,
+                    fragmentSource :: String,
                     usedInputs :: [Int],
                     usedUniforms :: [Int],
-                    usedSamplers :: [Int]
+                    usedSamplers :: [Int],
+                    fboBuffers :: Maybe Int -- Nothing indicates default framebuffer
                     }                                      
 
 type Binding = Int
@@ -51,58 +60,127 @@ data BoundState = BoundState {
                         boundSamplers :: Map.IntMap Int
                         }  
 
+data GPipeCompileException = GPipeCompileException String deriving (Typeable, Show)
+instance Exception GPipeCompileException 
+
+-- | May throw a GPipeCompileException 
 compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT os f m (s -> IO ())
 compile dcs s = do
     drawcalls <- liftIO $ sequence dcs -- IO only for SNMap
-    let allocatedUniforms = allocate glMAXUniforms (map usedUniforms drawcalls)      
-    let allocatedSamplers = allocate glMAXSamplers (map usedSamplers drawcalls)      
-    (pnames, fs) <- evalStateT (mapAndUnzipM comp  (zip3 drawcalls allocatedUniforms allocatedSamplers)) (BoundState Map.empty Map.empty)
-    let fr x = foldl (\ io f -> io >> f x) (return ()) fs
-    addContextFinalizer fr $ mapM_ glDelProg pnames    
-    return fr
+    (maxUnis, maxSamplers) <- liftContextIO $ do 
+                       maxUnis <- alloca (\ptr -> glGetIntegerv gl_MAX_COMBINED_UNIFORM_BLOCKS ptr >> peek ptr)
+                       maxSamplers <- alloca (\ptr -> glGetIntegerv gl_MAX_COMBINED_TEXTURE_IMAGE_UNITS ptr >> peek ptr)
+                       return (fromIntegral maxUnis, fromIntegral maxSamplers)
+    let unisPerDc = map usedUniforms drawcalls
+    let sampsPerDc = map usedSamplers drawcalls
+    -- TODO: Check if this is really needed, if so make it more verbose:
+    let errUni = ["Too many uniform blocks used in a single shader\n" | any (\ xs -> length xs >= maxUnis) unisPerDc]
+    let errSamp = ["Too many textures used in a single shader\n" | any (\ xs -> length xs >= maxSamplers) sampsPerDc]
+    let allocatedUniforms = allocate maxUnis unisPerDc      
+    let allocatedSamplers = allocate maxSamplers sampsPerDc
+    compRet <- evalStateT (mapM comp  (zip3 drawcalls allocatedUniforms allocatedSamplers)) (BoundState Map.empty Map.empty)
+    let (errs, ret) = partitionEithers compRet      
+        (pnames, fboNames, fs) = unzip3 ret
+        fr x = foldl (\ io f -> io >> f x) (return ()) fs
+        delete = do 
+                    mapM_ glDeleteProgram pnames
+                    withArrayLen (filter (/= 0) fboNames) $ \len ptr -> when (len > 0) $ glDeleteFramebuffers (fromIntegral len) ptr
+        allErrs = errUni ++ errSamp ++ errs
+    if null allErrs 
+        then do  
+            addContextFinalizer fr delete
+            return fr
+        else do
+            liftContextIOAsync delete
+            liftIO $ throwIO (GPipeException $ concat allErrs)   
  where   
-    comp (Drawcall runner primN rastN vsource fsource inps unis samps, ubinds, sbinds) = do
+    comp (Drawcall runner primN rastN vsource fsource inps unis samps fboSetup, ubinds, sbinds) = do
            BoundState uniState sampState <- get
            let (bindUni, uniState') = makeBind uniState (uniformNameToRenderIO s) (zip unis ubinds)
            let (bindSamp, sampState') = makeBind sampState (samplerNameToRenderIO s) $ zip samps sbinds
            put $ BoundState uniState' sampState'
            
-           lift $ liftContextIO $ do
-                              putStrLn "-------------------------------------------------------------------------------------------"
-                              putStrLn "-------------------------------------------------------------------------------------------"
-                              putStrLn "Compiling program"
-                              putStrLn "-------------"
-                              putStrLn "VERTEXSHADER:"
-                              putStr vsource
-                              putStrLn "-------------"   
-                              putStrLn "FRAGMENTSHADER:"
-                              putStr fsource
-                              putStrLn "-------------"
-
-                              mapM_ (\(name, ix) -> putStrLn $ "INPUT BindNameToIndex in" ++ show name ++ " " ++ show ix) $ zip inps [0..]
-
-                              pName <- glGenProg                             
-                              putStrLn "---- LINK ---"
+           lift $ do ePname <- liftContextIO $ do
+                              vShader <- glCreateShader gl_VERTEX_SHADER
+                              mErrV <- compileShader vShader vsource
+                              fShader <- glCreateShader gl_FRAGMENT_SHADER                             
+                              mErrF <- compileShader fShader fsource
+                              if isNothing mErrV && isNothing mErrV 
+                                then do pName <- glCreateProgram
+                                        glAttachShader pName vShader
+                                        glAttachShader pName fShader
+                                        mapM_ (\(name, ix) -> withCString ("in"++ show name) $ glBindAttribLocation pName ix) $ zip inps [0..]
+                                        mPErr <- linkProgram pName
+                                        glDetachShader pName vShader
+                                        glDetachShader pName fShader
+                                        glDeleteShader vShader
+                                        glDeleteShader fShader
+                                        case mPErr of
+                                            Just errP -> do glDeleteProgram pName 
+                                                            return $ Left errP
+                                            Nothing -> return $ Right pName
+                                else do glDeleteShader vShader
+                                        glDeleteShader fShader
+                                        let err = maybe "" (\e -> "A vertex shader compilation failed with the following error:\n" ++ e ++ "\n") mErrV
+                                              ++ maybe "" (\e -> "A fragment shader compilation failed with the following error:\n" ++ e ++ "\n") mErrF
+                                        return $ Left err
+                     case ePname of                   
+                          Left err -> return $ Left err
+                          Right pName -> liftContextIO $ do
+                              fboName <- case fboSetup of
+                                Nothing -> do glBindFramebuffer gl_DRAW_FRAMEBUFFER 0
+                                              return 0
+                                Just numColors -> do
+                                    fboName <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
+                                    glBindFramebuffer gl_DRAW_FRAMEBUFFER fboName
+                                    withArray [gl_COLOR_ATTACHMENT0..(gl_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $ glDrawBuffers (fromIntegral numColors)
+                                    glEnable gl_FRAMEBUFFER_SRGB
+                                    return fboName
+                                                           
+                              forM_ (zip unis ubinds) $ \(name, bind) -> do
+                                    uix <- withCString ("uBlock" ++ show name) $ glGetUniformBlockIndex pName
+                                    glUniformBlockBinding pName uix (fromIntegral bind)
                               
-                              uixs <- mapM (\name -> (putStrLn $ "UNI QueryNameToIndex uBlock" ++ show name) >> return 111 ) unis
-                              mapM_ (\(bind, ix) -> putStrLn $ "glUniformBlockBinding p ix bind " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) $ zip ubinds uixs
-
-                              sixs <- mapM (\name -> (putStrLn $ "SAMP QueryNameToIndex s" ++ show name) >> return 211 ) samps                             
-                              mapM_ (\(bind, ix) -> putStrLn $ "glUniformI set samplerBinds " ++ show pName ++ " " ++ show ix ++ " " ++ show bind) $ zip sbinds sixs
-                              putStrLn "-------------------------------------------------------------------------------------------"
-                              putStrLn "-------------------------------------------------------------------------------------------"
-                              
-                              return (pName, \x -> do
-                                           putStrLn "-----------------------------------------"
-                                           putStrLn $ "UseProgram " ++ show pName 
+                              glUseProgram pName -- For setting texture uniforms
+                              forM_ (zip samps sbinds) $ \(name, bind) -> do
+                                    six <- withCString ("s" ++ show name) $ glGetUniformLocation pName
+                                    glUniform1i six (fromIntegral bind)
+                                                                 
+                              return $ Right (pName, fboName, \x -> do
+                                           -- Drawing with program --
+                                           glUseProgram pName
                                            bindUni x 
-                                           bindSamp x                                           
+                                           bindSamp x                                   
                                            runner x
                                            (rasterizationNameToRenderIO s ! rastN) x -- TODO: Dont bind already bound?
                                            mapM_ ($ inps) ((inputArrayToRenderIOs s ! primN) x) -- TODO: Dont bind already bound?
-                                           putStrLn "-----------------------------------------"
                                            )
 
+    compileShader name source = do 
+        withCStringLen source $ \ (ptr, len) ->
+                                    with ptr $ \ pptr ->
+                                        with (fromIntegral len) $ \ plen ->
+                                            glShaderSource name 1 pptr plen
+        glCompileShader name
+        compStatus <- alloca $ \ ptr -> glGetShaderiv name gl_COMPILE_STATUS ptr >> peek ptr
+        if fromIntegral compStatus /= gl_FALSE
+            then return Nothing
+            else do logLen <- alloca $ \ ptr -> glGetShaderiv name gl_INFO_LOG_LENGTH ptr >> peek ptr
+                    let logLen' = fromIntegral logLen
+                    liftM Just $ allocaArray logLen' $ \ ptr -> do
+                                    glGetShaderInfoLog name logLen nullPtr ptr
+                                    peekCString ptr 
+    linkProgram name = do glLinkProgram name
+                          linkStatus <- alloca $ \ ptr -> glGetProgramiv name gl_LINK_STATUS ptr >> peek ptr
+                          if fromIntegral linkStatus /= gl_FALSE
+                            then return Nothing
+                            else do logLen <- alloca $ \ ptr -> glGetProgramiv name gl_INFO_LOG_LENGTH ptr >> peek ptr
+                                    let logLen' = fromIntegral logLen
+                                    liftM Just $ allocaArray logLen' $ \ ptr -> do
+                                                    glGetProgramInfoLog name logLen nullPtr ptr
+                                                    peekCString ptr 
+            
+    
 -- Optimization, save gl calls to already bound buffers/samplers
 makeBind :: Map.IntMap Int -> Map.IntMap (s -> Int -> IO ()) -> [(Int, Int)] -> (s -> IO (), Map.IntMap Int)
 makeBind m iom ((n,b):xs) = (g, m'')
@@ -113,9 +191,6 @@ makeBind m iom ((n,b):xs) = (g, m'')
                             _               -> (\s -> (iom ! n) s b, Map.insert b n m')      
         g s = f s >> io s
 makeBind m _ [] = (const $ return (), m)                          
-
-glGenProg = return 0
-glDelProg n = putStrLn $ "gldelprog " ++ show n
 
 allocate :: Int -> [[Int]] -> [[Int]]
 allocate mx = allocate' Map.empty []
@@ -130,9 +205,5 @@ allocate mx = allocate' Map.empty []
                                             in findLastUsed m' n' xs
           findLastUsed m _ _ = head $ Map.toList m                                    
           
-                                        
-
-glMAXUniforms = 3 :: Int
-glMAXSamplers = 3:: Int
-      
+                             
       

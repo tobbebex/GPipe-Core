@@ -14,6 +14,8 @@ import Data.Monoid (Monoid)
 import Data.Boolean
 import Data.IntMap.Lazy (insert)
 
+import Graphics.Rendering.OpenGL.Raw.Core33
+
 type VPos = V4 VFloat
 
 data Side = Front | Back | FrontAndBack
@@ -33,7 +35,7 @@ class FragmentInput a where
     toFragment :: ToFragment a (FragmentFormat a)  
     
 rasterize:: forall p a s os f. (PrimitiveTopology p, FragmentInput a)
-          => (s -> (Side, ViewPort))
+          => (s -> (Side, ViewPort, DepthRange))
           -> PrimitiveStream p (VPos, a)
           -> Shader os f s (FragmentStream (FragmentFormat a)) 
 rasterize sf (PrimitiveStream xs) = Shader $ do
@@ -49,9 +51,16 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
                                        z' <- z
                                        w' <- w
                                        tellAssignment' "gl_Position" $ "vec4("++x'++',':y'++',':z'++',':w'++")"
-        io s = let (side, vp) = sf s in putStrLn "glSetSideAndViewport"
+        io s = let (side, ViewPort (x,y) (w,h), DepthRange dmin dmax) = sf s in do setGlCullFace side
+                                                                                   glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 
+                                                                                   glDepthRange (fromRational $ toRational dmin) (fromRational $ toRational dmax)
 
-data ViewPort = ViewPort (Int,Int) (Int,Int)
+        setGlCullFace Front = glEnable gl_CULL_FACE >> glCullFace gl_BACK -- Back is culled when front is rasterized
+        setGlCullFace Back = glEnable gl_CULL_FACE >> glCullFace gl_FRONT
+        setGlCullFace _ = glDisable gl_CULL_FACE
+
+data ViewPort = ViewPort { viewPortLowerLeft :: (Int,Int), viewPortSize :: (Int,Int) }
+data DepthRange = DepthRange { minDepth :: Float, maxDepth :: Float }
  
 filterFragments :: (a -> FBool) -> FragmentStream a -> FragmentStream a 
 filterFragments f (FragmentStream xs) = FragmentStream $ map g xs

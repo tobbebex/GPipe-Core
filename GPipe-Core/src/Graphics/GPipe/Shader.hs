@@ -52,7 +52,7 @@ tellDrawcall :: IO (Drawcall s) -> ShaderM s ()
 tellDrawcall dc = ShaderM $ tell ([dc], mempty) 
 
 mapDrawcall :: (s -> s') -> Drawcall s' -> Drawcall s
-mapDrawcall f (Drawcall b d e g h i j k) = Drawcall (b . f) d e g h i j k 
+mapDrawcall f (Drawcall a b c d e g h i j) = Drawcall (a . f) b c d e g h i j 
            
 newtype ShaderM s a = ShaderM (WriterT ([IO (Drawcall s)], s -> All) (ListT (State (ShaderState s))) a) deriving (MonadPlus, Monad, Alternative, Applicative, Functor)
 

@@ -202,7 +202,10 @@ data EdgeMode = Repeat | Mirror | ClampToEdge | ClampToBorder deriving (Eq, Enum
 type BorderColor c = Color c Float 
 
 type Anisotropy = Float
+
+noAnisotropy :: Anisotropy 
 noAnisotropy = 1.0 
+
 type MinFilter = Filter
 type MagFilter = Filter
 type LodFilter = Filter
@@ -219,6 +222,7 @@ data ComparisonFunction =
    | Always
    deriving ( Eq, Ord, Show )
 
+getGlCompFunc :: ComparisonFunction -> GLenum
 getGlCompFunc Never = gl_NEVER
 getGlCompFunc Less = gl_LESS
 getGlCompFunc Equal = gl_EQUAL
@@ -308,6 +312,7 @@ data SampleLod' v x where
     SampleBias' :: FFloat -> SampleLod' v F   
     SampleGrad' :: v (S x Float) -> SampleLod' v x
 
+fromLod' :: SampleLod' v x -> SampleLod v x
 fromLod' SampleAuto' = SampleAuto
 fromLod' (SampleBias' x) = SampleBias x
 fromLod' (SampleGrad' x) = SampleGrad x
@@ -425,6 +430,7 @@ imageEquals (Image tn' k1' k2' _ _) (Image tn k1 k2 _ _) = tn' == tn && k1' == k
 getImageBinding :: Image t -> CUInt -> IO ()
 getImageBinding (Image _ _ _ _ io) = io
 
+getImageFBOKey :: Image t -> IO FBOKey
 getImageFBOKey (Image tn k1 k2 _ _) = do tn' <- readIORef tn
                                          return $ FBOKey tn' k1 k2 
 

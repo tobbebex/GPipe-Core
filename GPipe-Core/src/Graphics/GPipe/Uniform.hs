@@ -24,8 +24,6 @@ class BufferFormat (UniformBufferFormat a) => Uniform a where
 
 type UniformHostFormat x = HostFormat (UniformBufferFormat x)
 
--- uniformBlock ::  forall os f b. Uniform b => Shader os f (UniformHostFormat b, Proxy b) b
- 
 toUniformBlock :: forall os f s b. Uniform b => (s -> (Buffer os (BUniform (UniformBufferFormat b)), Int)) -> Shader os f s b
 toUniformBlock sf = Shader $ do 
                    blockId <- getName

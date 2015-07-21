@@ -32,7 +32,6 @@ import Control.Monad.Trans.Class
 import Control.Applicative (Applicative)
 import Data.Typeable (Typeable)
 import qualified Data.Map.Strict as Map 
-import System.Mem.Weak (addFinalizer)
 import Graphics.Rendering.OpenGL.Raw.Core33
 import Control.Concurrent.MVar
 import Data.IORef
@@ -131,8 +130,13 @@ data FBOKeys = FBOKeys { fboColors :: [FBOKey], fboDepth :: Maybe FBOKey, fboSte
 type VAOCache = Map.Map [VAOKey] (IORef CUInt)
 type FBOCache = Map.Map FBOKeys (IORef CUInt)
 
+getFBOKeys :: FBOKeys -> [FBOKey]
 getFBOKeys (FBOKeys xs d s) = xs ++ maybeToList d ++ maybeToList s
+
+newContextDatas :: IO (MVar [ContextData])
 newContextDatas = newMVar []
+
+addContextData :: SharedContextDatas -> IO ContextData
 addContextData r = do cd <- newMVar (Map.empty, Map.empty)  
                       modifyMVar_ r $ return . (cd:)
                       return cd
@@ -144,7 +148,7 @@ addCacheFinalizer :: MonadIO m => (CUInt -> (VAOCache, FBOCache) -> (VAOCache, F
 addCacheFinalizer f r =  ContextT $ do cds <- asks (snd . snd)
                                        liftIO $ do n <- readIORef r
                                                    void $ mkWeakIORef r $ do cs' <- readMVar cds 
-                                                                             mapM_ (flip modifyMVar_ (return . f n)) cs'
+                                                                             mapM_ (`modifyMVar_` (return . f n)) cs'
 
 addVAOBufferFinalizer :: MonadIO m => IORef CUInt -> ContextT os f m ()
 addVAOBufferFinalizer = addCacheFinalizer deleteVAOBuf  
@@ -153,10 +157,16 @@ addVAOBufferFinalizer = addCacheFinalizer deleteVAOBuf
     
 addFBOTextureFinalizer :: MonadIO m => Bool -> IORef CUInt -> ContextT os f m ()
 addFBOTextureFinalizer isRB = addCacheFinalizer deleteVBOBuf    
-    where deleteVBOBuf n (vao, fbo) = (vao, Map.filterWithKey (\k _ -> all (\fk -> fboTname fk /= n || isRB /= (fboTlayerOrNegIfRendBuff fk < 0) ) $ getFBOKeys k) $ fbo)
+    where deleteVBOBuf n (vao, fbo) = (vao, Map.filterWithKey
+                                          (\ k _ ->
+                                             all
+                                               (\ fk ->
+                                                  fboTname fk /= n || isRB /= (fboTlayerOrNegIfRendBuff fk < 0))
+                                               $ getFBOKeys k)
+                                          fbo)
 
 
-getContextData :: MonadIO m => ContextT os f m (ContextData)
+getContextData :: MonadIO m => ContextT os f m ContextData
 getContextData = ContextT $ asks (fst . snd)
 
 getVAO :: ContextData -> [VAOKey] -> IO (Maybe (IORef CUInt))
@@ -164,7 +174,7 @@ getVAO cd k = do (vaos, _) <- readMVar cd
                  return (Map.lookup k vaos)    
 
 setVAO :: ContextData -> [VAOKey] -> IORef CUInt -> IO ()
-setVAO cd k v = do modifyMVar_ cd $ \(vaos, fbos) -> return (Map.insert k v vaos, fbos)  
+setVAO cd k v = modifyMVar_ cd $ \ (vaos, fbos) -> return (Map.insert k v vaos, fbos)  
 
 getFBO :: ContextData -> FBOKeys -> IO (Maybe (IORef CUInt))
 getFBO cd k = do (_, fbos) <- readMVar cd

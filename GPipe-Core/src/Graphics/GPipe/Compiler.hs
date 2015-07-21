@@ -34,9 +34,9 @@ data Drawcall s = Drawcall {
                     usedSamplers :: [Int]
                     }                                      
 
-type Binding = Int
 -- index/binding refers to what is used in the final shader. Index space is limited, usually 16
 -- attribname is what was declared, but all might not be used. Attribname share namespace with uniforms and textures and is unlimited(TM)
+type Binding = Int
 
 -- TODO: Add usedBuffers to RenderIOState, ie Map.IntMap (s -> (Binding -> IO (), Int)) and the like
 --       then create a function that checks that none of the input buffers are used as output, and throws if it is
@@ -57,7 +57,8 @@ mapRenderIOState f (RenderIOState a b c d) (RenderIOState i j k l) = let g x = x
 
 data BoundState = BoundState { 
                         boundUniforms :: Map.IntMap Int,  
-                        boundSamplers :: Map.IntMap Int
+                        boundSamplers :: Map.IntMap Int,
+                        boundRasterizerN :: Int
                         }  
 
 data GPipeCompileException = GPipeCompileException String deriving (Typeable, Show)
@@ -78,7 +79,7 @@ compile dcs s = do
     let errSamp = ["Too many textures used in a single shader\n" | any (\ xs -> length xs >= maxSamplers) sampsPerDc]
     let allocatedUniforms = allocate maxUnis unisPerDc      
     let allocatedSamplers = allocate maxSamplers sampsPerDc
-    compRet <- evalStateT (mapM comp  (zip3 drawcalls allocatedUniforms allocatedSamplers)) (BoundState Map.empty Map.empty)
+    compRet <- evalStateT (mapM comp  (zip3 drawcalls allocatedUniforms allocatedSamplers)) (BoundState Map.empty Map.empty (-1))
     cd <- getContextData
     fAdd <- getContextFinalizerAdder
     let (errs, ret) = partitionEithers compRet      
@@ -95,10 +96,11 @@ compile dcs s = do
             liftIO $ throwIO (GPipeException $ concat allErrs)   
  where   
     comp (Drawcall fboSetup primN rastN vsource fsource inps unis samps, ubinds, sbinds) = do
-           BoundState uniState sampState <- get
+           BoundState uniState sampState boundRastN <- get
            let (bindUni, uniState') = makeBind uniState (uniformNameToRenderIO s) (zip unis ubinds)
            let (bindSamp, sampState') = makeBind sampState (samplerNameToRenderIO s) $ zip samps sbinds
-           put $ BoundState uniState' sampState'
+           let bindRast = if rastN == boundRastN then const $ return () else rasterizationNameToRenderIO s ! rastN 
+           put $ BoundState uniState' sampState' rastN
            
            lift $ do ePname <- liftContextIO $ do
                               vShader <- glCreateShader gl_VERTEX_SHADER
@@ -143,7 +145,7 @@ compile dcs s = do
                                            glUseProgram pName'
                                            bindUni x 
                                            bindSamp x
-                                           (rasterizationNameToRenderIO s ! rastN) x -- TODO: Dont bind already bound?
+                                           bindRast x
                                            let (mfbokeyio, blendio) = fboSetup x
                                            blendio
                                            case mfbokeyio of
@@ -204,22 +206,8 @@ compile dcs s = do
                                                     peekCString ptr 
             
 
-{-
-                              fboName <- case fboSetup of
-                                Nothing -> do glBindFramebuffer gl_DRAW_FRAMEBUFFER 0
-                                              return 0
-                                Just numColors -> do
-                                    fboName <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
-                                    glBindFramebuffer gl_DRAW_FRAMEBUFFER fboName
-                                    withArray [gl_COLOR_ATTACHMENT0..(gl_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $ glDrawBuffers (fromIntegral numColors)
-                                    glEnable gl_FRAMEBUFFER_SRGB
-                                    return fboName
-
-                
--}
-    
 -- Optimization, save gl calls to already bound buffers/samplers
-makeBind :: Map.IntMap Int -> Map.IntMap (s -> Int -> IO ()) -> [(Int, Int)] -> (s -> IO (), Map.IntMap Int)
+makeBind :: Map.IntMap Int -> Map.IntMap (s -> Binding -> IO ()) -> [(Int, Int)] -> (s -> IO (), Map.IntMap Int)
 makeBind m iom ((n,b):xs) = (g, m'')
     where 
         (f, m') = makeBind m iom xs

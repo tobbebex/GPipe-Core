@@ -7,7 +7,7 @@ import Graphics.GPipe.Context
 import Graphics.GPipe.Shader
 import Graphics.GPipe.Compiler
 import Graphics.GPipe.Buffer
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.IntMap.Lazy (insert)
 import Data.Functor ((<$>))
 import Data.Vec
@@ -21,6 +21,7 @@ import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Control.Monad
 import Foreign.C.Types
+import Data.IORef
 
 data Texture1D os a = Texture1D TexName (V1 Int)
 data Texture1DArray os a = Texture1DArray TexName (V2 Int) 
@@ -113,25 +114,28 @@ textureCubeSize = undefined
 calcLevelSize :: Int -> Int -> Int
 calcLevelSize size0 level = max 1 (size0 `div` (2 ^ level))
 
-data TexName = TexName { getTexName :: CUInt } 
+type TexName = IORef CUInt 
 
 makeTex :: MonadIO m => ContextT os f m TexName 
 makeTex = do
     name <- liftContextIO $ fromIntegral <$> alloca (\ptr -> glGenTextures 1 ptr >> peek ptr)
-    let tex = TexName name 
+    tex <- liftIO $ newIORef name 
     addContextFinalizer tex $ with (fromIntegral name) (glDeleteTextures 1)
+    addFBOTextureFinalizer False tex
     return tex 
 
 makeRenderBuff :: MonadIO m => ContextT os f m TexName 
 makeRenderBuff = do
     name <- liftContextIO $ fromIntegral <$> alloca (\ptr -> glGenRenderbuffers 1 ptr >> peek ptr)
-    let tex = TexName name 
+    tex <- liftIO $ newIORef name 
     addContextFinalizer tex $ with (fromIntegral name) (glDeleteRenderbuffers 1)
+    addFBOTextureFinalizer True tex
     return tex 
     
 useTex :: Integral a => TexName -> GLenum -> a -> IO ()
-useTex (TexName n) t bind = do glActiveTexture (gl_TEXTURE0 + fromIntegral bind)
-                               glBindTexture t n
+useTex texNameRef t bind = do glActiveTexture (gl_TEXTURE0 + fromIntegral bind)
+                              n <- readIORef texNameRef
+                              glBindTexture t n
                                              
 useTexSync :: TexName -> GLenum -> IO ()
 useTexSync tn t = do maxUnits <- alloca (\ptr -> glGetIntegerv gl_MAX_COMBINED_TEXTURE_IMAGE_UNITS ptr >> peek ptr)  -- Use last for all sync actions, keeping 0.. for async drawcalls
@@ -413,16 +417,16 @@ sampleFunc s proj lod off coord vToS ivToS pvToS = do
 
 ----------------------------------------------------------------------------------
 
-data Image f = Image TexName (V2 Int) (CUInt -> IO ()) -- Internal
+data Image f = Image TexName Int Int (V2 Int) (CUInt -> IO ()) -- the two Ints is last two in FBOKey
 
-getImageName :: Image t -> CUInt
-getImageName (Image tn _ _) = getTexName tn
+imageEquals :: Image a -> Image b -> Bool
+imageEquals (Image tn' k1' k2' _ _) (Image tn k1 k2 _ _) = tn' == tn && k1' == k1 && k2' == k2
 
 getImageBinding :: Image t -> CUInt -> IO ()
-getImageBinding (Image _ _ io) = io
+getImageBinding (Image _ _ _ _ io) = io
 
 imageSize :: Image f -> V2 Int
-imageSize (Image _ s _) = s
+imageSize (Image _ _ _ s _) = s
 
 getTexture1DImage :: Texture1D os f -> Level -> Render os f (Image f) 
 getTexture2DImage :: Texture2D os f -> Level -> Render os f (Image f) 
@@ -431,12 +435,13 @@ getTexture1DArray :: Texture1DArray os f -> Level -> Slice -> Render os f (Image
 getTexture2DArray :: Texture2DArray os f -> Level -> Slice -> Render os f (Image f) 
 getTextureCube :: TextureCube os f -> Level -> CubeSide -> Render os f (Image f) 
 
-getTexture1DImage t@(Texture1D tn _) l = return $ Image tn (V2 (fromV1 (texture1DSize t l)) 1) $ \attP -> glFramebufferTexture1D gl_DRAW_FRAMEBUFFER attP gl_TEXTURE_1D (getTexName tn) (fromIntegral l)
-getTexture2DImage t@(Texture2D tn _) l = return $ Image tn (texture2DSize t l) $ \attP -> glFramebufferTexture2D gl_DRAW_FRAMEBUFFER attP gl_TEXTURE_2D (getTexName tn) (fromIntegral l)
-getTexture3DImage t@(Texture3D tn _) l z' = let V3 x y z = texture3DSize t l in return $ Image tn (V2 x y) $ \attP -> glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP (getTexName tn) (fromIntegral l) (fromIntegral $ min z' (z-1))
-getTexture1DArray t@(Texture1DArray tn _) l y' = let V2 x y = texture1DArraySize t l in return $ Image tn (V2 x 1) $ \attP -> glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP (getTexName tn) (fromIntegral l) (fromIntegral $ min y' (y-1)) 
-getTexture2DArray t@(Texture2DArray tn _) l z' = let V3 x y z = texture2DArraySize t l in return $ Image tn (V2 x y) $ \attP -> glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP (getTexName tn) (fromIntegral l) (fromIntegral $ min z' (z-1)) 
-getTextureCube t@(TextureCube tn _) l s = let x = textureCubeSize t l in return $ Image tn (V2 x x) $ \attP -> glFramebufferTexture2D gl_DRAW_FRAMEBUFFER attP (getGlCubeSide s) (getTexName tn) (fromIntegral l)
+getTexture1DImage t@(Texture1D tn _) l = return $ Image tn 0 l (V2 (fromV1 (texture1DSize t l)) 1) $ \attP -> do { n <- readIORef tn; glFramebufferTexture1D gl_DRAW_FRAMEBUFFER attP gl_TEXTURE_1D n (fromIntegral l) }
+getTexture2DImage t@(Texture2D tn _) l = return $ Image tn 0 l (texture2DSize t l) $ \attP -> do { n <- readIORef tn; glFramebufferTexture2D gl_DRAW_FRAMEBUFFER attP gl_TEXTURE_2D n (fromIntegral l) }
+getTexture2DImage t@(RenderBuffer2D tn _) l = return $ Image tn (-1) l (texture2DSize t l) $ \attP -> do { n <- readIORef tn; glFramebufferRenderbuffer gl_DRAW_FRAMEBUFFER attP gl_RENDERBUFFER n }
+getTexture3DImage t@(Texture3D tn _) l z' = let V3 x y z = texture3DSize t l in return $ Image tn z' l (V2 x y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) }
+getTexture1DArray t@(Texture1DArray tn _) l y' = let V2 x y = texture1DArraySize t l in return $ Image tn y' l (V2 x 1) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min y' (y-1)) }
+getTexture2DArray t@(Texture2DArray tn _) l z' = let V3 x y z = texture2DArraySize t l in return $ Image tn z' l (V2 x y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) } 
+getTextureCube t@(TextureCube tn _) l s = let { x = textureCubeSize t l; s' = getGlCubeSide s } in return $ Image tn (fromIntegral s') l (V2 x x) $ \attP -> do { n <- readIORef tn; glFramebufferTexture2D gl_DRAW_FRAMEBUFFER attP s' n (fromIntegral l) }
 
 getGlCubeSide :: CubeSide -> GLenum
 getGlCubeSide CubePosX = gl_TEXTURE_CUBE_MAP_POSITIVE_X 

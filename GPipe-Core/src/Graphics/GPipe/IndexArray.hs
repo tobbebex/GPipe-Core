@@ -11,6 +11,7 @@ import Graphics.GPipe.Buffer
 import Graphics.GPipe.Shader
 import Prelude hiding (length, take, drop)
 import Foreign.C.Types
+import Data.IORef
 
 class BufferFormat a => IndexFormat a where
     indexToInt :: a -> HostFormat a -> Int
@@ -26,7 +27,7 @@ instance IndexFormat BWord8 where
     indexToInt _ = fromIntegral    
     glType _ = glBYTE
     
-data IndexArray = IndexArray { iArrName :: CUInt, length:: Int, offset:: Int, restart:: Maybe Int, indexType :: Int } 
+data IndexArray = IndexArray { iArrName :: IORef CUInt, length:: Int, offset:: Int, restart:: Maybe Int, indexType :: Int } 
 newIndexArray :: forall os f a. IndexFormat a => Buffer os a -> Maybe (HostFormat a) -> Render os f IndexArray
 newIndexArray buf r = let a = undefined :: a in Render $ return $ IndexArray (bufName buf) (bufElementCount buf) 0 (fmap (indexToInt a) r) (glType a) 
  

@@ -12,6 +12,7 @@ import Graphics.GPipe.Shader
 import Graphics.GPipe.Compiler
 import Graphics.GPipe.PrimitiveArray
 import Graphics.GPipe.IndexArray 
+import Graphics.GPipe.Context
 import qualified Graphics.GPipe.IndexArray as IndexArray (length)
 import Control.Category
 import Control.Arrow
@@ -23,6 +24,8 @@ import Data.Int
 import Graphics.Rendering.OpenGL.Raw.Core33
 import Foreign.Marshal.Utils
 import Foreign.Ptr (intPtrToPtr)
+import Data.IORef
+import Foreign.C.Types
 
 --------------------
 
@@ -39,45 +42,40 @@ class BufferFormat a => VertexInput a where
     type VertexFormat a
     toVertex :: ToVertex a (VertexFormat a)  
 
-newtype ToVertex a b = ToVertex (Kleisli (StateT Int (Writer [Binding -> IO ()])) a b) deriving (Category, Arrow)
+newtype ToVertex a b = ToVertex (Kleisli (StateT Int (Writer [Binding -> (IO VAOKey, IO ())])) a b) deriving (Category, Arrow)
 
-   
                                                               
 toPrimitiveStream :: forall os f s a p. (VertexInput a, PrimitiveTopology p) => (s -> PrimitiveArray p a) -> Shader os f s (PrimitiveStream p (VertexFormat a))   
 toPrimitiveStream sf = Shader $ do n <- getName
                                    let sampleBuffer = makeBuffer undefined undefined :: Buffer os a
-                                       x = fst $ runWriter (evalStateT (mf $ bufBElement sampleBuffer $ BInput 0 0) 0) 
+                                       x = fst $ runWriter (evalStateT (mf $ bufBElement sampleBuffer $ BInput 0 0) 0)
                                    doForInputArray n (map drawcall . getPrimitiveArray . sf)
                                    return $ PrimitiveStream [(x, PrimitiveStreamData n)] 
     where 
         ToVertex (Kleisli mf) = toVertex :: ToVertex a (VertexFormat a)
-        drawcall (PrimitiveArraySimple p l a) binds = do runAttribs  a binds
-                                                         glDrawArrays (toGLtopology p) 0 (fromIntegral l)
-        drawcall (PrimitiveArrayIndexed p i a) binds = do 
-                                                    runAttribs a binds
+        drawcall (PrimitiveArraySimple p l a) binds = (attribs a binds, glDrawArrays (toGLtopology p) 0 (fromIntegral l)) 
+        drawcall (PrimitiveArrayIndexed p i a) binds = (attribs a binds, do
                                                     bindIndexBuffer i
-                                                    glDrawElements (toGLtopology p) (fromIntegral $ IndexArray.length i) (fromIntegral $ indexType i) (intPtrToPtr $ fromIntegral $ offset i)
-        drawcall (PrimitiveArrayInstanced p il l a) binds = do
-                                              runAttribs a binds
-                                              glDrawArraysInstanced (toGLtopology p) 0 (fromIntegral l) (fromIntegral il)
-        drawcall (PrimitiveArrayIndexedInstanced p i il a) binds = do
-                                                      runAttribs a binds
+                                                    glDrawElements (toGLtopology p) (fromIntegral $ IndexArray.length i) (fromIntegral $ indexType i) (intPtrToPtr $ fromIntegral $ offset i))
+        drawcall (PrimitiveArrayInstanced p il l a) binds = (attribs a binds, glDrawArraysInstanced (toGLtopology p) 0 (fromIntegral l) (fromIntegral il))
+        drawcall (PrimitiveArrayIndexedInstanced p i il a) binds = (attribs a binds, do
                                                       bindIndexBuffer i
-                                                      glDrawElementsInstanced (toGLtopology p) (fromIntegral $ IndexArray.length i) (fromIntegral $ indexType i) (intPtrToPtr $ fromIntegral $ offset i) (fromIntegral il)
+                                                      glDrawElementsInstanced (toGLtopology p) (fromIntegral $ IndexArray.length i) (fromIntegral $ indexType i) (intPtrToPtr $ fromIntegral $ offset i) (fromIntegral il))
         bindIndexBuffer i = do case restart i of Just x -> do glEnable gl_PRIMITIVE_RESTART 
                                                               glPrimitiveRestartIndex (fromIntegral x)
                                                  Nothing -> glDisable gl_PRIMITIVE_RESTART
-                               glBindBuffer (iArrName i) gl_ELEMENT_ARRAY_BUFFER                                                      
+                               bname <- readIORef (iArrName i)
+                               glBindBuffer bname gl_ELEMENT_ARRAY_BUFFER
 
-        assignIxs :: Int -> Int -> [Int] -> [Int -> IO ()] -> [IO ()]
+        assignIxs :: Int -> Int -> [Int] -> [Binding -> (IO VAOKey, IO ())] -> [(IO VAOKey, IO ())] 
         assignIxs n ix xxs@(x:xs) (f:fs) | x == n    = f ix : assignIxs (n+1) (ix+1) xs fs
-                                         | otherwise = assignIxs (n+1) (ix+1) xxs fs
+                                         | otherwise = assignIxs (n+1) ix xxs fs
         assignIxs _ _ _ [] = []                                          
         assignIxs _ _ _ _ = error "Too few attributes generated in toPrimitiveStream"
-        
-        runAttribs a binds = sequence_ $ assignIxs 0 0 binds $ snd $ runWriter (runStateT (mf a) 0)
+                
+        attribs a binds = first sequence $ second sequence_ $ unzip $ assignIxs 0 0 binds $ execWriter (runStateT (mf a) 0)
 
-        doForInputArray :: Int -> (s -> [[Binding] -> IO()]) -> ShaderM s ()
+        doForInputArray :: Int -> (s -> [[Binding] -> ((IO [VAOKey], IO ()), IO ())]) -> ShaderM s ()
         doForInputArray n io = modifyRenderIO (\s -> s { inputArrayToRenderIOs = insert n io (inputArrayToRenderIOs s) } )
 
 data InputIndices = InputIndices {
@@ -91,7 +89,13 @@ withInputIndices = fmap (\a -> (a, InputIndices (scalarS' "gl_VertexID") (scalar
 makeVertexFx norm x f styp typ b = do 
                              n <- get
                              put $ n + 1
-                             lift $ tell [\ix -> glBindBuffer (bName b) gl_ARRAY_BUFFER >> glVertexAttribPointer (fromIntegral ix) x typ (fromBool norm) (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral $ bStride b * bSkipElems b + bOffset b)]
+                             let combOffset = bStride b * bSkipElems b + bOffset b
+                             lift $ tell [\ix -> ( do bn <- readIORef $ bName b
+                                                      return $ VAOKey bn combOffset x norm (bInstanceDiv b)
+                                                 , do bn <- readIORef $ bName b
+                                                      glBindBuffer bn gl_ARRAY_BUFFER 
+                                                      glVertexAttribDivisor (fromIntegral ix) (fromIntegral $ bInstanceDiv b)
+                                                      glVertexAttribPointer (fromIntegral ix) x typ (fromBool norm) (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral $ combOffset))]
                              return (f styp $ useVInput styp n)
 
 makeVertexFnorm = makeVertexFx True 
@@ -100,7 +104,13 @@ makeVertexF = makeVertexFx False
 makeVertexI x f styp typ b = do 
                              n <- get
                              put $ n + 1
-                             lift $ tell [\ix -> glBindBuffer (bName b) gl_ARRAY_BUFFER  >> glVertexAttribIPointer (fromIntegral ix) x typ (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral $ bStride b * bSkipElems b + bOffset b)]
+                             let combOffset = bStride b * bSkipElems b + bOffset b
+                             lift $ tell [\ix -> ( do bn <- readIORef $ bName b
+                                                      return $ VAOKey bn combOffset x False (bInstanceDiv b)
+                                                 , do bn <- readIORef $ bName b
+                                                      glBindBuffer bn gl_ARRAY_BUFFER
+                                                      glVertexAttribDivisor (fromIntegral ix) (fromIntegral $ bInstanceDiv b) 
+                                                      glVertexAttribIPointer (fromIntegral ix) x typ (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral $ combOffset))]
                              return (f styp $ useVInput styp n) 
 
 -- scalars

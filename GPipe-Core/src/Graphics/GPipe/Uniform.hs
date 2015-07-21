@@ -16,6 +16,7 @@ import Data.IntMap.Lazy (insert)
 import Data.Word (Word)
 
 import Graphics.Rendering.OpenGL.Raw.Core33
+import Data.IORef
 
 class BufferFormat (UniformBufferFormat a) => Uniform a where
     type UniformBufferFormat a
@@ -30,7 +31,8 @@ toUniformBlock sf = Shader $ do
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
                    doForUniform blockId $ \s bind -> let (ub, i) = sf s 
-                                                     in  glBindBufferRange gl_UNIFORM_BUFFER (fromIntegral bind) (bufName ub) (fromIntegral $ i * bufElementSize ub) (fromIntegral $ bufElementSize ub)
+                                                     in do bname <- readIORef $ bufName ub
+                                                           glBindBufferRange gl_UNIFORM_BUFFER (fromIntegral bind) bname (fromIntegral $ i * bufElementSize ub) (fromIntegral $ bufElementSize ub)
                    return u
     where
             sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))

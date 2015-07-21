@@ -54,7 +54,7 @@ drawStencil fs sf m = Shader $ tellDrawcalls fs $ \c -> let ((sh,g,ioc), numC) =
 
 drawDepthStencil fs sf m = Shader $ tellDrawcalls fs $ \(c,d) -> let ((sh,g,ioc), numC) = runDrawColors (m c) in ((sh >> setDepth d, g, \s -> ioc s >> iods s), Just numC)
     where iods s = let (b, di, si, o) = sf s in setGlBlend b >> getCombinedBinding di si >> setGlDepthStencilOptions o
-          getCombinedBinding di si | getImageName di == getImageName si = getImageBinding di gl_DEPTH_STENCIL_ATTACHMENT
+          getCombinedBinding di si | imageEquals di si = getImageBinding di gl_DEPTH_STENCIL_ATTACHMENT
                                    | otherwise = getImageBinding di gl_DEPTH_ATTACHMENT >> getImageBinding si gl_STENCIL_ATTACHMENT
 
 

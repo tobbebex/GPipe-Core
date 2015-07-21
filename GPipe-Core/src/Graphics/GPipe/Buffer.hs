@@ -40,6 +40,7 @@ import Data.Int
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
 import Foreign.C.Types
+import Data.IORef
 
 class BufferFormat f where
     type HostFormat f
@@ -59,7 +60,7 @@ instance Eq (Buffer os b) where
 bufSize :: forall os b. Buffer os b -> Int
 bufSize b = bufElementSize b * bufElementCount b
 
-type BufferName = CUInt
+type BufferName = IORef CUInt
 type Offset = Int
 type Stride = Int
 
@@ -81,7 +82,7 @@ instance Arrow ToBuffer where
     arr f = ToBuffer (arr f) (arr f) (arr f) (arr f)
     first (ToBuffer a b c d) = ToBuffer (first a) (first b) (first c) (first d)
     
-data B a = B { bName :: CUInt, bOffset :: Int, bStride :: Int, bSkipElems :: Int, bInstanceDiv :: Int}
+data B a = B { bName :: IORef CUInt, bOffset :: Int, bStride :: Int, bSkipElems :: Int, bInstanceDiv :: Int}
 
            
 type BFloat = B Float
@@ -197,13 +198,16 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
 
 newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT os f m (Buffer os b)
 newBuffer elementCount = do
-    (buffer, name) <- liftContextIO $ do
+    (buffer, nameRef, name) <- liftContextIO $ do
                        name <- alloca (\ptr -> glGenBuffers 1 ptr >> peek ptr) 
-                       let buffer = makeBuffer name elementCount
-                       glBindBuffer gl_COPY_WRITE_BUFFER (fromIntegral $ bufName buffer)  
+                       nameRef <- newIORef name
+                       let buffer = makeBuffer nameRef elementCount
+                       bname <- readIORef $ bufName buffer
+                       glBindBuffer gl_COPY_WRITE_BUFFER (fromIntegral bname )  
                        glBufferData gl_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr gl_DYNAMIC_DRAW
-                       return (buffer, name)
-    addContextFinalizer buffer $ with name (glDeleteBuffers 1)
+                       return (buffer, nameRef, name)
+    addContextFinalizer nameRef $ with name (glDeleteBuffers 1)
+    addVAOBufferFinalizer nameRef
     return buffer 
 
 writeBuffer :: MonadIO m => [HostFormat f] -> Int -> Buffer os f -> ContextT os f2 m ()
@@ -217,7 +221,8 @@ writeBuffer elems offset buffer =
                                 write (ptr `plusPtr` elemSize) (n-1) xs
         write ptr _ [] = return ptr
     in liftContextIOAsync $ do 
-                          glBindBuffer gl_COPY_WRITE_BUFFER (bufName buffer)
+                          bname <- readIORef $ bufName buffer
+                          glBindBuffer gl_COPY_WRITE_BUFFER bname
                           ptr <- glMapBufferRange gl_COPY_WRITE_BUFFER off (fromIntegral $ maxElems * elemSize) (gl_MAP_WRITE_BIT + gl_MAP_FLUSH_EXPLICIT_BIT)
                           end <- write ptr maxElems elems
                           glFlushMappedBufferRange gl_COPY_WRITE_BUFFER off (fromIntegral $ end `minusPtr` ptr) 
@@ -231,8 +236,10 @@ readBuffer x y z f = readBufferM x y z (\ a b -> return $ f a b)
 
 copyBuffer :: MonadIO m => Int -> Int -> Buffer os f -> Int -> Buffer os f -> ContextT os f2 m ()
 copyBuffer len from bFrom to bTo = liftContextIOAsync $ do 
-                                                      glBindBuffer gl_COPY_READ_BUFFER (bufName bFrom)
-                                                      glBindBuffer gl_COPY_WRITE_BUFFER (bufName bTo)
+                                                      bnamef <- readIORef $ bufName bFrom
+                                                      bnamet <- readIORef $ bufName bTo
+                                                      glBindBuffer gl_COPY_READ_BUFFER bnamef
+                                                      glBindBuffer gl_COPY_WRITE_BUFFER bnamet
                                                       let elemSize = bufElementSize bFrom -- same as for bTo
                                                       glCopyBufferSubData gl_COPY_READ_BUFFER gl_COPY_WRITE_BUFFER (fromIntegral $ from * elemSize) (fromIntegral $ to * elemSize) (fromIntegral $ len * elemSize)   
 

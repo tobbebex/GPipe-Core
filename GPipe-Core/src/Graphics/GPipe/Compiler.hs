@@ -22,18 +22,16 @@ import Data.Either
 import Control.Exception (throwIO, Exception)
 import Data.Dynamic (Typeable)
 import Data.IORef
-import Foreign.C.Types
 
 data Drawcall s = Drawcall {
-                    runDrawcall :: s -> IO (),
+                    drawcallFBO :: s -> (Maybe (IO FBOKeys, IO ()), IO ()),
                     drawcallName :: Int,
                     rasterizationName :: Int,
                     vertexsSource :: String,
                     fragmentSource :: String,
                     usedInputs :: [Int],
                     usedUniforms :: [Int],
-                    usedSamplers :: [Int],
-                    fboBuffers :: Maybe Int -- Nothing indicates default framebuffer
+                    usedSamplers :: [Int]
                     }                                      
 
 type Binding = Int
@@ -84,7 +82,7 @@ compile dcs s = do
     cd <- getContextData
     fAdd <- getContextFinalizerAdder
     let (errs, ret) = partitionEithers compRet      
-        (pnames, fboSetups, fs) = unzip3 ret
+        (pnames, fs) = unzip ret
         fr x = foldl (\ io f -> io >> f x cd fAdd) (return ()) fs
         allErrs = errUni ++ errSamp ++ errs
     if null allErrs 
@@ -96,7 +94,7 @@ compile dcs s = do
             liftContextIOAsync $ mapM_ (readIORef >=> glDeleteProgram) pnames
             liftIO $ throwIO (GPipeException $ concat allErrs)   
  where   
-    comp (Drawcall runner primN rastN vsource fsource inps unis samps fboSetup, ubinds, sbinds) = do
+    comp (Drawcall fboSetup primN rastN vsource fsource inps unis samps, ubinds, sbinds) = do
            BoundState uniState sampState <- get
            let (bindUni, uniState') = makeBind uniState (uniformNameToRenderIO s) (zip unis ubinds)
            let (bindSamp, sampState') = makeBind sampState (samplerNameToRenderIO s) $ zip samps sbinds
@@ -139,25 +137,44 @@ compile dcs s = do
                                     glUniform1i six (fromIntegral bind)
                               pNameRef <- newIORef pName
                                                                  
-                              return $ Right (pNameRef, fboSetup, \x cd fAdd -> do
+                              return $ Right (pNameRef, \x cd fAdd -> do
                                            -- Drawing with program --
-                                           pName <- readIORef pNameRef
-                                           glUseProgram pName
+                                           pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
+                                           glUseProgram pName'
                                            bindUni x 
-                                           bindSamp x                                   
-                                           runner x
+                                           bindSamp x
                                            (rasterizationNameToRenderIO s ! rastN) x -- TODO: Dont bind already bound?
+                                           let (mfbokeyio, blendio) = fboSetup x
+                                           blendio
+                                           case mfbokeyio of
+                                                Nothing -> glBindFramebuffer gl_DRAW_FRAMEBUFFER 0
+                                                Just (fbokeyio, fboio) -> do
+                                                   fbokey <- fbokeyio
+                                                   mfbo <- getFBO cd fbokey
+                                                   case mfbo of
+                                                        Just fbo -> do fbo' <- readIORef fbo
+                                                                       glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
+                                                        Nothing -> do fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
+                                                                      fbo <- newIORef fbo'
+                                                                      void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
+                                                                      setFBO cd fbokey fbo
+                                                                      glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
+                                                                      let numColors = length $ fboColors fbokey
+                                                                      withArray [gl_COLOR_ATTACHMENT0..(gl_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $ glDrawBuffers (fromIntegral numColors)
+                                                                      glEnable gl_FRAMEBUFFER_SRGB
+                                                                      fboio
+                                           -- Draw each Vertex Array --
                                            forM_ (map ($ inps) ((inputArrayToRenderIOs s ! primN) x)) $ \ ((keyio, vaoio), drawio) -> do
                                                 key <- keyio
                                                 mvao <- getVAO cd key
                                                 case mvao of
                                                     Just vao -> do vao' <- readIORef vao
-                                                                   glEnableVertexAttribArray vao'
+                                                                   glBindVertexArray vao'
                                                     Nothing -> do vao' <- alloca (\ptr -> glGenVertexArrays 1 ptr >> peek ptr)
                                                                   vao <- newIORef vao'
-                                                                  fAdd vao $ with vao' (glDeleteVertexArrays 1)
+                                                                  void $ fAdd vao $ with vao' (glDeleteVertexArrays 1)
                                                                   setVAO cd key vao
-                                                                  glEnableVertexAttribArray vao'
+                                                                  glBindVertexArray vao'
                                                                   vaoio
                                                 drawio
                                            )
@@ -198,22 +215,7 @@ compile dcs s = do
                                     glEnable gl_FRAMEBUFFER_SRGB
                                     return fboName
 
-        delete = do 
-                    mapM_ glDeleteProgram pnames
-                    withArrayLen (filter (/= 0) fboNames) $ \len ptr -> when (len > 0) $ glDeleteFramebuffers (fromIntegral len) ptr
-                    
-                    
-                                                mfbo <- getFBO cd key
-                                                case mfbo of
-                                                    Just fbo -> do fbo' <- readIORef fbo
-                                                                   glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
-                                                                   io
-                                                    Nothing -> do fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
-                                                                  fbo <- newIORef fbo'
-                                                                  fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
-                                                                  glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
-                                                                  fboSetup
-                                                                  fboio                    
+                
 -}
     
 -- Optimization, save gl calls to already bound buffers/samplers

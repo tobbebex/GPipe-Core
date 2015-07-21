@@ -425,6 +425,9 @@ imageEquals (Image tn' k1' k2' _ _) (Image tn k1 k2 _ _) = tn' == tn && k1' == k
 getImageBinding :: Image t -> CUInt -> IO ()
 getImageBinding (Image _ _ _ _ io) = io
 
+getImageFBOKey (Image tn k1 k2 _ _) = do tn' <- readIORef tn
+                                         return $ FBOKey tn' k1 k2 
+
 imageSize :: Image f -> V2 Int
 imageSize (Image _ _ _ s _) = s
 

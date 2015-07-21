@@ -20,7 +20,7 @@ module Graphics.GPipe.Context
     getContextData,
     getVAO, setVAO,
     getFBO, setFBO,
-    VAOKey(..), FBOKey(..)
+    VAOKey(..), FBOKey(..), FBOKeys(..)
 )
 where
 
@@ -39,6 +39,7 @@ import Data.IORef
 import Control.Monad
 import Data.List (delete)
 import Foreign.C.Types
+import Data.Maybe (maybeToList)
 
 type ContextFactory c ds = ContextFormat c ds -> IO ContextHandle
 
@@ -126,9 +127,11 @@ type SharedContextDatas = MVar [ContextData]
 type ContextData = MVar (VAOCache, FBOCache)
 data VAOKey = VAOKey { vaoBname :: !CUInt, vaoCombBufferOffset :: !Int, vaoComponents :: !CInt, vaoNorm :: !Bool, vaoDiv :: !Int } deriving (Eq, Ord)
 data FBOKey = FBOKey { fboTname :: !CUInt, fboTlayerOrNegIfRendBuff :: !Int, fboTlevel :: !Int } deriving (Eq, Ord)
+data FBOKeys = FBOKeys { fboColors :: [FBOKey], fboDepth :: Maybe FBOKey, fboStencil :: Maybe FBOKey } deriving (Eq, Ord)  
 type VAOCache = Map.Map [VAOKey] (IORef CUInt)
-type FBOCache = Map.Map [FBOKey] (IORef CUInt)
+type FBOCache = Map.Map FBOKeys (IORef CUInt)
 
+getFBOKeys (FBOKeys xs d s) = xs ++ maybeToList d ++ maybeToList s
 newContextDatas = newMVar []
 addContextData r = do cd <- newMVar (Map.empty, Map.empty)  
                       modifyMVar_ r $ return . (cd:)
@@ -150,7 +153,7 @@ addVAOBufferFinalizer = addCacheFinalizer deleteVAOBuf
     
 addFBOTextureFinalizer :: MonadIO m => Bool -> IORef CUInt -> ContextT os f m ()
 addFBOTextureFinalizer isRB = addCacheFinalizer deleteVBOBuf    
-    where deleteVBOBuf n (vao, fbo) = (vao, Map.filterWithKey (\k _ -> all (\fk -> fboTname fk /= n || isRB /= (fboTlayerOrNegIfRendBuff fk < 0) ) k) fbo)
+    where deleteVBOBuf n (vao, fbo) = (vao, Map.filterWithKey (\k _ -> all (\fk -> fboTname fk /= n || isRB /= (fboTlayerOrNegIfRendBuff fk < 0) ) $ getFBOKeys k) $ fbo)
 
 
 getContextData :: MonadIO m => ContextT os f m (ContextData)
@@ -163,9 +166,9 @@ getVAO cd k = do (vaos, _) <- readMVar cd
 setVAO :: ContextData -> [VAOKey] -> IORef CUInt -> IO ()
 setVAO cd k v = do modifyMVar_ cd $ \(vaos, fbos) -> return (Map.insert k v vaos, fbos)  
 
-getFBO :: ContextData -> [FBOKey] -> IO (Maybe (IORef CUInt))
+getFBO :: ContextData -> FBOKeys -> IO (Maybe (IORef CUInt))
 getFBO cd k = do (_, fbos) <- readMVar cd
                  return (Map.lookup k fbos)
 
-setFBO :: ContextData -> [FBOKey] -> IORef CUInt -> IO ()
+setFBO :: ContextData -> FBOKeys -> IORef CUInt -> IO ()
 setFBO cd k v = modifyMVar_ cd $ \(vaos, fbos) -> return (vaos, Map.insert k v fbos)  

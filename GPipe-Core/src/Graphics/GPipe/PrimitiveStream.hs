@@ -25,7 +25,6 @@ import Graphics.Rendering.OpenGL.Raw.Core33
 import Foreign.Marshal.Utils
 import Foreign.Ptr (intPtrToPtr)
 import Data.IORef
-import Foreign.C.Types
 
 --------------------
 
@@ -93,9 +92,11 @@ makeVertexFx norm x f styp typ b = do
                              lift $ tell [\ix -> ( do bn <- readIORef $ bName b
                                                       return $ VAOKey bn combOffset x norm (bInstanceDiv b)
                                                  , do bn <- readIORef $ bName b
+                                                      let ix' = fromIntegral ix
+                                                      glEnableVertexAttribArray ix'
                                                       glBindBuffer bn gl_ARRAY_BUFFER 
-                                                      glVertexAttribDivisor (fromIntegral ix) (fromIntegral $ bInstanceDiv b)
-                                                      glVertexAttribPointer (fromIntegral ix) x typ (fromBool norm) (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral $ combOffset))]
+                                                      glVertexAttribDivisor ix' (fromIntegral $ bInstanceDiv b)
+                                                      glVertexAttribPointer ix' x typ (fromBool norm) (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset))]
                              return (f styp $ useVInput styp n)
 
 makeVertexFnorm = makeVertexFx True 
@@ -108,9 +109,11 @@ makeVertexI x f styp typ b = do
                              lift $ tell [\ix -> ( do bn <- readIORef $ bName b
                                                       return $ VAOKey bn combOffset x False (bInstanceDiv b)
                                                  , do bn <- readIORef $ bName b
+                                                      let ix' = fromIntegral ix
+                                                      glEnableVertexAttribArray ix'
                                                       glBindBuffer bn gl_ARRAY_BUFFER
-                                                      glVertexAttribDivisor (fromIntegral ix) (fromIntegral $ bInstanceDiv b) 
-                                                      glVertexAttribIPointer (fromIntegral ix) x typ (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral $ combOffset))]
+                                                      glVertexAttribDivisor ix' (fromIntegral $ bInstanceDiv b) 
+                                                      glVertexAttribIPointer ix' x typ (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset))]
                              return (f styp $ useVInput styp n) 
 
 -- scalars
@@ -159,28 +162,27 @@ instance VertexInput BWord8 where
        
 -- B2
 
-unB2norm = unB2 . unBnorm
 instance VertexInput (B2 Float) where
     type VertexFormat (B2 Float) = (VFloat, VFloat)
     toVertex = ToVertex $ Kleisli $ makeVertexF 2 vec2S STypeFloat gl_FLOAT . unB2
 instance VertexInput (BNormalized (B2 Int32)) where
     type VertexFormat (BNormalized (B2 Int32)) = (VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_INT . unB2norm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_INT . unB2 . unBnorm
 instance VertexInput (BNormalized (B2 Int16)) where
     type VertexFormat (BNormalized (B2 Int16)) = (VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_SHORT . unB2norm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_SHORT . unB2 . unBnorm
 instance VertexInput (BNormalized (B2 Int8)) where
     type VertexFormat (BNormalized (B2 Int8)) = (VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_BYTE . unB2norm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_BYTE . unB2 . unBnorm
 instance VertexInput (BNormalized (B2 Word32)) where
     type VertexFormat (BNormalized (B2 Word32)) = (VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_UNSIGNED_INT . unB2norm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_UNSIGNED_INT . unB2 . unBnorm
 instance VertexInput (BNormalized (B2 Word16)) where
     type VertexFormat (BNormalized (B2 Word16)) = (VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_UNSIGNED_SHORT . unB2norm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_UNSIGNED_SHORT . unB2 . unBnorm
 instance VertexInput (BNormalized (B2 Word8)) where
     type VertexFormat (BNormalized (B2 Word8)) = (VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_UNSIGNED_BYTE . unB2norm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_UNSIGNED_BYTE . unB2 . unBnorm
 instance VertexInput  (B2 Int32) where
     type VertexFormat  (B2 Int32) = (VInt, VInt)
     toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S STypeInt gl_INT . unB2

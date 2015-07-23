@@ -21,6 +21,7 @@ import Foreign.Marshal.Utils
 import Control.Monad
 import Foreign.C.Types
 import Data.IORef
+import Control.Arrow ((&&&))
 
 data Texture1D os a = Texture1D TexName Int MaxLevels
 data Texture1DArray os a = Texture1DArray TexName (Int, Int)  MaxLevels
@@ -36,12 +37,103 @@ type Size1 = Int
 type Size2 = (Int, Int)
 type Size3 = (Int, Int, Int)
 
-newTexture1D :: forall os f c m. (ColorSampleable c, Monad m) => Format c -> Size1 -> MaxLevels -> ContextT os f m (Texture1D os c)
-newTexture1DArray :: forall os f c m. (ColorSampleable c, Monad m) => Format c -> Size2 -> MaxLevels -> ContextT os f m (Texture1DArray os c)
+newTexture1D :: forall os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size1 -> MaxLevels -> ContextT os f m (Texture1D os c)
+newTexture1DArray :: forall os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size2 -> MaxLevels -> ContextT os f m (Texture1DArray os c)
 newTexture2D :: forall os f c m. (TextureFormat c, MonadIO m) => Format c -> Size2 -> MaxLevels -> ContextT os f m (Texture2D os c)
-newTexture2DArray :: forall os f c m. (ColorSampleable c, Monad m) => Format c -> Size3 -> MaxLevels -> ContextT os f m (Texture2DArray os c)
-newTexture3D :: forall os f c m. (ColorRenderable c, Monad m) => Format c -> Size3 -> MaxLevels -> ContextT os f m (Texture3D os c)
-newTextureCube :: forall os f c m. (ColorSampleable c, Monad m) => Format c -> Size1 -> MaxLevels -> ContextT os f m (TextureCube os c)
+newTexture2DArray :: forall os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size3 -> MaxLevels -> ContextT os f m (Texture2DArray os c)
+newTexture3D :: forall os f c m. (ColorRenderable c, MonadIO m) => Format c -> Size3 -> MaxLevels -> ContextT os f m (Texture3D os c)
+newTextureCube :: forall os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size1 -> MaxLevels -> ContextT os f m (TextureCube os c)
+
+newTexture1D f s mx = do
+                        t <- makeTex
+                        let glintf = fromIntegral $ getGlInternalFormat f
+                            glf = getGlFormat (undefined :: c)
+                            ls = min mx (calcMaxLevels s)
+                            tex = Texture1D t s ls
+                        liftContextIOAsync $ do
+                            useTexSync t gl_TEXTURE_1D
+                            forM_ (zip (texture1DSizes tex) [0..]) $ \(lw, l) ->
+                                glTexImage1D gl_TEXTURE_1D l glintf (fromIntegral lw) 0 glf gl_BYTE nullPtr
+                            setDefaultTexParams gl_TEXTURE_1D (ls-1)                                    
+                        return tex  
+newTexture1DArray f s@(w, sl) mx = do
+                                t <- makeTex
+                                let glintf = fromIntegral $ getGlInternalFormat f
+                                    glf = getGlFormat (undefined :: c)
+                                    ls = min mx (calcMaxLevels w)
+                                    tex = Texture1DArray t s ls
+                                liftContextIOAsync $ do
+                                    useTexSync t gl_TEXTURE_1D_ARRAY
+                                    forM_ (zip (texture1DArraySizes tex) [0..]) $ \((lw, _), l) ->
+                                        glTexImage2D gl_TEXTURE_1D_ARRAY l glintf (fromIntegral lw) (fromIntegral sl) 0 glf gl_BYTE nullPtr
+                                    setDefaultTexParams gl_TEXTURE_1D_ARRAY (ls-1)                                    
+                                return tex
+newTexture2D f s@(w, h) mx | getGlFormat (undefined :: c) == gl_STENCIL_INDEX = do 
+                                t <- makeRenderBuff
+                                liftContextIOAsync $ 
+                                   glRenderbufferStorage gl_RENDERBUFFER (getGlInternalFormat f) (fromIntegral w) (fromIntegral h)
+                                return $ RenderBuffer2D t s
+                             | otherwise = do
+                                t <- makeTex
+                                let glintf = fromIntegral $ getGlInternalFormat f
+                                    glf = getGlFormat (undefined :: c)
+                                    ls = min mx (calcMaxLevels (max w h))
+                                    tex = Texture2D t s ls
+                                liftContextIOAsync $ do
+                                    useTexSync t gl_TEXTURE_2D
+                                    forM_ (zip (texture2DSizes tex) [0..]) $ \((lw, lh), l) ->
+                                        glTexImage2D gl_TEXTURE_2D l glintf (fromIntegral lw) (fromIntegral lh) 0 glf gl_BYTE nullPtr
+                                    setDefaultTexParams gl_TEXTURE_2D (ls-1)                                    
+                                return tex
+
+newTexture2DArray f s@(w, h, sl) mx = do
+                        t <- makeTex
+                        let glintf = fromIntegral $ getGlInternalFormat f
+                            glf = getGlFormat (undefined :: c)
+                            ls = min mx (calcMaxLevels (max w h))
+                            tex = Texture2DArray t s ls
+                        liftContextIOAsync $ do
+                            useTexSync t gl_TEXTURE_2D_ARRAY
+                            forM_ (zip (texture2DArraySizes tex) [0..]) $ \((lw,lh,_), l) ->
+                                glTexImage3D gl_TEXTURE_2D_ARRAY l glintf (fromIntegral lw) (fromIntegral lh) (fromIntegral sl) 0 glf gl_BYTE nullPtr
+                            setDefaultTexParams gl_TEXTURE_2D_ARRAY (ls-1)                                    
+                        return tex  
+
+newTexture3D f s@(w, h, d) mx = do
+                        t <- makeTex
+                        let glintf = fromIntegral $ getGlInternalFormat f
+                            glf = getGlFormat (undefined :: c)
+                            ls = min mx (calcMaxLevels (max w (max h d)))
+                            tex = Texture3D t s ls
+                        liftContextIOAsync $ do
+                            useTexSync t gl_TEXTURE_3D
+                            forM_ (zip (texture3DSizes tex) [0..]) $ \((lw,lh,ld), l) ->
+                                glTexImage3D gl_TEXTURE_3D l glintf (fromIntegral lw) (fromIntegral lh) (fromIntegral ld) 0 glf gl_BYTE nullPtr
+                            setDefaultTexParams gl_TEXTURE_3D (ls-1)                                    
+                        return tex
+newTextureCube f s mx = do
+                            t <- makeTex
+                            let glintf = fromIntegral $ getGlInternalFormat f
+                                glf = getGlFormat (undefined :: c)
+                                ls = min mx (calcMaxLevels s)
+                                tex = TextureCube t s ls
+                            liftContextIOAsync $ do
+                                useTexSync t gl_TEXTURE_CUBE_MAP
+                                forM_ [(size, getGlCubeSide side) | size <- zip (textureCubeSizes tex) [0..], side <- [minBound..maxBound]] $ \((lx, l), side) ->
+                                    glTexImage2D side l glintf (fromIntegral lx) (fromIntegral lx) 0 glf gl_BYTE nullPtr
+                                setDefaultTexParams gl_TEXTURE_CUBE_MAP (ls-1)
+                                glTexParameteri gl_TEXTURE_CUBE_MAP gl_TEXTURE_WRAP_S (fromIntegral gl_CLAMP_TO_EDGE)
+                                glTexParameteri gl_TEXTURE_CUBE_MAP gl_TEXTURE_WRAP_T (fromIntegral gl_CLAMP_TO_EDGE)
+                                glTexParameteri gl_TEXTURE_CUBE_MAP gl_TEXTURE_WRAP_R (fromIntegral gl_CLAMP_TO_EDGE)                                    
+                            return tex
+
+setDefaultTexParams :: GLenum -> Int -> IO ()
+setDefaultTexParams t ml = do
+                            glTexParameteri t gl_TEXTURE_BASE_LEVEL 0
+                            glTexParameteri t gl_TEXTURE_MAX_LEVEL (fromIntegral ml)
+                            glTexParameteri t gl_TEXTURE_MIN_FILTER (fromIntegral gl_NEAREST_MIPMAP_NEAREST)
+                            glTexParameteri t gl_TEXTURE_MAG_FILTER (fromIntegral gl_NEAREST)  
+
 
 texture1DLevels :: Texture1D os c -> Int 
 texture1DArrayLevels :: Texture1DArray os c -> Int 
@@ -56,46 +148,16 @@ texture2DLevels (RenderBuffer2D _ _) = 1
 texture2DArrayLevels (Texture2DArray _ _ ls) = ls 
 texture3DLevels (Texture3D _ _ ls) = ls 
 textureCubeLevels (TextureCube _ _ ls) = ls 
-
-
-newTexture1D = undefined  
-newTexture1DArray = undefined
-newTexture2D f s@(w, h) mx | getGlFormat (undefined :: c) == gl_STENCIL_INDEX = do 
-                                t <- makeRenderBuff
-                                liftContextIO $ do
-                                   glRenderbufferStorage gl_RENDERBUFFER (getGlInternalFormat f) (fromIntegral w) (fromIntegral h)
-                                   return $ RenderBuffer2D t s
-                             | otherwise = do
-                                t <- makeTex
-                                liftContextIO $ do
-                                    let glintf = fromIntegral $ getGlInternalFormat f
-                                        glf = getGlFormat (undefined :: c)
-                                        ls = min mx (calcMaxLevels (max w h))
-                                        tex = Texture2D t s ls
-                                    useTexSync t gl_TEXTURE_2D
-                                    forM_ (zip (texture2DSizes tex) [0..]) $ \((lw, lh), l) ->
-                                        glTexImage2D gl_TEXTURE_2D l glintf (fromIntegral lw) (fromIntegral lh) 0 glf gl_BYTE nullPtr
-                                    glTexParameteri gl_TEXTURE_2D gl_TEXTURE_BASE_LEVEL 0
-                                    glTexParameteri gl_TEXTURE_2D gl_TEXTURE_MAX_LEVEL (fromIntegral (ls-1))
-                                    glTexParameteri gl_TEXTURE_2D gl_TEXTURE_MIN_FILTER (fromIntegral gl_NEAREST_MIPMAP_NEAREST)
-                                    glTexParameteri gl_TEXTURE_2D gl_TEXTURE_MAG_FILTER (fromIntegral gl_NEAREST)                                    
-                                    return tex
-
-newTexture2DArray = undefined
-newTexture3D  = undefined
-newTextureCube  = undefined
-
-
+                            
 texture1DSizes :: Texture1D os c -> [Size1] 
 texture1DArraySizes :: Texture1DArray os c -> [Size2] 
 texture2DSizes :: Texture2D os c -> [Size2] 
 texture2DArraySizes :: Texture2DArray os c -> [Size3] 
 texture3DSizes :: Texture3D os c -> [Size3] 
 textureCubeSizes :: TextureCube os c -> [Size1] 
-
 texture1DSizes (Texture1D _ w ls) = map (calcLevelSize w) [0..(ls-1)] 
 texture1DArraySizes (Texture1DArray _ (w, s) ls) = map (\l -> (calcLevelSize w l, s)) [0..(ls-1)]
-texture2DSizes (Texture2D _ (w, h) ls) = map (\l -> (calcLevelSize w l, calcLevelSize h l)) [0..(ls-1)]
+texture2DSizes (Texture2D _ (w, h) ls) = map (calcLevelSize w &&& calcLevelSize h) [0..(ls-1)]
 texture2DSizes (RenderBuffer2D _ (w, h)) = [(w, h)]
 texture2DArraySizes (Texture2DArray _ (w, h, s) ls) = map (\l -> (calcLevelSize w l, calcLevelSize h l, s)) [0..(ls-1)] 
 texture3DSizes (Texture3D _ (w, h, d) ls) = map (\l -> (calcLevelSize w l, calcLevelSize h l, calcLevelSize d l)) [0..(ls-1)] 
@@ -137,7 +199,7 @@ useTexSync tn t = do maxUnits <- alloca (\ptr -> glGetIntegerv gl_MAX_COMBINED_T
 
 type Level = Int
 type Slice = Int
-data CubeSide = CubePosX | CubeNegX | CubePosY | CubeNegY | CubePosZ | CubeNegZ
+data CubeSide = CubePosX | CubeNegX | CubePosY | CubeNegY | CubePosZ | CubeNegZ deriving (Eq, Enum, Bounded)
 
 data Proxy t = Proxy
 
@@ -255,6 +317,7 @@ newSampler2D sf = Shader $ do
                                                            setEdgeMode gl_TEXTURE_2D (Just ex, Just ey, Nothing) (return ())
                    return $ Sampler2D sampId
 
+setEdgeMode :: GLenum -> (Maybe EdgeMode, Maybe EdgeMode, Maybe EdgeMode) -> IO () -> IO ()
 setEdgeMode t (se,te,re) bcio = do glwrap gl_TEXTURE_WRAP_S se
                                    glwrap gl_TEXTURE_WRAP_T te
                                    glwrap gl_TEXTURE_WRAP_R re
@@ -266,6 +329,7 @@ setEdgeMode t (se,te,re) bcio = do glwrap gl_TEXTURE_WRAP_S se
           glwrap x (Just ClampToEdge) = glTexParameteri t x (fromIntegral gl_CLAMP_TO_EDGE)
           glwrap x (Just ClampToBorder) = glTexParameteri t x (fromIntegral gl_CLAMP_TO_BORDER)
           
+setSamplerFilter :: GLenum -> SamplerFilter a -> IO ()
 setSamplerFilter t (SamplerFilter magf minf lodf a) = setSamplerFilter' t magf minf lodf a
 setSamplerFilter t SamplerNearest = setSamplerFilter' t Nearest Nearest Nearest Nothing
 

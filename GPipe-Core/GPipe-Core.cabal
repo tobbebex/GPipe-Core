@@ -28,6 +28,5 @@ library
                    Graphics.GPipe.PrimitiveArray,
                    Graphics.GPipe.Expr,
                    Graphics.GPipe.Shader,
-                   Graphics.GPipe.PrimitiveStream,
-                   Data.Vec
+                   Graphics.GPipe.PrimitiveStream
   other-modules:    Graphics.GPipe.Compiler

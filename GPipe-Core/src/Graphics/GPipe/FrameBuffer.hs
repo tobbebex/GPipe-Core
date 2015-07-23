@@ -15,7 +15,6 @@ import Control.Monad.Trans.Writer.Lazy
 import Data.List (intercalate)
 import Control.Monad.Trans.State.Lazy
 import Control.Monad.Trans.Class
-import Data.Vec
 
 import Graphics.Rendering.OpenGL.Raw.Core33
 import Foreign.Marshal.Utils
@@ -144,7 +143,7 @@ orderedUnion [] ys = ys
 setColor :: forall c. ColorSampleable c => c -> Int -> FragColor c -> (ExprM (), GlobDeclM ())
 setColor ct n c = let    name = "out" ++ show n
                          typeS = typeStr ct
-                  in (do xs <- mapM unS $ fromColor ct c
+                  in (do xs <- mapM unS (fromColor ct c :: [S F (ColorElement c)])
                          tellAssignment' name (typeS ++ "(" ++ intercalate "," xs ++ ")")
                          ,
                       do tellGlobal "layout(location = "
@@ -180,7 +179,7 @@ setGlContextColorOptions c (ContextColorOption blend mask) = do
 
 setGlBlend :: Blending -> IO ()
 setGlBlend NoBlending = return ()
-setGlBlend (BlendRgbAlpha (e, ea) (BlendingFactors sf df, BlendingFactors sfa dfa) (V4 r g b a)) = do
+setGlBlend (BlendRgbAlpha (e, ea) (BlendingFactors sf df, BlendingFactors sfa dfa) (r, g, b, a)) = do
                             glBlendEquationSeparate (getGlBlendEquation e) (getGlBlendEquation ea) 
                             glBlendFuncSeparate (getGlBlendFunc sf) (getGlBlendFunc df) (getGlBlendFunc sfa) (getGlBlendFunc dfa)  
                             glBlendColor (toGlFloat r) (toGlFloat g) (toGlFloat b) (toGlFloat a)
@@ -244,7 +243,7 @@ data Blending =
     | BlendRgbAlpha (BlendEquation, BlendEquation) (BlendingFactors, BlendingFactors) ConstantColor
     | LogicOp LogicOp
                       
-type ConstantColor = V4 Float
+type ConstantColor = (Float, Float, Float, Float)
 
 data BlendingFactors = BlendingFactors { blendFactorSrc :: BlendingFactor, blendFactorDst :: BlendingFactor }
 

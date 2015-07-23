@@ -8,7 +8,6 @@ import Graphics.GPipe.Shader
 import Graphics.GPipe.Compiler
 import Graphics.GPipe.PrimitiveStream
 import Graphics.GPipe.PrimitiveArray
-import Data.Vec
 import Control.Monad.Trans.State.Lazy
 import Data.Monoid (Monoid)
 import Data.Boolean
@@ -16,7 +15,7 @@ import Data.IntMap.Lazy (insert)
 
 import Graphics.Rendering.OpenGL.Raw.Core33
 
-type VPos = V4 VFloat
+type VPos = (VFloat, VFloat, VFloat, VFloat)
 
 data Side = Front | Back | FrontAndBack
 type ExprPos = ExprM ()
@@ -45,13 +44,14 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
     where        
         ToFragment (Kleisli m) = toFragment :: ToFragment a (FragmentFormat a)
         f n ((p, x),s) = (evalState (m x) 0, FragmentStreamData n (makePos p) s true)
-        makePos (V4 (S x) (S y) (S z) (S w)) = do
+        makePos (S x, S y, S z, S w) = do
                                        x' <- x
                                        y' <- y
                                        z' <- z
                                        w' <- w
                                        tellAssignment' "gl_Position" $ "vec4("++x'++',':y'++',':z'++',':w'++")"
         io s = let (side, ViewPort (x,y) (w,h), DepthRange dmin dmax) = sf s in do setGlCullFace side
+                                                                                   glScissor (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 
                                                                                    glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 
                                                                                    glDepthRange (fromRational $ toRational dmin) (fromRational $ toRational dmax)
 
@@ -78,10 +78,13 @@ withRasterizedInfo = fmap (\a -> (a, RasterizedInfo (vec4S' "gl_FragCoord") (sca
 data Flat a = Flat a
 data NoPerspective a = NoPerspective a
 
+makeFragment :: String -> SType -> (a -> ExprM String) -> ToFragment a (S c a1)
 makeFragment qual styp f = ToFragment $ Kleisli $ \ x -> do n <- get
                                                             put (n+1)
                                                             return $ S $ useFInput qual "vf" styp n $ f x
+unFlat :: Flat t -> t
 unFlat (Flat s) = s
+unNPersp :: NoPerspective t -> t
 unNPersp (NoPerspective s) = s
 
 instance FragmentInput VFloat where

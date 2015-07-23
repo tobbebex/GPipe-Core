@@ -87,7 +87,8 @@ runSharedContextT f (ContextT m) =
                         runReaderT (i >> m) rs
 
 initGlState :: MonadIO m => ContextT os f m ()
-initGlState = liftContextIOAsync $ glEnable gl_FRAMEBUFFER_SRGB
+initGlState = liftContextIOAsync $ do glEnable gl_FRAMEBUFFER_SRGB
+                                      glEnable gl_SCISSOR_TEST
 
 liftContextIO :: MonadIO m => IO a -> ContextT os f m a
 liftContextIO m = ContextT (asks fst) >>= liftIO . flip contextDoSync m

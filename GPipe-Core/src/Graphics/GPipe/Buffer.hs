@@ -21,7 +21,6 @@ module Graphics.GPipe.Buffer
 ) where
 
 import Graphics.GPipe.Context
-import Data.Vec
 
 import Graphics.Rendering.OpenGL.Raw.Core33
 import Foreign.Marshal.Utils
@@ -162,18 +161,18 @@ instance BufferFormat a => BufferFormat (BNormalized a) where
     toBuffer = arr BNormalized . toBuffer
                                    
 instance Storable a => BufferFormat (B2 a) where
-    type HostFormat (B2 a) = V2 a
-    toBuffer = proc (V2 a b) -> do
+    type HostFormat (B2 a) = (a,a)
+    toBuffer = proc (a, b) -> do
             (a', _::B a) <- toBuffer . align (2 * sizeOf (undefined :: a)) -< (a, b)
             returnA -< B2 a'
 instance Storable a => BufferFormat (B3 a) where
-    type HostFormat (B3 a) = V3 a
-    toBuffer = proc (V3 a b c) -> do
+    type HostFormat (B3 a) = (a,a,a)
+    toBuffer = proc (a, b, c) -> do
             (a', _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c)
             returnA -< B3 a'
 instance Storable a => BufferFormat (B4 a) where
-    type HostFormat (B4 a) = V4 a
-    toBuffer = proc (V4 a b c d) -> do
+    type HostFormat (B4 a) = (a,a,a,a)
+    toBuffer = proc (a, b, c, d) -> do
             (a', _::B a, _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c, d)
             returnA -< B4 a'
     

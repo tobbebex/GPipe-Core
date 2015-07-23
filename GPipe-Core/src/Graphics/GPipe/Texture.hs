@@ -10,7 +10,6 @@ import Graphics.GPipe.Buffer
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.IntMap.Lazy (insert)
 import Data.Functor ((<$>))
-import Data.Vec
 
 import Graphics.Rendering.OpenGL.Raw.Core33
 import Graphics.Rendering.OpenGL.Raw.EXT.TextureFilterAnisotropic
@@ -23,53 +22,58 @@ import Control.Monad
 import Foreign.C.Types
 import Data.IORef
 
-data Texture1D os a = Texture1D TexName (V1 Int) MaxLevels
-data Texture1DArray os a = Texture1DArray TexName (V2 Int)  MaxLevels
-data Texture2D os a = Texture2D TexName (V2 Int) MaxLevels | RenderBuffer2D TexName (V2 Int)
-data Texture2DArray os a = Texture2DArray TexName (V1 Int) MaxLevels
+data Texture1D os a = Texture1D TexName Int MaxLevels
+data Texture1DArray os a = Texture1DArray TexName (Int, Int)  MaxLevels
+data Texture2D os a = Texture2D TexName (Int, Int) MaxLevels 
+                    | RenderBuffer2D TexName (Int, Int)
+data Texture2DArray os a = Texture2DArray TexName (Int, Int, Int) MaxLevels
 data Texture3D os a = Texture3D TexName (Int, Int, Int) MaxLevels
 data TextureCube os a = TextureCube TexName Int MaxLevels
 
 type MaxLevels = Int
 
-newTexture1D :: (ColorSampleable c, Monad m) => c -> V1 Int -> MaxLevels -> ContextT os f m (Texture1D os c)
-newTexture1DArray :: (ColorSampleable c, Monad m) => c -> V2 Int -> MaxLevels -> ContextT os f m (Texture1DArray os c)
-newTexture2D :: (TextureFormat c, MonadIO m) => c -> V2 Int-> MaxLevels -> ContextT os f m (Texture2D os c)
-newTexture2DArray :: (ColorSampleable c, Monad m) => c -> V3 Int -> MaxLevels -> ContextT os f m (Texture2DArray os c)
-newTexture3D :: (ColorRenderable c, Monad m) => c -> V3 Int -> MaxLevels -> ContextT os f m (Texture3D os c)
-newTextureCube :: (ColorSampleable c, Monad m) => c -> Int -> MaxLevels -> ContextT os f m (TextureCube os c)
+type Size1 = Int
+type Size2 = (Int, Int)
+type Size3 = (Int, Int, Int)
 
-texture1DLevels :: Texture1D os c -> ContextT os f m Int 
-texture1DArrayLevels :: Texture1DArray os c -> ContextT os f m Int 
-texture2DLevels :: Texture2D os c -> ContextT os f m Int 
-texture2DArrayLevels :: Texture2DArray os c -> ContextT os f m Int 
-texture3DLevels :: Texture3D os c -> ContextT os f m Int 
-textureCubeLevels :: TextureCube os c -> ContextT os f m Int 
+newTexture1D :: forall os f c m. (ColorSampleable c, Monad m) => Format c -> Size1 -> MaxLevels -> ContextT os f m (Texture1D os c)
+newTexture1DArray :: forall os f c m. (ColorSampleable c, Monad m) => Format c -> Size2 -> MaxLevels -> ContextT os f m (Texture1DArray os c)
+newTexture2D :: forall os f c m. (TextureFormat c, MonadIO m) => Format c -> Size2 -> MaxLevels -> ContextT os f m (Texture2D os c)
+newTexture2DArray :: forall os f c m. (ColorSampleable c, Monad m) => Format c -> Size3 -> MaxLevels -> ContextT os f m (Texture2DArray os c)
+newTexture3D :: forall os f c m. (ColorRenderable c, Monad m) => Format c -> Size3 -> MaxLevels -> ContextT os f m (Texture3D os c)
+newTextureCube :: forall os f c m. (ColorSampleable c, Monad m) => Format c -> Size1 -> MaxLevels -> ContextT os f m (TextureCube os c)
 
-texture1DLevels = undefined 
-texture1DArrayLevels = undefined 
-texture2DLevels = undefined 
-texture2DArrayLevels = undefined 
-texture3DLevels = undefined 
-textureCubeLevels = undefined 
+texture1DLevels :: Texture1D os c -> Int 
+texture1DArrayLevels :: Texture1DArray os c -> Int 
+texture2DLevels :: Texture2D os c -> Int 
+texture2DArrayLevels :: Texture2DArray os c -> Int 
+texture3DLevels :: Texture3D os c -> Int 
+textureCubeLevels :: TextureCube os c -> Int 
+texture1DLevels (Texture1D _ _ ls) = ls
+texture1DArrayLevels (Texture1DArray _ _ ls) = ls 
+texture2DLevels (Texture2D _ _ ls) = ls 
+texture2DLevels (RenderBuffer2D _ _) = 1 
+texture2DArrayLevels (Texture2DArray _ _ ls) = ls 
+texture3DLevels (Texture3D _ _ ls) = ls 
+textureCubeLevels (TextureCube _ _ ls) = ls 
 
 
 newTexture1D = undefined  
 newTexture1DArray = undefined
-newTexture2D f s@(V2 w h) mx | getGlFormat f == gl_STENCIL_INDEX = do 
+newTexture2D f s@(w, h) mx | getGlFormat (undefined :: c) == gl_STENCIL_INDEX = do 
                                 t <- makeRenderBuff
                                 liftContextIO $ do
-                                   undefined
+                                   glRenderbufferStorage gl_RENDERBUFFER (getGlInternalFormat f) (fromIntegral w) (fromIntegral h)
                                    return $ RenderBuffer2D t s
                              | otherwise = do
                                 t <- makeTex
                                 liftContextIO $ do
                                     let glintf = fromIntegral $ getGlInternalFormat f
-                                        glf = getGlFormat f
+                                        glf = getGlFormat (undefined :: c)
                                         ls = min mx (calcMaxLevels (max w h))
                                         tex = Texture2D t s ls
                                     useTexSync t gl_TEXTURE_2D
-                                    forM_ (zip (texture2DSizes tex) [0..]) $ \(V2 lw lh, l) ->
+                                    forM_ (zip (texture2DSizes tex) [0..]) $ \((lw, lh), l) ->
                                         glTexImage2D gl_TEXTURE_2D l glintf (fromIntegral lw) (fromIntegral lh) 0 glf gl_BYTE nullPtr
                                     glTexParameteri gl_TEXTURE_2D gl_TEXTURE_BASE_LEVEL 0
                                     glTexParameteri gl_TEXTURE_2D gl_TEXTURE_MAX_LEVEL (fromIntegral (ls-1))
@@ -82,20 +86,20 @@ newTexture3D  = undefined
 newTextureCube  = undefined
 
 
-texture1DSizes :: Texture1D os c -> [V1 Int] 
-texture1DArraySizes :: Texture1DArray os c -> [V2 Int] 
-texture2DSizes :: Texture2D os c -> [V2 Int] 
-texture2DArraySizes :: Texture2DArray os c -> [V3 Int] 
-texture3DSizes :: Texture3D os c -> [V3 Int] 
-textureCubeSizes :: TextureCube os c -> [Int] 
+texture1DSizes :: Texture1D os c -> [Size1] 
+texture1DArraySizes :: Texture1DArray os c -> [Size2] 
+texture2DSizes :: Texture2D os c -> [Size2] 
+texture2DArraySizes :: Texture2DArray os c -> [Size3] 
+texture3DSizes :: Texture3D os c -> [Size3] 
+textureCubeSizes :: TextureCube os c -> [Size1] 
 
-texture1DSizes = undefined 
-texture1DArraySizes = undefined 
-texture2DSizes t@(Texture2D _ (V2 w h) ls) = map (\l -> V2 (calcLevelSize w l) (calcLevelSize h l)) [0..(ls-1)]
-texture2DSizes (RenderBuffer2D _ (V2 w h)) = [V2 w h]
-texture2DArraySizes = undefined 
-texture3DSizes = undefined 
-textureCubeSizes = undefined 
+texture1DSizes (Texture1D _ w ls) = map (calcLevelSize w) [0..(ls-1)] 
+texture1DArraySizes (Texture1DArray _ (w, s) ls) = map (\l -> (calcLevelSize w l, s)) [0..(ls-1)]
+texture2DSizes (Texture2D _ (w, h) ls) = map (\l -> (calcLevelSize w l, calcLevelSize h l)) [0..(ls-1)]
+texture2DSizes (RenderBuffer2D _ (w, h)) = [(w, h)]
+texture2DArraySizes (Texture2DArray _ (w, h, s) ls) = map (\l -> (calcLevelSize w l, calcLevelSize h l, s)) [0..(ls-1)] 
+texture3DSizes (Texture3D _ (w, h, d) ls) = map (\l -> (calcLevelSize w l, calcLevelSize h l, calcLevelSize d l)) [0..(ls-1)] 
+textureCubeSizes (TextureCube _ x ls) = map (calcLevelSize x) [0..(ls-1)]
 
 calcLevelSize :: Int -> Int -> Int
 calcLevelSize size0 level = max 1 (size0 `div` (2 ^ level))
@@ -137,19 +141,25 @@ data CubeSide = CubePosX | CubeNegX | CubePosY | CubeNegY | CubePosZ | CubeNegZ
 
 data Proxy t = Proxy
 
-writeTexture1D :: (ColorElement c ~ BaseShaderFormat b) => Texture1D os c -> Level -> (V1 Int, V1 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
-writeTexture1DArray :: (ColorElement c ~ BaseShaderFormat b) => Texture1DArray os c -> Level -> Slice -> (V1 Int, V1 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
-writeTexture2D :: (ColorElement c ~ BaseShaderFormat b) => Texture2D os c -> Level -> (V2 Int, V2 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
-writeTexture2DArray :: (ColorElement c ~ BaseShaderFormat b) => Texture2DArray os c -> Level -> Slice -> (V2 Int, V2 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
-writeTexture3D :: (ColorElement c ~ BaseShaderFormat b) => Texture3D os c -> Level -> (V3 Int, V3 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
-writeTextureCube :: (ColorElement c ~ BaseShaderFormat b) => TextureCube os c -> Level -> CubeSide -> (V2 Int, V2 Int) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+type StartPos1 = Int
+type StartPos2 = (Int, Int)
+type StartPos3 = (Int, Int, Int)
 
-writeTexture1D' :: (ColorElement c ~ BaseShaderFormat b) => Texture1D os c -> Level -> (V1 Int, V1 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
-writeTexture1DArray' :: (ColorElement c ~ BaseShaderFormat b) => Texture1DArray os c -> Level -> Slice -> (V1 Int, V1 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
-writeTexture2D' :: (ColorElement c ~ BaseShaderFormat b) => Texture2D os c -> Level -> (V2 Int, V2 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
-writeTexture2DArray' :: (ColorElement c ~ BaseShaderFormat b) => Texture2DArray os c -> Level -> Slice -> (V2 Int, V2 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
-writeTexture3D' :: (ColorElement c ~ BaseShaderFormat b) => Texture3D os c -> Level -> (V3 Int, V3 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
-writeTextureCube' :: (ColorElement c ~ BaseShaderFormat b) => TextureCube os c -> Level -> CubeSide -> (V2 Int, V2 Int) -> (Buffer os a, a -> b, Int) -> ContextT os f m ()
+type BufferStartPos = Int 
+
+writeTexture1D :: (ColorElement c ~ BaseShaderFormat b) => Texture1D os c -> Level -> (StartPos1, Size1) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+writeTexture1DArray :: (ColorElement c ~ BaseShaderFormat b) => Texture1DArray os c -> Level -> Slice -> (StartPos1, Size1) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+writeTexture2D :: (ColorElement c ~ BaseShaderFormat b) => Texture2D os c -> Level -> (StartPos2, Size2) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+writeTexture2DArray :: (ColorElement c ~ BaseShaderFormat b) => Texture2DArray os c -> Level -> Slice -> (StartPos2, Size2) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+writeTexture3D :: (ColorElement c ~ BaseShaderFormat b) => Texture3D os c -> Level -> (StartPos3, Size3) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+writeTextureCube :: (ColorElement c ~ BaseShaderFormat b) => TextureCube os c -> Level -> CubeSide -> (StartPos2, Size2) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
+
+writeTexture1D' :: (ColorElement c ~ BaseShaderFormat b) => Texture1D os c -> Level -> (StartPos1, Size1) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
+writeTexture1DArray' :: (ColorElement c ~ BaseShaderFormat b) => Texture1DArray os c -> Level -> Slice -> (StartPos1, Size1) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
+writeTexture2D' :: (ColorElement c ~ BaseShaderFormat b) => Texture2D os c -> Level -> (StartPos2, Size2) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
+writeTexture2DArray' :: (ColorElement c ~ BaseShaderFormat b) => Texture2DArray os c -> Level -> Slice -> (StartPos2, Size2) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
+writeTexture3D' :: (ColorElement c ~ BaseShaderFormat b) => Texture3D os c -> Level -> (StartPos3, Size3) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
+writeTextureCube' :: (ColorElement c ~ BaseShaderFormat b) => TextureCube os c -> Level -> CubeSide -> (StartPos2, Size2) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
 
 
 writeTexture1D = undefined
@@ -196,7 +206,8 @@ data SamplerFilter c where
     SamplerFilter :: (ColorElement c ~ Float) => MagFilter -> MinFilter -> LodFilter -> Maybe Anisotropy -> SamplerFilter c 
     SamplerNearest :: SamplerFilter c
 
-type SamplerEdgeMode dim c = (dim EdgeMode, BorderColor c)
+type EdgeMode2 = (EdgeMode, EdgeMode)
+type EdgeMode3 = (EdgeMode, EdgeMode, EdgeMode)
 
 data ComparisonFunction =
      Never
@@ -219,17 +230,17 @@ getGlCompFunc Notequal = gl_NOTEQUAL
 getGlCompFunc Gequal = gl_GEQUAL
 getGlCompFunc Always = gl_ALWAYS
    
-newSampler1D :: ColorSampleable c => (s -> (Texture1D os c, SamplerFilter c, SamplerEdgeMode V1 c)) -> Shader os f s (Sampler1D c)
-newSampler1DArray :: ColorSampleable c => (s -> (Texture1DArray os c, SamplerFilter c, SamplerEdgeMode V1 c)) -> Shader os f s (Sampler1DArray c)
-newSampler2D :: ColorSampleable c => (s -> (Texture2D os c, SamplerFilter c, SamplerEdgeMode V2 c)) -> Shader os f s (Sampler2D c)
-newSampler3D :: ColorRenderable c => (s -> (Texture3D os c, SamplerFilter c, SamplerEdgeMode V3 c)) -> Shader os f s (Sampler3D c)
+newSampler1D :: ColorSampleable c => (s -> (Texture1D os c, SamplerFilter c, (EdgeMode,  BorderColor c))) -> Shader os f s (Sampler1D c)
+newSampler1DArray :: ColorSampleable c => (s -> (Texture1DArray os c, SamplerFilter c, (EdgeMode, BorderColor c))) -> Shader os f s (Sampler1DArray c)
+newSampler2D :: ColorSampleable c => (s -> (Texture2D os c, SamplerFilter c, (EdgeMode2, BorderColor c))) -> Shader os f s (Sampler2D c)
+newSampler3D :: ColorRenderable c => (s -> (Texture3D os c, SamplerFilter c, (EdgeMode3, BorderColor c))) -> Shader os f s (Sampler3D c)
 newSamplerCube :: ColorSampleable c => (s -> (TextureCube os c, SamplerFilter c)) -> Shader os f s (SamplerCube c)
 
-newSampler1DShadow :: DepthRenderable d => (s -> (Texture1D os d, SamplerFilter c, SamplerEdgeMode V1 c, ComparisonFunction)) -> Shader os f s (Sampler1D Shadow)
-newSampler1DArrayShadow :: DepthRenderable d => (s -> (Texture1DArray os d, SamplerFilter c, SamplerEdgeMode V1 c, ComparisonFunction)) -> Shader os f s (Sampler1DArray Shadow)
-newSampler2DShadow :: DepthRenderable d => (s -> (Texture2D os d, SamplerFilter c, SamplerEdgeMode V2 c, ComparisonFunction)) -> Shader os f s (Sampler2D Shadow)
-newSampler2DArray :: ColorSampleable c => (s -> (Texture2DArray os c, SamplerFilter c, SamplerEdgeMode V2 c)) -> Shader os f s (Sampler2DArray c)
-newSampler2DArrayShadow :: DepthRenderable d => (s -> (Texture2DArray os d, SamplerFilter c, SamplerEdgeMode V2 c, ComparisonFunction)) -> Shader os f s (Sampler2DArray Shadow)
+newSampler1DShadow :: DepthRenderable d => (s -> (Texture1D os d, SamplerFilter c, (EdgeMode, BorderColor c), ComparisonFunction)) -> Shader os f s (Sampler1D Shadow)
+newSampler1DArrayShadow :: DepthRenderable d => (s -> (Texture1DArray os d, SamplerFilter c, (EdgeMode, BorderColor c), ComparisonFunction)) -> Shader os f s (Sampler1DArray Shadow)
+newSampler2DShadow :: DepthRenderable d => (s -> (Texture2D os d, SamplerFilter c, (EdgeMode2, BorderColor c), ComparisonFunction)) -> Shader os f s (Sampler2D Shadow)
+newSampler2DArray :: ColorSampleable c => (s -> (Texture2DArray os c, SamplerFilter c, (EdgeMode2, BorderColor c))) -> Shader os f s (Sampler2DArray c)
+newSampler2DArrayShadow :: DepthRenderable d => (s -> (Texture2DArray os d, SamplerFilter c, (EdgeMode2, BorderColor c), ComparisonFunction)) -> Shader os f s (Sampler2DArray Shadow)
 newSamplerCubeShadow :: DepthRenderable d => (s -> (TextureCube os d, SamplerFilter c, ComparisonFunction)) -> Shader os f s (SamplerCube Shadow)
 
 newSampler1D = undefined
@@ -238,9 +249,9 @@ newSampler1DArray = undefined
 newSampler1DArrayShadow = undefined
 newSampler2D sf = Shader $ do 
                    sampId <- getName
-                   doForSampler sampId $ \s bind -> let (Texture2D tn _ _, filter, (V2 ex ey, ec)) = sf s 
+                   doForSampler sampId $ \s bind -> let (Texture2D tn _ _, filt, ((ex, ey), ec)) = sf s 
                                                     in  do useTex tn gl_TEXTURE_2D bind
-                                                           setSamplerFilter gl_TEXTURE_2D filter
+                                                           setSamplerFilter gl_TEXTURE_2D filt
                                                            setEdgeMode gl_TEXTURE_2D (Just ex, Just ey, Nothing) (return ())
                    return $ Sampler2D sampId
 
@@ -293,16 +304,22 @@ data Sampler2DArray c
 data Sampler3D c
 data SamplerCube c
 
-data SampleLod v x where
+data SampleLod vx x where
     SampleAuto :: SampleLod v F
-    SampleBias :: FFloat -> SampleLod v F   
-    SampleLod :: S x Float -> SampleLod v x
-    SampleGrad :: v (S x Float) -> SampleLod v x
+    SampleBias :: FFloat -> SampleLod vx F   
+    SampleLod :: S x Float -> SampleLod vx x
+    SampleGrad :: vx -> SampleLod vx x
 
-data SampleLod' v x where
+data SampleLod' vx x where
     SampleAuto' :: SampleLod' v F
-    SampleBias' :: FFloat -> SampleLod' v F   
-    SampleGrad' :: v (S x Float) -> SampleLod' v x
+    SampleBias' :: FFloat -> SampleLod' vx F   
+    SampleGrad' :: vx -> SampleLod' vx x
+
+type SampleLod1 x = SampleLod (S x Float) x
+type SampleLod2 x = SampleLod (S x Float, S x Float) x
+type SampleLod3 x = SampleLod (S x Float, S x Float, S x Float) x
+type SampleLod2' x = SampleLod' (S x Float, S x Float) x
+type SampleLod3' x = SampleLod' (S x Float, S x Float, S x Float) x
 
 fromLod' :: SampleLod' v x -> SampleLod v x
 fromLod' SampleAuto' = SampleAuto
@@ -310,35 +327,37 @@ fromLod' (SampleBias' x) = SampleBias x
 fromLod' (SampleGrad' x) = SampleGrad x
 
 type SampleProj x = Maybe (S x Float)
-type SampleOffset v x = Maybe (v Int) 
+type SampleOffset1 x = Maybe Int 
+type SampleOffset2 x = Maybe (Int, Int) 
+type SampleOffset3 x = Maybe (Int, Int, Int)
 
 -- | The type of a color sample made by a texture t 
 type ColorSample x f = Color f (S x (ColorElement f))
 
-sample1D            :: forall c x. ColorSampleable c =>  Sampler1D c          -> SampleLod V1 x -> SampleProj x -> SampleOffset V1 x -> V1 (S x Float) -> ColorSample x c
-sample2D            :: forall c x. ColorSampleable c => Sampler2D c          -> SampleLod V2 x -> SampleProj x -> SampleOffset V2 x -> V2 (S x Float) -> ColorSample x c
-sample3D            :: forall c x. ColorSampleable c =>  Sampler3D c          -> SampleLod V3 x -> SampleProj x -> SampleOffset V3 x -> V3 (S x Float) -> ColorSample x c
-sample1DArray       :: forall c x. ColorSampleable c =>  Sampler1DArray c     -> SampleLod V1 x -> SampleOffset V1 x -> V2 (S x Float) -> ColorSample x c
-sample2DArray       :: forall c x. ColorSampleable c =>  Sampler2DArray c     -> SampleLod V2 x -> SampleOffset V2 x -> V3 (S x Float) -> ColorSample x c
-sampleCube          :: forall c x. ColorSampleable c =>  SamplerCube c        -> SampleLod V3 x -> V3 (S x Float) -> ColorSample x c
+sample1D            :: forall c x. ColorSampleable c =>  Sampler1D c          -> SampleLod1 x -> SampleProj x -> SampleOffset1 x -> S x Float -> ColorSample x c
+sample2D            :: forall c x. ColorSampleable c => Sampler2D c          -> SampleLod2 x -> SampleProj x -> SampleOffset2 x -> (S x Float, S x Float) -> ColorSample x c
+sample3D            :: forall c x. ColorSampleable c =>  Sampler3D c          -> SampleLod3 x -> SampleProj x -> SampleOffset3 x -> (S x Float, S x Float, S x Float) -> ColorSample x c
+sample1DArray       :: forall c x. ColorSampleable c =>  Sampler1DArray c     -> SampleLod1 x -> SampleOffset1 x -> (S x Float, S x Float) -> ColorSample x c
+sample2DArray       :: forall c x. ColorSampleable c =>  Sampler2DArray c     -> SampleLod2 x -> SampleOffset2 x -> (S x Float, S x Float, S x Float) -> ColorSample x c
+sampleCube          :: forall c x. ColorSampleable c =>  SamplerCube c        -> SampleLod3 x -> (S x Float, S x Float, S x Float) -> ColorSample x c
 
-sample1DShadow      :: forall x. Sampler1D Shadow     -> SampleLod V1 x -> SampleProj x -> SampleOffset V1 x -> S x Float -> V1 (S x Float) -> S x Float
-sample2DShadow      :: forall x. Sampler2D Shadow     -> SampleLod V2 x -> SampleProj x -> SampleOffset V2 x -> S x Float -> V2 (S x Float) -> S x Float
-sample1DArrayShadow :: forall x. Sampler1DArray Shadow-> SampleLod V1 x -> SampleOffset V1 x -> S x Float -> V2 (S x Float) -> S x Float
-sample2DArrayShadow :: forall x. Sampler2DArray Shadow-> SampleLod' V2 x -> SampleOffset V2 x -> S x Float -> V3 (S x Float)-> S x Float
-sampleCubeShadow    :: forall x. SamplerCube Shadow   -> SampleLod' V3 x -> S x Float -> V3 (S x Float) -> S x Float
+sample1DShadow      :: forall x. Sampler1D Shadow     -> SampleLod1 x -> SampleProj x -> SampleOffset1 x -> S x Float -> S x Float -> S x Float
+sample2DShadow      :: forall x. Sampler2D Shadow     -> SampleLod2 x -> SampleProj x -> SampleOffset2 x -> S x Float -> (S x Float, S x Float) -> S x Float
+sample1DArrayShadow :: forall x. Sampler1DArray Shadow-> SampleLod1 x -> SampleOffset1 x -> S x Float -> (S x Float, S x Float) -> S x Float
+sample2DArrayShadow :: forall x. Sampler2DArray Shadow-> SampleLod2' x -> SampleOffset2 x -> S x Float -> (S x Float, S x Float, S x Float)-> S x Float
+sampleCubeShadow    :: forall x. SamplerCube Shadow   -> SampleLod3' x -> S x Float -> (S x Float, S x Float, S x Float) -> S x Float
 
-texelFetch1D        :: forall c x. ColorSampleable c =>  Sampler1D c          -> SampleOffset V1 x -> S x Level -> V1 (S x Int) -> ColorSample x c
-texelFetch2D        :: forall c x. ColorSampleable c =>  Sampler2D c          -> SampleOffset V2 x -> S x Level -> V2 (S x Int) -> ColorSample x c
-texelFetch3D        :: forall c x. ColorSampleable c =>  Sampler3D c          -> SampleOffset V3 x -> S x Level -> V3 (S x Int) -> ColorSample x c
-texelFetch1DArray   :: forall c x. ColorSampleable c =>  Sampler1DArray c     -> SampleOffset V1 x -> S x Level -> V2 (S x Int) -> ColorSample x c
-texelFetch2DArray   :: forall c x. ColorSampleable c =>  Sampler2DArray c     -> SampleOffset V2 x -> S x Level -> V3 (S x Int) -> ColorSample x c
+texelFetch1D        :: forall c x. ColorSampleable c =>  Sampler1D c          -> SampleOffset1 x -> S x Level -> S x Int -> ColorSample x c
+texelFetch2D        :: forall c x. ColorSampleable c =>  Sampler2D c          -> SampleOffset2 x -> S x Level -> (S x Int, S x Int) -> ColorSample x c
+texelFetch3D        :: forall c x. ColorSampleable c =>  Sampler3D c          -> SampleOffset3 x -> S x Level -> (S x Int, S x Int, S x Int) -> ColorSample x c
+texelFetch1DArray   :: forall c x. ColorSampleable c =>  Sampler1DArray c     -> SampleOffset1 x -> S x Level -> (S x Int, S x Int) -> ColorSample x c
+texelFetch2DArray   :: forall c x. ColorSampleable c =>  Sampler2DArray c     -> SampleOffset2 x -> S x Level -> (S x Int, S x Int, S x Int) -> ColorSample x c
 
-sampler1Dsize      :: forall c x. Sampler1D c -> S x Level -> V1 (S x Int)
-sampler2Dsize      :: forall c x. Sampler2D c -> S x Level -> V2 (S x Int)
-sampler3Dsize      :: forall c x. Sampler3D c -> S x Level -> V3 (S x Int)
-sampler1DArraysize :: forall c x. Sampler1DArray c -> S x Level -> V2 (S x Int)
-sampler2DArraysize :: forall c x. Sampler2DArray c -> S x Level -> V3 (S x Int)
+sampler1Dsize      :: forall c x. Sampler1D c -> S x Level -> S x Int
+sampler2Dsize      :: forall c x. Sampler2D c -> S x Level -> (S x Int, S x Int)
+sampler3Dsize      :: forall c x. Sampler3D c -> S x Level -> (S x Int, S x Int, S x Int)
+sampler1DArraysize :: forall c x. Sampler1DArray c -> S x Level -> (S x Int, S x Int)
+sampler2DArraysize :: forall c x. Sampler2DArray c -> S x Level -> (S x Int, S x Int, S x Int)
 samplerCubesize    :: forall c x. SamplerCube c -> S x Level -> S x Int
 
 sampler1Dsize = undefined
@@ -349,7 +368,7 @@ sampler2DArraysize = undefined
 samplerCubesize = undefined    
 
 sample1D = undefined
-sample2D (Sampler2D sampId) lod proj off coord = sample (undefined :: c) "2D" sampId lod proj off coord v2toF iv2toF pv2toF 
+sample2D (Sampler2D sampId) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) "2D" sampId lod proj off coord v2toF iv2toF pv2toF 
 sample3D = undefined
 sampleCube = undefined
 sample1DShadow = undefined
@@ -366,22 +385,27 @@ texelFetch3D        = undefined
 texelFetch1DArray   = undefined
 texelFetch2DArray   = undefined
 
-sample f sName sampId lod proj off coord vToS ivToS pvToS =
-    toColor f $ vec4S (STypeVec 4) $ do s <- useSampler sName sampId
-                                        sampleFunc s proj lod off coord vToS ivToS pvToS 
+toColorS :: ColorSampleable f => f -> (S x Float,S x Float,S x Float,S x Float) -> Color f (S x Float)
+toColorS = toColor 
 
-v2toF (V2 x y) = do x' <- unS x
-                    y' <- unS y
-                    return $ "vec2(" ++ x' ++ ',':y' ++ ")"   
-iv2toF (V2 x y) = "ivec2(" ++ show x ++ ',':show y ++ ")"   
-pv2toF (V2 x y) z = do x' <- unS x
-                       y' <- unS y
-                       z' <- unS z
-                       return $ "vec3(" ++ x' ++ ',':y' ++ ',':z' ++ ")"
+sample :: e -> String -> Int -> SampleLod coord x -> SampleProj x -> Maybe off -> coord -> (coord -> ExprM String) -> (off -> String) -> (coord -> S x Float -> ExprM String) -> (S x e, S x e, S x e, S x e)  
+sample _ sName sampId lod proj off coord vToS ivToS pvToS =
+    vec4S (STypeVec 4) $ do s <- useSampler sName sampId
+                            sampleFunc s proj lod off coord vToS ivToS pvToS 
+
+v2toF (x, y) = do x' <- unS x
+                  y' <- unS y
+                  return $ "vec2(" ++ x' ++ ',':y' ++ ")"   
+iv2toF :: (Int, Int) -> String
+iv2toF (x, y) = "ivec2(" ++ show x ++ ',':show y ++ ")"   
+pv2toF (x, y) z = do x' <- unS x
+                     y' <- unS y
+                     z' <- unS z
+                     return $ "vec3(" ++ x' ++ ',':y' ++ ',':z' ++ ")"
 
 sampleFunc s proj lod off coord vToS ivToS pvToS = do
-    pc <- projCoordParam proj coord vToS pvToS 
-    l <- lodParam lod vToS
+    pc <- projCoordParam proj  
+    l <- lodParam lod 
     b <- biasParam lod
     return $ "texture" ++ projName proj ++ lodName lod ++ offName off ++ '(' : s ++ ',' : pc ++ l ++ o ++ b ++ ")"  
   where 
@@ -390,12 +414,12 @@ sampleFunc s proj lod off coord vToS ivToS pvToS = do
     projName Nothing = ""
     projName _ = "Proj"
 
-    projCoordParam Nothing coord vToS pvToS = vToS coord
-    projCoordParam (Just p) coord vToS pvToS = pvToS coord p
+    projCoordParam Nothing = vToS coord
+    projCoordParam (Just p) = pvToS coord p
     
-    lodParam (SampleLod x) _ = fmap (',':) (unS x)
-    lodParam (SampleGrad x) vToS = fmap (',':) (vToS x)
-    lodParam _ _ = return ""
+    lodParam (SampleLod x) = fmap (',':) (unS x)
+    lodParam (SampleGrad x) = fmap (',':) (vToS x)
+    lodParam _ = return ""
     
     biasParam :: SampleLod v x -> ExprM String 
     biasParam (SampleBias (S x)) = do x' <- x
@@ -414,7 +438,7 @@ sampleFunc s proj lod off coord vToS ivToS pvToS = do
 
 ----------------------------------------------------------------------------------
 
-data Image f = Image TexName Int Int (V2 Int) (CUInt -> IO ()) -- the two Ints is last two in FBOKey
+data Image f = Image TexName Int Int ((Int, Int)) (CUInt -> IO ()) -- the two Ints is last two in FBOKey
 
 imageEquals :: Image a -> Image b -> Bool
 imageEquals (Image tn' k1' k2' _ _) (Image tn k1 k2 _ _) = tn' == tn && k1' == k1 && k2' == k2
@@ -426,7 +450,7 @@ getImageFBOKey :: Image t -> IO FBOKey
 getImageFBOKey (Image tn k1 k2 _ _) = do tn' <- readIORef tn
                                          return $ FBOKey tn' k1 k2 
 
-imageSize :: Image f -> V2 Int
+imageSize :: Image f -> (Int, Int)
 imageSize (Image _ _ _ s _) = s
 
 getTexture1DImage :: Texture1D os f -> Level -> Render os f (Image f) 
@@ -436,22 +460,22 @@ getTexture1DArray :: Texture1DArray os f -> Level -> Slice -> Render os f (Image
 getTexture2DArray :: Texture2DArray os f -> Level -> Slice -> Render os f (Image f) 
 getTextureCube :: TextureCube os f -> Level -> CubeSide -> Render os f (Image f) 
 
-getTexture1DImage t@(Texture1D tn _ ls) l' = let l = min ls l' in return $ Image tn 0 l (V2 (fromV1 (texture1DSizes t !! l)) 1) $ \attP -> do { n <- readIORef tn; glFramebufferTexture1D gl_DRAW_FRAMEBUFFER attP gl_TEXTURE_1D n (fromIntegral l) }
+getTexture1DImage t@(Texture1D tn _ ls) l' = let l = min ls l' in return $ Image tn 0 l (texture1DSizes t !! l, 1) $ \attP -> do { n <- readIORef tn; glFramebufferTexture1D gl_DRAW_FRAMEBUFFER attP gl_TEXTURE_1D n (fromIntegral l) }
 getTexture2DImage t@(Texture2D tn _ ls) l' = let l = min ls l' in return $ Image tn 0 l (texture2DSizes t !! l) $ \attP -> do { n <- readIORef tn; glFramebufferTexture2D gl_DRAW_FRAMEBUFFER attP gl_TEXTURE_2D n (fromIntegral l) }
 getTexture2DImage t@(RenderBuffer2D tn _) _ = return $ Image tn (-1) 0 (head $ texture2DSizes t) $ \attP -> do { n <- readIORef tn; glFramebufferRenderbuffer gl_DRAW_FRAMEBUFFER attP gl_RENDERBUFFER n }
 getTexture3DImage t@(Texture3D tn _ ls) l' z' = let l = min ls l' 
-                                                    V3 x y z = texture3DSizes t !! l 
-                                                in return $ Image tn z' l (V2 x y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) }
+                                                    (x, y, z) = texture3DSizes t !! l 
+                                                in return $ Image tn z' l (x, y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) }
 getTexture1DArray t@(Texture1DArray tn _ ls) l' y' = let l = min ls l' 
-                                                         V2 x y = texture1DArraySizes t !! l 
-                                                     in return $ Image tn y' l (V2 x 1) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min y' (y-1)) }
+                                                         (x, y) = texture1DArraySizes t !! l 
+                                                     in return $ Image tn y' l (x, 1) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min y' (y-1)) }
 getTexture2DArray t@(Texture2DArray tn _ ls) l' z' = let l = min ls l' 
-                                                         V3 x y z = texture2DArraySizes t !! l 
-                                                     in return $ Image tn z' l (V2 x y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) } 
+                                                         (x, y, z) = texture2DArraySizes t !! l 
+                                                     in return $ Image tn z' l (x, y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer gl_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) } 
 getTextureCube t@(TextureCube tn _ ls) l' s = let l = min ls l' 
                                                   x = textureCubeSizes t !! l
                                                   s' = getGlCubeSide s
-                                              in return $ Image tn (fromIntegral s') l (V2 x x) $ \attP -> do { n <- readIORef tn; glFramebufferTexture2D gl_DRAW_FRAMEBUFFER attP s' n (fromIntegral l) }
+                                              in return $ Image tn (fromIntegral s') l (x, x) $ \attP -> do { n <- readIORef tn; glFramebufferTexture2D gl_DRAW_FRAMEBUFFER attP s' n (fromIntegral l) }
 
 getGlCubeSide :: CubeSide -> GLenum
 getGlCubeSide CubePosX = gl_TEXTURE_CUBE_MAP_POSITIVE_X 

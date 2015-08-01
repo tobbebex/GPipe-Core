@@ -9,7 +9,6 @@ import Graphics.GPipe.Compiler
 import Graphics.GPipe.Buffer
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.IntMap.Lazy (insert)
-import Data.Functor ((<$>))
 
 import Graphics.Rendering.OpenGL.Raw.Core33
 import Graphics.Rendering.OpenGL.Raw.EXT.TextureFilterAnisotropic
@@ -493,17 +492,17 @@ sample1DArrayShadow :: forall x. Sampler1DArray Shadow-> SampleLod1 x -> SampleO
 sample2DArrayShadow :: forall x. Sampler2DArray Shadow-> SampleLod2' x -> SampleOffset2 x -> ReferenceValue x -> (S x Float, S x Float, S x Float)-> S x Float
 sampleCubeShadow    :: forall x. SamplerCube Shadow   -> SampleLod3' x -> ReferenceValue x -> (S x Float, S x Float, S x Float) -> S x Float
 
-sample1D (Sampler1D sampId _) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) "1D" sampId lod proj off coord v1toF v1toF iv1toF pv1toF
-sample2D (Sampler2D sampId _) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) "2D" sampId lod proj off coord v2toF v2toF iv2toF pv2toF 
-sample3D (Sampler3D sampId _) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) "3D" sampId lod proj off coord v3toF v3toF iv3toF pv3toF
-sample1DArray (Sampler1DArray sampId _) lod off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) "1DArray" sampId lod Nothing off coord v2toF v1toF iv1toF undefined
-sample2DArray (Sampler2DArray sampId _) lod off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) "2DArray" sampId lod Nothing off coord v3toF v2toF iv2toF undefined
-sampleCube (SamplerCube sampId _) lod coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) "Cube" sampId lod Nothing Nothing coord v3toF v3toF undefined undefined
+sample1D (Sampler1D sampId _) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "1D" sampId lod proj off coord v1toF v1toF civ1toF pv1toF
+sample2D (Sampler2D sampId _) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "2D" sampId lod proj off coord v2toF v2toF civ2toF pv2toF 
+sample3D (Sampler3D sampId _) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "3D" sampId lod proj off coord v3toF v3toF civ3toF pv3toF
+sample1DArray (Sampler1DArray sampId _) lod off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "1DArray" sampId lod Nothing off coord v2toF v1toF civ1toF undefined
+sample2DArray (Sampler2DArray sampId _) lod off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "2DArray" sampId lod Nothing off coord v3toF v2toF civ2toF undefined
+sampleCube (SamplerCube sampId _) lod coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "Cube" sampId lod Nothing Nothing coord v3toF v3toF undefined undefined
 
-sample1DShadow (Sampler1D sampId _) lod proj off ref coord = sampleShadow "1D" sampId lod proj off (t1t3 coord ref) v3toF v1toF iv1toF pv3toF
-sample2DShadow (Sampler2D sampId _) lod proj off ref coord = sampleShadow "2D" sampId lod proj off (t2t3 coord ref) v3toF v2toF iv2toF pv3toF
-sample1DArrayShadow (Sampler1DArray sampId _) lod off ref coord = sampleShadow "1DArray" sampId lod Nothing off (t2t3 coord ref) v3toF v1toF iv1toF undefined
-sample2DArrayShadow (Sampler2DArray sampId _) lod off ref coord = sampleShadow "2DArray" sampId (fromLod' lod) Nothing off (t3t4 coord ref) v4toF v2toF iv2toF undefined
+sample1DShadow (Sampler1D sampId _) lod proj off ref coord = sampleShadow "1D" sampId lod proj off (t1t3 coord ref) v3toF v1toF civ1toF pv3toF
+sample2DShadow (Sampler2D sampId _) lod proj off ref coord = sampleShadow "2D" sampId lod proj off (t2t3 coord ref) v3toF v2toF civ2toF pv3toF
+sample1DArrayShadow (Sampler1DArray sampId _) lod off ref coord = sampleShadow "1DArray" sampId lod Nothing off (t2t3 coord ref) v3toF v1toF civ1toF undefined
+sample2DArrayShadow (Sampler2DArray sampId _) lod off ref coord = sampleShadow "2DArray" sampId (fromLod' lod) Nothing off (t3t4 coord ref) v4toF v2toF civ2toF undefined
 sampleCubeShadow (SamplerCube sampId _) lod ref coord = sampleShadow "Cube" sampId (fromLod' lod) Nothing Nothing (t3t4 coord ref) v4toF v3toF undefined undefined
 
 t1t3 :: t -> t -> (t, S x Float, t)
@@ -519,11 +518,11 @@ texelFetch3D        :: forall c x. ColorSampleable c =>  Sampler3D (Format c)   
 texelFetch1DArray   :: forall c x. ColorSampleable c =>  Sampler1DArray (Format c)     -> SampleOffset1 x -> S x Level -> (S x Int, S x Int) -> ColorSample x c
 texelFetch2DArray   :: forall c x. ColorSampleable c =>  Sampler2DArray (Format c)     -> SampleOffset2 x -> S x Level -> (S x Int, S x Int, S x Int) -> ColorSample x c
 
-texelFetch1D        = undefined
-texelFetch2D        = undefined
-texelFetch3D        = undefined
-texelFetch1DArray   = undefined
-texelFetch2DArray   = undefined
+texelFetch1D (Sampler1D sampId _) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "1D" sampId lod off coord iv1toF civ1toF
+texelFetch2D (Sampler2D sampId _) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "2D" sampId lod off coord iv2toF civ2toF
+texelFetch3D (Sampler3D sampId _) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "3D" sampId lod off coord iv3toF civ3toF
+texelFetch1DArray (Sampler1DArray sampId _) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "1DArray" sampId lod off coord iv2toF civ1toF
+texelFetch2DArray (Sampler2DArray sampId _) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "2DArray" sampId lod off coord iv3toF civ2toF
 
 sampler1DSize      :: Sampler1D f -> S x Level -> S x Int
 sampler2DSize      :: Sampler2D f -> S x Level -> (S x Int, S x Int)
@@ -547,15 +546,20 @@ getTextureSize sampId sName l = do s <- useSampler sName sampId
                                    l' <- unS l
                                    return $ "textureSize(" ++ s ++ ',' : l' ++ ")"
 
-sample :: e -> String -> Int -> SampleLod lcoord x -> SampleProj x -> Maybe off -> coord -> (coord -> ExprM String) -> (lcoord -> ExprM String) -> (off -> String) -> (coord -> S x Float -> ExprM String) -> (S x e, S x e, S x e, S x e)  
-sample _ sName sampId lod proj off coord vToS lvToS ivToS pvToS =
-    vec4S (STypeVec 4) $ do s <- useSampler sName sampId
-                            sampleFunc s proj lod off coord vToS lvToS ivToS pvToS 
+sample :: e -> String -> String -> Int -> SampleLod lcoord x -> SampleProj x -> Maybe off -> coord -> (coord -> ExprM String) -> (lcoord -> ExprM String) -> (off -> String) -> (coord -> S x Float -> ExprM String) -> (S x e, S x e, S x e, S x e)  
+sample _ sDynType sName sampId lod proj off coord vToS lvToS ivToS pvToS =
+    vec4S (STypeDyn sDynType) $ do s <- useSampler sName sampId
+                                   sampleFunc s proj lod off coord vToS lvToS ivToS pvToS 
 
 sampleShadow :: String -> Int -> SampleLod lcoord x -> SampleProj x -> Maybe off -> coord -> (coord -> ExprM String) -> (lcoord -> ExprM String) -> (off -> String) -> (coord -> S x Float -> ExprM String) -> S x Float  
-sampleShadow sName sampId lod proj off coord vToS lvToS ivToS pvToS =
+sampleShadow sName sampId lod proj off coord vToS lvToS civToS pvToS =
     scalarS STypeFloat $ do s <- useSampler (sName ++ "Shadow") sampId
-                            sampleFunc s proj lod off coord vToS lvToS ivToS pvToS 
+                            sampleFunc s proj lod off coord vToS lvToS civToS pvToS 
+
+fetch :: e -> String -> String -> Int -> S x Int -> Maybe off -> coord -> (coord -> ExprM String) -> (off -> String) -> (S x e, S x e, S x e, S x e)  
+fetch _ sDynType sName sampId lod off coord ivToS civToS =
+    vec4S (STypeDyn sDynType) $ do s <- useSampler sName sampId
+                                   fetchFunc s off coord lod ivToS civToS
 
 v1toF :: S c Float -> ExprM String
 v2toF :: (S c Float, S c Float) -> ExprM String
@@ -574,13 +578,25 @@ v4toF (x, y, z, w) = do x' <- unS x
                         z' <- unS z
                         w' <- unS w
                         return $ "vec4(" ++ x' ++ ',':y' ++ ',':z' ++ ',':w' ++ ")"
-                           
-iv1toF :: Int -> String
-iv2toF :: (Int, Int) -> String
-iv3toF :: (Int, Int, Int) -> String
-iv1toF = show   
-iv2toF (x, y) = "ivec2(" ++ show x ++ ',':show y ++ ")"   
-iv3toF (x, y, z) = "ivec3(" ++ show x ++ ',':show y ++ ',':show z ++ ")"   
+
+iv1toF :: S c Int -> ExprM String
+iv2toF :: (S c Int, S c Int) -> ExprM String
+iv3toF :: (S c Int, S c Int, S c Int) -> ExprM String
+iv1toF = unS
+iv2toF (x, y) = do x' <- unS x
+                   y' <- unS y
+                   return $ "ivec2(" ++ x' ++ ',':y' ++ ")"   
+iv3toF (x, y, z) = do x' <- unS x
+                      y' <- unS y
+                      z' <- unS z
+                      return $ "ivec3(" ++ x' ++ ',':y' ++ ',':z' ++ ")"   
+                                                
+civ1toF :: Int -> String
+civ2toF :: (Int, Int) -> String
+civ3toF :: (Int, Int, Int) -> String
+civ1toF = show   
+civ2toF (x, y) = "ivec2(" ++ show x ++ ',':show y ++ ")"   
+civ3toF (x, y, z) = "ivec3(" ++ show x ++ ',':show y ++ ',':show z ++ ")"   
 pv1toF :: S c Float -> S c Float -> ExprM String
 pv2toF :: (S c Float, S c Float) -> S c Float -> ExprM String
 pv3toF :: (S c Float, S c Float, S c Float) -> S c Float -> ExprM String
@@ -598,13 +614,13 @@ pv3toF (x, y, z) w = do x' <- unS x
                         w' <- unS w
                         return $ "vec4(" ++ x' ++ ',':y' ++ ',':z' ++  ',':w' ++ ")"
 
-sampleFunc s proj lod off coord vToS lvToS ivToS pvToS = do
+sampleFunc s proj lod off coord vToS lvToS civToS pvToS = do
     pc <- projCoordParam proj  
     l <- lodParam lod 
     b <- biasParam lod
     return $ "texture" ++ projName proj ++ lodName lod ++ offName off ++ '(' : s ++ ',' : pc ++ l ++ o ++ b ++ ")"  
   where 
-    o = offParam off
+    o = offParam off civToS 
     
     projName Nothing = ""
     projName _ = "Proj"
@@ -619,17 +635,26 @@ sampleFunc s proj lod off coord vToS lvToS ivToS pvToS = do
     biasParam :: SampleLod v x -> ExprM String 
     biasParam (SampleBias (S x)) = do x' <- x
                                       return $ ',':x'
-    biasParam _ = return ""
-    
-    offParam Nothing = ""
-    offParam (Just x) = ',' : ivToS x
-        
+    biasParam _ = return ""    
+       
     lodName (SampleLod _) = "Lod"
     lodName (SampleGrad _) = "Grad"
     lodName _ = ""
     
-    offName Nothing = ""
-    offName _ = "Offset"
+fetchFunc s off coord lod vToS civToS = do
+    c <- vToS coord 
+    l <- unS lod 
+    return $ "fetch" ++ offName off ++ '(' : s ++ ',' : c ++ ',': l ++ o ++ ")"  
+  where 
+    o = offParam off civToS
+        
+offParam :: Maybe t -> (t -> String) -> String
+offParam Nothing _ = ""
+offParam (Just x) civToS = ',' : civToS x
+
+offName :: Maybe t -> String
+offName Nothing = ""
+offName _ = "Offset"
 
 ----------------------------------------------------------------------------------
 

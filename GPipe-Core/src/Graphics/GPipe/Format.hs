@@ -221,6 +221,7 @@ class TextureFormat f => ColorSampleable f where
     type Color f a
     type ColorElement f :: *
     typeStr :: f -> String
+    typeStr4 :: f -> String
     toColor :: f -> (x,x,x,x) -> Color f x
     fromColor :: f -> Color f x -> [x]
     setBorderColor :: f -> GLenum -> Color f (ColorElement f) -> IO ()
@@ -229,6 +230,7 @@ instance ColorSampleable RFloat where
     type Color RFloat a = a
     type ColorElement RFloat = Float
     typeStr _ = "float"
+    typeStr4 _ = "vec4"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
     setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)      
@@ -236,6 +238,7 @@ instance ColorSampleable RInt where
     type Color RInt a = a
     type ColorElement RInt = Int
     typeStr _ = "int"
+    typeStr4 _ = "ivec4"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
     setBorderColor _ t r = withArray [fromIntegral r, 0,0,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
@@ -243,6 +246,7 @@ instance ColorSampleable RWord where
     type Color RWord a = a
     type ColorElement RWord = Word
     typeStr _ = "uint"
+    typeStr4 _ = "uvec4"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
     setBorderColor _ t r = withArray [fromIntegral r, 0,0,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
@@ -251,6 +255,7 @@ instance ColorSampleable RGFloat where
     type Color RGFloat a = (a,a)
     type ColorElement RGFloat = Float
     typeStr _ = "vec2"
+    typeStr4 _ = "vec4"
     toColor _ (r,g,_,_) = (r, g)
     fromColor _ (r, g) = [r,g]
     setBorderColor _ t (r, g) = withArray [realToFrac r, realToFrac g,0,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)
@@ -258,6 +263,7 @@ instance ColorSampleable RGInt where
     type Color RGInt a = (a,a)
     type ColorElement RGInt = Int
     typeStr _ = "ivec2"
+    typeStr4 _ = "ivec4"
     toColor _ (r,g,_,_) = (r, g)
     fromColor _ (r, g) = [r,g]
     setBorderColor _ t (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
@@ -265,6 +271,7 @@ instance ColorSampleable RGWord where
     type Color RGWord a = (a,a)
     type ColorElement RGWord = Word
     typeStr _ = "uvec2"
+    typeStr4 _ = "uvec4"
     toColor _ (r,g,_,_) = (r, g)
     fromColor _ (r, g) = [r,g]
     setBorderColor _ t (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
@@ -273,6 +280,7 @@ instance ColorSampleable RGBFloat where
     type Color RGBFloat a = (a,a,a)
     type ColorElement RGBFloat = Float
     typeStr _ = "vec3"
+    typeStr4 _ = "vec4"
     toColor _ (r,g,b,_) = (r, g, b)
     fromColor _ (r, g, b) = [r,g,b]
     setBorderColor _ t (r, g, b) = withArray [realToFrac r, realToFrac g, realToFrac b,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)
@@ -280,6 +288,7 @@ instance ColorSampleable RGBInt where
     type Color RGBInt a = (a,a,a)
     type ColorElement RGBInt = Int
     typeStr _ = "ivec3"
+    typeStr4 _ = "ivec4"
     toColor _ (r,g,b,_) = (r, g, b)
     fromColor _ (r, g, b) = [r,g,b]
     setBorderColor _ t (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
@@ -287,6 +296,7 @@ instance ColorSampleable RGBWord where
     type Color RGBWord a = (a,a,a)
     type ColorElement RGBWord = Word
     typeStr _ = "uvec3"
+    typeStr4 _ = "uvec4"
     toColor _ (r,g,b,_) = (r, g, b)
     fromColor _ (r, g, b) = [r,g,b]
     setBorderColor _ t (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
@@ -295,6 +305,7 @@ instance ColorSampleable RGBAFloat where
     type Color RGBAFloat a = (a,a,a,a)
     type ColorElement RGBAFloat = Float
     typeStr _ = "vec4"
+    typeStr4 _ = "vec4"
     toColor _ = id
     fromColor _ (r, g, b, a) = [r,g,b,a]
     setBorderColor _ t (r, g, b, a) = withArray [realToFrac r, realToFrac g, realToFrac b, realToFrac a] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)
@@ -302,6 +313,7 @@ instance ColorSampleable RGBAInt where
     type Color RGBAInt a = (a,a,a,a)
     type ColorElement RGBAInt = Int
     typeStr _ = "ivec4"
+    typeStr4 _ = "ivec4"
     toColor _ = id
     fromColor _ (r, g, b, a) = [r,g,b,a]
     setBorderColor _ t (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
@@ -309,6 +321,7 @@ instance ColorSampleable RGBAWord where
     type Color RGBAWord a = (a,a,a,a)
     type ColorElement RGBAWord = Word
     typeStr _ = "uvec4"
+    typeStr4 _ = "uvec4"
     toColor _ = id
     fromColor _ (r, g, b, a) = [r,g,b,a]
     setBorderColor _ t (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)

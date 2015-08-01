@@ -53,7 +53,7 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
         io s = let (side, ViewPort (x,y) (w,h), DepthRange dmin dmax) = sf s in do setGlCullFace side
                                                                                    glScissor (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 
                                                                                    glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 
-                                                                                   glDepthRange (fromRational $ toRational dmin) (fromRational $ toRational dmax)
+                                                                                   glDepthRange (realToFrac dmin) (realToFrac dmax)
 
         setGlCullFace Front = glEnable gl_CULL_FACE >> glCullFace gl_BACK -- Back is culled when front is rasterized
         setGlCullFace Back = glEnable gl_CULL_FACE >> glCullFace gl_FRONT

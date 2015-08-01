@@ -31,7 +31,7 @@ runDrawColors (DrawColors m) = foldl sf (return (), return (), const (return [],
                                 n <- x
                                 return $ ns ++ [n]
                             , b >> y, c >> z)
-drawColor :: forall c s os. ColorRenderable c => FragColor c -> (s -> (Image c, ColorMask c, UseBlending)) -> DrawColors os s ()
+drawColor :: forall c s os. ColorRenderable c => FragColor c -> (s -> (Image (Format c), ColorMask c, UseBlending)) -> DrawColors os s ()
 drawColor c sf = DrawColors $ do n <- get
                                  put $ n+1
                                  lift $ tell [\ix -> make3  (setColor cf ix c) $ \s -> let (i, mask, o) = sf s
@@ -46,9 +46,9 @@ drawColor c sf = DrawColors $ do n <- get
     where cf = undefined :: c
 
 draw :: forall a os f s. FragmentStream a -> (s -> Blending) -> (a -> DrawColors os s ()) -> Shader os f s ()
-drawDepth :: forall a os f s d. DepthRenderable d => FragmentStream (a, FragDepth) -> (s -> (Blending, Image d, DepthOption)) -> (a -> DrawColors os s ()) -> Shader os f s ()
-drawStencil :: forall a os f s st. StencilRenderable st => FragmentStream a -> (s -> (Blending, Image st, StencilOptions)) -> (a -> DrawColors os s ()) -> Shader os f s ()
-drawDepthStencil :: forall a os f s d st. (DepthRenderable d, StencilRenderable st) => FragmentStream (a, FragDepth) -> (s -> (Blending, Image d, Image st, DepthStencilOption)) -> (a -> DrawColors os s ()) -> Shader os f s ()
+drawDepth :: forall a os f s d. DepthRenderable d => FragmentStream (a, FragDepth) -> (s -> (Blending, Image (Format d), DepthOption)) -> (a -> DrawColors os s ()) -> Shader os f s ()
+drawStencil :: forall a os f s st. StencilRenderable st => FragmentStream a -> (s -> (Blending, Image (Format st), StencilOptions)) -> (a -> DrawColors os s ()) -> Shader os f s ()
+drawDepthStencil :: forall a os f s d st. (DepthRenderable d, StencilRenderable st) => FragmentStream (a, FragDepth) -> (s -> (Blending, Image (Format d), Image (Format st), DepthStencilOption)) -> (a -> DrawColors os s ()) -> Shader os f s ()
 
 makeFBOKeys :: IO [FBOKey] -> IO (Maybe FBOKey) -> IO (Maybe FBOKey) -> IO FBOKeys
 makeFBOKeys c d s = do c' <- c
@@ -182,11 +182,9 @@ setGlBlend NoBlending = return ()
 setGlBlend (BlendRgbAlpha (e, ea) (BlendingFactors sf df, BlendingFactors sfa dfa) (r, g, b, a)) = do
                             glBlendEquationSeparate (getGlBlendEquation e) (getGlBlendEquation ea) 
                             glBlendFuncSeparate (getGlBlendFunc sf) (getGlBlendFunc df) (getGlBlendFunc sfa) (getGlBlendFunc dfa)  
-                            glBlendColor (toGlFloat r) (toGlFloat g) (toGlFloat b) (toGlFloat a)
+                            glBlendColor (realToFrac r) (realToFrac g) (realToFrac b) (realToFrac a)
 setGlBlend (LogicOp op) = glEnable gl_COLOR_LOGIC_OP >> glLogicOp (getGlLogicOp op) 
 
-toGlFloat :: Float -> GLfloat
-toGlFloat = fromRational . toRational
        
 setGlDepthOptions :: DepthOption -> IO ()
 setGlDepthOptions (DepthOption df dm) = do glEnable gl_DEPTH_TEST

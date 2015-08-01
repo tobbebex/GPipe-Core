@@ -9,6 +9,7 @@ module Graphics.GPipe.Format where
 
 import Data.Word
 import Graphics.Rendering.OpenGL.Raw.Core33
+import Foreign.Marshal.Array (withArray)
 
 data RFloat 
 data RInt
@@ -222,6 +223,7 @@ class TextureFormat f => ColorSampleable f where
     typeStr :: f -> String
     toColor :: f -> (x,x,x,x) -> Color f x
     fromColor :: f -> Color f x -> [x]
+    setBorderColor :: f -> GLenum -> Color f (ColorElement f) -> IO ()
 
 instance ColorSampleable RFloat where
     type Color RFloat a = a
@@ -229,20 +231,21 @@ instance ColorSampleable RFloat where
     typeStr _ = "float"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
-    
+    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)      
 instance ColorSampleable RInt where
     type Color RInt a = a
     type ColorElement RInt = Int
     typeStr _ = "int"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
-
+    setBorderColor _ t r = withArray [fromIntegral r, 0,0,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
 instance ColorSampleable RWord where
     type Color RWord a = a
     type ColorElement RWord = Word
     typeStr _ = "uint"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
+    setBorderColor _ t r = withArray [fromIntegral r, 0,0,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
 
 instance ColorSampleable RGFloat where
     type Color RGFloat a = (a,a)
@@ -250,18 +253,21 @@ instance ColorSampleable RGFloat where
     typeStr _ = "vec2"
     toColor _ (r,g,_,_) = (r, g)
     fromColor _ (r, g) = [r,g]
+    setBorderColor _ t (r, g) = withArray [realToFrac r, realToFrac g,0,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)
 instance ColorSampleable RGInt where
     type Color RGInt a = (a,a)
     type ColorElement RGInt = Int
     typeStr _ = "ivec2"
     toColor _ (r,g,_,_) = (r, g)
     fromColor _ (r, g) = [r,g]
+    setBorderColor _ t (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
 instance ColorSampleable RGWord where
     type Color RGWord a = (a,a)
     type ColorElement RGWord = Word
     typeStr _ = "uvec2"
     toColor _ (r,g,_,_) = (r, g)
     fromColor _ (r, g) = [r,g]
+    setBorderColor _ t (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
     
 instance ColorSampleable RGBFloat where
     type Color RGBFloat a = (a,a,a)
@@ -269,36 +275,43 @@ instance ColorSampleable RGBFloat where
     typeStr _ = "vec3"
     toColor _ (r,g,b,_) = (r, g, b)
     fromColor _ (r, g, b) = [r,g,b]
+    setBorderColor _ t (r, g, b) = withArray [realToFrac r, realToFrac g, realToFrac b,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)
 instance ColorSampleable RGBInt where
     type Color RGBInt a = (a,a,a)
     type ColorElement RGBInt = Int
     typeStr _ = "ivec3"
     toColor _ (r,g,b,_) = (r, g, b)
     fromColor _ (r, g, b) = [r,g,b]
+    setBorderColor _ t (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
 instance ColorSampleable RGBWord where
     type Color RGBWord a = (a,a,a)
     type ColorElement RGBWord = Word
     typeStr _ = "uvec3"
     toColor _ (r,g,b,_) = (r, g, b)
     fromColor _ (r, g, b) = [r,g,b]
+    setBorderColor _ t (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
+
 instance ColorSampleable RGBAFloat where
     type Color RGBAFloat a = (a,a,a,a)
     type ColorElement RGBAFloat = Float
     typeStr _ = "vec4"
     toColor _ = id
     fromColor _ (r, g, b, a) = [r,g,b,a]
+    setBorderColor _ t (r, g, b, a) = withArray [realToFrac r, realToFrac g, realToFrac b, realToFrac a] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)
 instance ColorSampleable RGBAInt where
     type Color RGBAInt a = (a,a,a,a)
     type ColorElement RGBAInt = Int
     typeStr _ = "ivec4"
     toColor _ = id
     fromColor _ (r, g, b, a) = [r,g,b,a]
+    setBorderColor _ t (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
 instance ColorSampleable RGBAWord where
     type Color RGBAWord a = (a,a,a,a)
     type ColorElement RGBAWord = Word
     typeStr _ = "uvec4"
     toColor _ = id
     fromColor _ (r, g, b, a) = [r,g,b,a]
+    setBorderColor _ t (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
 
 instance ColorSampleable Depth where
     type Color Depth a = a
@@ -306,17 +319,19 @@ instance ColorSampleable Depth where
     typeStr _ = "float"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
+    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)      
 instance ColorSampleable DepthStencil where
     type Color DepthStencil a = a
     type ColorElement DepthStencil = Float
     typeStr _ = "float"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
+    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)      
 
 class ColorSampleable c => ColorRenderable c where
     isSrgb :: Format c -> Bool
     isSrgb _ = False
-class TextureFormat f => DepthRenderable f
+class ColorSampleable f => DepthRenderable f
 class TextureFormat f => StencilRenderable f
 
 instance ColorRenderable RFloat

@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternGuards, DeriveDataTypeable #-}
-module Graphics.GPipe.Compiler where
+module Graphics.GPipe.Internal.Compiler where
 
-import Graphics.GPipe.Context
+import Graphics.GPipe.Internal.Context
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Exception (MonadException)
 import qualified Data.IntMap as Map

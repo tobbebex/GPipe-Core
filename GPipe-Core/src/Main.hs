@@ -2,24 +2,24 @@
 module Main where
 
 import Data.Boolean
-import Graphics.GPipe.Context
-import Graphics.GPipe.Buffer
-import Graphics.GPipe.Format
-import Graphics.GPipe.VertexArray as VertexArray
-import Graphics.GPipe.PrimitiveArray
-import Graphics.GPipe.Shader
-import Graphics.GPipe.PrimitiveStream
-import Graphics.GPipe.FragmentStream
-import Graphics.GPipe.FrameBuffer
-import Graphics.GPipe.Expr
-import Graphics.GPipe.Uniform
+import Graphics.GPipe.Internal.Context
+import Graphics.GPipe.Internal.Buffer
+import Graphics.GPipe.Internal.Format
+import Graphics.GPipe.Internal.VertexArray as VertexArray
+import Graphics.GPipe.Internal.PrimitiveArray
+import Graphics.GPipe.Internal.Shader
+import Graphics.GPipe.Internal.PrimitiveStream
+import Graphics.GPipe.Internal.FragmentStream
+import Graphics.GPipe.Internal.FrameBuffer
+import Graphics.GPipe.Internal.Expr
+import Graphics.GPipe.Internal.Uniform
 import Control.Category (Category(..))
 import Prelude hiding ((.), id, length)
 import System.Mem.StableName (makeStableName, hashStableName)
 import Data.Monoid ((<>))
 import Control.Monad.IO.Class (liftIO)
 import Control.Applicative ((<$>))
-import Graphics.GPipe.Texture
+import Graphics.GPipe.Internal.Texture
 import Data.Vec
 
 

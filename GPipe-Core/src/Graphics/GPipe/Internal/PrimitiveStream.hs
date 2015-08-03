@@ -53,11 +53,11 @@ toPrimitiveStream sf = Shader $ do n <- getName
         drawcall (PrimitiveArraySimple p l a) binds = (attribs a binds, glDrawArrays (toGLtopology p) 0 (fromIntegral l)) 
         drawcall (PrimitiveArrayIndexed p i a) binds = (attribs a binds, do
                                                     bindIndexBuffer i
-                                                    glDrawElements (toGLtopology p) (fromIntegral $ indexArrayLength i) (fromIntegral $ indexType i) (intPtrToPtr $ fromIntegral $ offset i))
+                                                    glDrawElements (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i))
         drawcall (PrimitiveArrayInstanced p il l a) binds = (attribs a binds, glDrawArraysInstanced (toGLtopology p) 0 (fromIntegral l) (fromIntegral il))
         drawcall (PrimitiveArrayIndexedInstanced p i il a) binds = (attribs a binds, do
                                                       bindIndexBuffer i
-                                                      glDrawElementsInstanced (toGLtopology p) (fromIntegral $ indexArrayLength i) (fromIntegral $ indexType i) (intPtrToPtr $ fromIntegral $ offset i) (fromIntegral il))
+                                                      glDrawElementsInstanced (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i) (fromIntegral il))
         bindIndexBuffer i = do case restart i of Just x -> do glEnable gl_PRIMITIVE_RESTART 
                                                               glPrimitiveRestartIndex (fromIntegral x)
                                                  Nothing -> glDisable gl_PRIMITIVE_RESTART

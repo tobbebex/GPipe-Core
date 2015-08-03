@@ -4,7 +4,8 @@
 module Graphics.GPipe.Internal.Buffer 
 (
     BufferFormat(..),
-    BaseBufferFormat(..),
+    BufferTextureFormat(..),
+    BufferColor,
     Buffer(),
     ToBuffer(),
     B(..), B2(..), B3(..), B4(..),
@@ -120,12 +121,6 @@ toB1B1 (B2 b) = (b, b { bOffset = bOffset b + sizeOf (undefined :: a) })
 newtype BUniform a = BUniform a
 newtype BNormalized a = BNormalized a
 
-class BufferFormat a => BaseBufferFormat a where
-    type BaseShaderFormat a  
-
-instance BaseBufferFormat BInt32 where
-    type BaseShaderFormat BInt32 = Int  
-
 instance Storable a => BufferFormat (B a) where
     type HostFormat (B a) = a
     toBuffer = ToBuffer 
@@ -227,11 +222,8 @@ writeBuffer elems offset buffer =
                           glFlushMappedBufferRange gl_COPY_WRITE_BUFFER off (fromIntegral $ end `minusPtr` ptr) 
                           void $ glUnmapBuffer gl_COPY_WRITE_BUFFER 
 
-readBufferM :: MonadIO m => Int -> Int -> Buffer os f -> (HostFormat f -> a -> m a) -> a ->  ContextT os f2 m a
-readBufferM = undefined
-
-readBuffer :: MonadIO m => Int -> Int -> Buffer os f -> (HostFormat f -> a -> a) -> a -> ContextT os f2 m a
-readBuffer x y z f = readBufferM x y z (\ a b -> return $ f a b)
+readBuffer :: MonadIO m => Int -> Int -> Buffer os f -> (HostFormat f -> a -> m a) -> a ->  ContextT os f2 m a
+readBuffer = undefined
 
 copyBuffer :: MonadIO m => Int -> Int -> Buffer os f -> Int -> Buffer os f -> ContextT os f2 m ()
 copyBuffer len from bFrom to bTo = liftContextIOAsync $ do 
@@ -267,6 +259,21 @@ makeBuffer name elementCount =
         writer ptr x = void $ runReaderT (runStateT (runKleisli b x) ptr) ptr
     in Buffer name elementSize elementCount elementF writer
 
-    
-                     
+
+class BufferTextureFormat f where
+    glType :: f -> GLenum
+    pixelByteSize :: f -> Int
+    glType = error "You cannot create your own instances of BufferTextureFormat"
+    pixelByteSize = error "You cannot create your own instances of BufferTextureFormat"
+
+type family BufferColor f where
+    BufferColor BInt32 = Int
+    BufferColor BInt16 = Int
+    BufferColor BInt8 = Int
+    BufferColor (B2 BInt32) = (Int, Int)
+    BufferColor (BNormalized (B2 BInt32)) = (Float, Float)
+
+instance BufferTextureFormat BInt32 where
+    glType _ = gl_INT
+    pixelByteSize _ = 4
     

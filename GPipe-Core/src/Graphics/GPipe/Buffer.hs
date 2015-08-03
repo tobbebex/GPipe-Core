@@ -1,6 +1,5 @@
 module Graphics.GPipe.Buffer (
     BufferFormat(..),
-    BaseBufferFormat(..),
     Buffer(),
     ToBuffer(),
     B(), B2(..), B3(..), B4(..),
@@ -8,8 +7,9 @@ module Graphics.GPipe.Buffer (
     BNormalized(..),
     newBuffer,
     writeBuffer,
-    readBuffer,
     copyBuffer,
+    BufferTextureFormat(),
+    BufferColor,
     BFloat, BInt32, BInt16, BInt8, BWord32, BWord16, BWord8, 
     BInt32Norm, BInt16Norm, BInt8Norm, BWord32Norm, BWord16Norm, BWord8Norm    
 )

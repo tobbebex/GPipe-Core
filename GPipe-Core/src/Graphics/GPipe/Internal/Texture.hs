@@ -209,19 +209,36 @@ type StartPos3 = (Int, Int, Int)
 
 type BufferStartPos = Int 
 
-writeTexture1D :: (ColorElement c ~ BaseShaderFormat b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
-writeTexture1DArray :: (ColorElement c ~ BaseShaderFormat b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
-writeTexture2D :: (ColorElement c ~ BaseShaderFormat b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
-writeTexture2DArray :: (ColorElement c ~ BaseShaderFormat b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
-writeTexture3D :: (ColorElement c ~ BaseShaderFormat b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
-writeTextureCube :: (ColorElement c ~ BaseShaderFormat b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> ([HostFormat b], Proxy b) -> ContextT os f m ()
 
-writeTexture1D' :: (ColorElement c ~ BaseShaderFormat b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
-writeTexture1DArray' :: (ColorElement c ~ BaseShaderFormat b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
-writeTexture2D' :: (ColorElement c ~ BaseShaderFormat b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
-writeTexture2DArray' :: (ColorElement c ~ BaseShaderFormat b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
-writeTexture3D' :: (ColorElement c ~ BaseShaderFormat b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
-writeTextureCube' :: (ColorElement c ~ BaseShaderFormat b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> (Buffer os a, a -> b, BufferStartPos) -> ContextT os f m ()
+writeTexture1D      :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
+writeTexture1DArray :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
+writeTexture2D      :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
+writeTexture2DArray :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
+writeTexture3D      :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
+writeTextureCube    :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
+
+writeTexture1DFromBuffer     :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> Buffer os a -> (a -> b) -> BufferStartPos -> ContextT os f m ()
+writeTexture1DArrayFromBuffer:: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> Buffer os a -> (a -> b) -> BufferStartPos -> ContextT os f m ()
+writeTexture2DFromBuffer     :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> Buffer os a -> (a -> b) -> BufferStartPos -> ContextT os f m ()
+writeTexture2DArrayFromBuffer:: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> Buffer os a -> (a -> b) -> BufferStartPos -> ContextT os f m ()
+writeTexture3DFromBuffer     :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> Buffer os a -> (a -> b) -> BufferStartPos -> ContextT os f m ()
+writeTextureCubeFromBuffer   :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> Buffer os a -> (a -> b) -> BufferStartPos -> ContextT os f m ()
+
+
+readTexture1D      :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
+readTexture1DArray :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
+readTexture2D      :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
+readTexture2DArray :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
+readTexture3D      :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
+readTextureCube    :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
+
+readTexture1DToBuffer     :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTexture1DArrayToBuffer:: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTexture2DToBuffer     :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTexture2DArrayToBuffer:: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTexture3DToBuffer     :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTextureCubeToBuffer   :: (BufferTextureFormat b, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> Buffer os b-> BufferStartPos -> ContextT os f m ()
+
 
 
 writeTexture1D = undefined
@@ -231,22 +248,27 @@ writeTexture2DArray = undefined
 writeTexture3D = undefined
 writeTextureCube = undefined
 
-writeTexture1D' = undefined
-writeTexture1DArray' = undefined
-writeTexture2D' = undefined
-writeTexture2DArray' = undefined
-writeTexture3D' = undefined
-writeTextureCube' = undefined
+writeTexture1DFromBuffer = undefined
+writeTexture1DArrayFromBuffer = undefined
+writeTexture2DFromBuffer = undefined
+writeTexture2DArrayFromBuffer = undefined
+writeTexture3DFromBuffer = undefined
+writeTextureCubeFromBuffer = undefined
 
-----------------------------------------------------------------------
 
--- TODO : Texture -> user
--- TODO : Texture -> Texture
--- TODO : Default -> Texture
--- TODO : Texture -> Default
--- TODO : Buffer -> Default
--- TODO : Texture -> Buffer
--- TODO : Buffer -> user
+readTexture1D = undefined
+readTexture1DArray = undefined
+readTexture2D = undefined
+readTexture2DArray = undefined
+readTexture3D = undefined
+readTextureCube = undefined
+
+readTexture1DToBuffer = undefined
+readTexture1DArrayToBuffer = undefined
+readTexture2DToBuffer = undefined
+readTexture2DArrayToBuffer = undefined
+readTexture3DToBuffer = undefined
+readTextureCubeToBuffer = undefined
 
 ----------------------------------------------------------------------
 -- Samplers

@@ -7,6 +7,8 @@ import Data.Monoid
 import Foreign.C.Types
 import Data.IORef
 
+import Graphics.Rendering.OpenGL.Raw.Core33
+
 data VertexArray t a = VertexArray  { vertexArrayLength :: Int, bArrBFunc:: BInput -> a }
 
 data Instances
@@ -34,23 +36,23 @@ replicateEach n (VertexArray m f) = VertexArray (n*m) (\x -> f $ x {bInInstanceD
 
 class BufferFormat a => IndexFormat a where
     indexToInt :: a -> HostFormat a -> Int
-    glType :: a -> Int
+    glIndexType :: a -> CUInt
     indexToInt = error "You cannot create your own instances of IndexFormat"
-    glType = error "You cannot create your own instances of IndexFormat"
+    glIndexType = error "You cannot create your own instances of IndexFormat"
         
 instance IndexFormat BWord32 where
     indexToInt _ = fromIntegral  
-    glType _ = glINT
+    glIndexType _ = gl_INT
 instance IndexFormat BWord16 where
     indexToInt _ = fromIntegral  
-    glType _ = glSHORT
+    glIndexType _ = gl_SHORT
 instance IndexFormat BWord8 where
     indexToInt _ = fromIntegral    
-    glType _ = glBYTE
+    glIndexType _ = gl_BYTE
     
-data IndexArray = IndexArray { iArrName :: IORef CUInt, indexArrayLength:: Int, offset:: Int, restart:: Maybe Int, indexType :: Int } 
+data IndexArray = IndexArray { iArrName :: IORef CUInt, indexArrayLength:: Int, offset:: Int, restart:: Maybe Int, indexType :: CUInt } 
 newIndexArray :: forall os f a. IndexFormat a => Buffer os a -> Maybe (HostFormat a) -> Render os f IndexArray
-newIndexArray buf r = let a = undefined :: a in Render $ return $ IndexArray (bufName buf) (bufElementCount buf) 0 (fmap (indexToInt a) r) (glType a) 
+newIndexArray buf r = let a = undefined :: a in Render $ return $ IndexArray (bufName buf) (bufElementCount buf) 0 (fmap (indexToInt a) r) (glIndexType a) 
  
 takeIndices :: Int -> IndexArray -> IndexArray
 takeIndices n i = i { indexArrayLength = min n (indexArrayLength i) }
@@ -58,13 +60,6 @@ takeIndices n i = i { indexArrayLength = min n (indexArrayLength i) }
 dropIndices :: Int -> IndexArray -> IndexArray
 dropIndices n i = i { indexArrayLength = max (l - n) 0, offset = offset i + n } where l = indexArrayLength i
  
-glINT :: Int
-glINT = undefined
-glSHORT :: Int
-glSHORT = undefined
-glBYTE :: Int
-glBYTE = undefined
-
 class PrimitiveTopology p where
     toGLtopology :: p -> CUInt
     toGLtopology = error "You cannot create your own instances of IndexFormat"

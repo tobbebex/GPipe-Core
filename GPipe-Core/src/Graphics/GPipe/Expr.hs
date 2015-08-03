@@ -14,6 +14,16 @@ module Graphics.GPipe.Expr (
     dFdx,
     dFdy,
     fwidth,
+    length4,
+    length3,
+    length2,
+    normalize4,
+    normalize3,
+    normalize2,
+    dot4,
+    dot3,
+    dot2,
+    cross    
 )
 where
 

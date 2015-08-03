@@ -16,6 +16,7 @@ import qualified Control.Monad.Trans.Class as T (lift)
 import Data.SNMap
 import qualified Data.IntMap as Map
 import Data.Boolean
+import Data.List (intercalate)
 
 type NextTempVar = Int
 type NextGlobal = Int
@@ -95,6 +96,17 @@ vec4S' :: RValue -> (S c a, S c a, S c a, S c a)
 vec4S' s = let f p = S $ return (s ++ p)
            in (f ".x", f ".y", f".z", f ".w")
 
+vec2S'' :: S c a -> (S c a, S c a)
+vec2S'' s = let (x,y,_z,_w) = vec4S'' s
+            in (x,y)
+vec3S'' :: S c a -> (S c a, S c a, S c a)
+vec3S'' s = let (x,y,z,_w) = vec4S'' s
+            in (x,y,z)
+vec4S'' :: S c a -> (S c a, S c a, S c a, S c a)
+vec4S'' s = let f p = S $ fmap (++ p) (unS s)
+            in (f ".x", f ".y", f".z", f ".w")
+
+           
 data V
 --data P
 data F
@@ -620,5 +632,48 @@ dFdx = fun1f "dFdx"
 dFdy = fun1f "dFdy"
 fwidth = fun1f "fwidth"
 
+---------------------------------
+fromVec4 :: (S x Float, S x Float, S x Float, S x Float) -> S x (Float,Float,Float,Float)
+fromVec4 (x,y,z,w) = S $ do params <- mapM unS [x,y,z,w]
+                            return $ "vec4(" ++ intercalate "," params ++ ")"  
+fromVec3 :: (S x Float, S x Float, S x Float) -> S x (Float,Float,Float)
+fromVec3 (x,y,z) = S $ do params <- mapM unS [x,y,z]
+                          return $ "vec3(" ++ intercalate "," params ++ ")"  
+fromVec2 :: (S x Float, S x Float) -> S x (Float,Float)
+fromVec2 (x,y) = S $ do params <- mapM unS [x,y]
+                        return $ "vec2(" ++ intercalate "," params ++ ")"  
+                              
+length4 :: (S x Float, S x Float, S x Float, S x Float) -> S x Float
+length4 = fun1f "length" . fromVec4
+length3 :: (S x Float, S x Float, S x Float) -> S x Float
+length3 = fun1f "length" . fromVec3
+length2 :: (S x Float, S x Float) -> S x Float
+length2 = fun1f "length" . fromVec2
+
+normalize4 :: (S x Float, S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float, S x Float)
+normalize4 = vec4S'' . fun1 (STypeVec 4) "normalize" . fromVec4
+normalize3 :: (S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float)
+normalize3 = vec3S'' . fun1 (STypeVec 3) "normalize" . fromVec3
+normalize2 :: (S x Float, S x Float) -> (S x Float, S x Float)
+normalize2 = vec2S'' . fun1 (STypeVec 2) "normalize" . fromVec2
+
+dot4 :: (S x Float, S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float, S x Float) -> S x Float
+dot4 a b = fun2f "dot" (fromVec4 a) (fromVec4 b)
+dot3 :: (S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float) -> S x Float
+dot3 a b = fun2f "dot" (fromVec3 a) (fromVec3 b)
+dot2 :: (S x Float, S x Float) -> (S x Float, S x Float) -> S x Float
+dot2 a b = fun2f "dot" (fromVec2 a) (fromVec2 b)
+
+cross :: (S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float)
+cross a b = vec3S'' $ fun2 (STypeVec 3) "cross" (fromVec3 a) (fromVec3 b)
+
+---------------------------------
+
+{-# RULES "minB/S" minB = minS #-}
+{-# RULES "maxB/S" maxB = maxS #-}
+minS :: S x Float -> S x Float -> S x Float 
+minS = binf "min"
+maxS :: S x Float -> S x Float -> S x Float 
+maxS = binf "max"
 
                              

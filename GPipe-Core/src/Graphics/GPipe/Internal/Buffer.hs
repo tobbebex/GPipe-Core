@@ -260,20 +260,179 @@ makeBuffer name elementCount =
     in Buffer name elementSize elementCount elementF writer
 
 
-class BufferTextureFormat f where
+class BufferFormat f => BufferTextureFormat f where
     glType :: f -> GLenum
     pixelByteSize :: f -> Int
     glType = error "You cannot create your own instances of BufferTextureFormat"
     pixelByteSize = error "You cannot create your own instances of BufferTextureFormat"
 
 type family BufferColor f where
+    BufferColor (BNormalized BInt32) = Float
+    BufferColor (BNormalized BInt16) = Float
+    BufferColor (BNormalized BInt8) = Float
+    BufferColor BFloat = Float
+
     BufferColor BInt32 = Int
     BufferColor BInt16 = Int
     BufferColor BInt8 = Int
-    BufferColor (B2 BInt32) = (Int, Int)
-    BufferColor (BNormalized (B2 BInt32)) = (Float, Float)
+
+    BufferColor BWord32 = Word
+    BufferColor BWord16 = Word
+    BufferColor BWord8 = Word
+
+    BufferColor (BNormalized (B2 Int32)) = (Float, Float)
+    BufferColor (BNormalized (B2 Int16)) = (Float, Float)
+    BufferColor (BNormalized (B2 Int8)) = (Float, Float)
+    BufferColor (B2 Float) = (Float, Float)
+
+    BufferColor (B2 Int32) = (Int, Int)
+    BufferColor (B2 Int16) = (Int, Int)
+    BufferColor (B2 Int8) = (Int, Int)
+
+    BufferColor (B2 Word32) = (Word, Word)
+    BufferColor (B2 Word16) = (Word, Word)
+    BufferColor (B2 Word8) = (Word, Word)
+
+    BufferColor (BNormalized (B3 Int32)) = (Float, Float, Float)
+    BufferColor (BNormalized (B3 Int16)) = (Float, Float, Float)
+    BufferColor (BNormalized (B3 Int8)) = (Float, Float, Float)
+    BufferColor (B3 Float) = (Float, Float, Float)
+
+    BufferColor (B3 Int32) = (Int, Int, Int)
+    BufferColor (B3 Int16) = (Int, Int, Int)
+    BufferColor (B3 Int8) = (Int, Int, Int)
+
+    BufferColor (B3 Word32) = (Word, Word, Word)
+    BufferColor (B3 Word16) = (Word, Word, Word)
+    BufferColor (B3 Word8) = (Word, Word, Word)
+
+    BufferColor (BNormalized (B4 Int32)) = (Float, Float, Float, Float)
+    BufferColor (BNormalized (B4 Int16)) = (Float, Float, Float, Float)
+    BufferColor (BNormalized (B4 Int8)) = (Float, Float, Float, Float)
+    BufferColor (B4 Float) = (Float, Float, Float, Float)
+
+    BufferColor (B4 Int32) = (Int, Int, Int, Int)
+    BufferColor (B4 Int16) = (Int, Int, Int, Int)
+    BufferColor (B4 Int8) = (Int, Int, Int, Int)
+
+    BufferColor (B4 Word32) = (Word, Word, Word, Word)
+    BufferColor (B4 Word16) = (Word, Word, Word, Word)
+    BufferColor (B4 Word8) = (Word, Word, Word, Word)
 
 instance BufferTextureFormat BInt32 where
     glType _ = gl_INT
     pixelByteSize _ = 4
+
+instance BufferTextureFormat BInt16 where
+    glType _ = gl_SHORT
+    pixelByteSize _ = 2
+
+instance BufferTextureFormat BInt8 where
+    glType _ = gl_BYTE
+    pixelByteSize _ = 1
+
+instance BufferTextureFormat BWord32 where
+    glType _ = gl_UNSIGNED_INT
+    pixelByteSize _ = 4
+
+instance BufferTextureFormat BWord16 where
+    glType _ = gl_UNSIGNED_SHORT
+    pixelByteSize _ = 2
+
+instance BufferTextureFormat BWord8 where
+    glType _ = gl_UNSIGNED_BYTE
+    pixelByteSize _ = 1
+
+instance BufferTextureFormat BFloat where
+    glType _ = gl_FLOAT
+    pixelByteSize _ = 4
+
+instance BufferTextureFormat (B2 Int32) where
+    glType _ = gl_INT
+    pixelByteSize _ = 4*2
+
+instance BufferTextureFormat (B2 Int16) where
+    glType _ = gl_SHORT
+    pixelByteSize _ = 2*2
+
+instance BufferTextureFormat (B2 Int8) where
+    glType _ = gl_BYTE
+    pixelByteSize _ = 1*2
+
+instance BufferTextureFormat (B2 Word32) where
+    glType _ = gl_UNSIGNED_INT
+    pixelByteSize _ = 4*2
+
+instance BufferTextureFormat (B2 Word16) where
+    glType _ = gl_UNSIGNED_SHORT
+    pixelByteSize _ = 2*2
+
+instance BufferTextureFormat (B2 Word8) where
+    glType _ = gl_UNSIGNED_BYTE
+    pixelByteSize _ = 1*2
+
+instance BufferTextureFormat (B2 Float) where
+    glType _ = gl_FLOAT
+    pixelByteSize _ = 4*2
+
+instance BufferTextureFormat (B3 Int32) where
+    glType _ = gl_INT
+    pixelByteSize _ = 4*3
+
+instance BufferTextureFormat (B3 Int16) where
+    glType _ = gl_SHORT
+    pixelByteSize _ = 2*3
+
+instance BufferTextureFormat (B3 Int8) where
+    glType _ = gl_BYTE
+    pixelByteSize _ = 1*3
+
+instance BufferTextureFormat (B3 Word32) where
+    glType _ = gl_UNSIGNED_INT
+    pixelByteSize _ = 4*3
+
+instance BufferTextureFormat (B3 Word16) where
+    glType _ = gl_UNSIGNED_SHORT
+    pixelByteSize _ = 2*3
+
+instance BufferTextureFormat (B3 Word8) where
+    glType _ = gl_UNSIGNED_BYTE
+    pixelByteSize _ = 1*3
+
+instance BufferTextureFormat (B3 Float) where
+    glType _ = gl_FLOAT
+    pixelByteSize _ = 4*3
+
+instance BufferTextureFormat (B4 Int32) where
+    glType _ = gl_INT
+    pixelByteSize _ = 4*4
+
+instance BufferTextureFormat (B4 Int16) where
+    glType _ = gl_SHORT
+    pixelByteSize _ = 2*4
+
+instance BufferTextureFormat (B4 Int8) where
+    glType _ = gl_BYTE
+    pixelByteSize _ = 1*4
+
+instance BufferTextureFormat (B4 Word32) where
+    glType _ = gl_UNSIGNED_INT
+    pixelByteSize _ = 4*4
+
+instance BufferTextureFormat (B4 Word16) where
+    glType _ = gl_UNSIGNED_SHORT
+    pixelByteSize _ = 2*4
+
+instance BufferTextureFormat (B4 Word8) where
+    glType _ = gl_UNSIGNED_BYTE
+    pixelByteSize _ = 1*4
+
+instance BufferTextureFormat (B4 Float) where
+    glType _ = gl_FLOAT
+    pixelByteSize _ = 4*4
+    
+instance BufferTextureFormat a => BufferTextureFormat (BNormalized a) where
+    glType (BNormalized a) = glType a
+    pixelByteSize (BNormalized a) = pixelByteSize a
+
     

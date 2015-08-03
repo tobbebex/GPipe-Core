@@ -100,7 +100,6 @@ data Format a where
     Stencil4 :: Format Stencil
     Stencil8 :: Format Stencil
     Stencil16 :: Format Stencil
-    DepthStencil :: Format Depth -> Format Stencil -> Format DepthStencil
     Depth24Stencil8  :: Format DepthStencil
     Depth32FStencil8 :: Format DepthStencil
 
@@ -177,7 +176,6 @@ getGlInternalFormat Stencil8 = gl_STENCIL_INDEX8
 getGlInternalFormat Stencil16 = gl_STENCIL_INDEX16
 getGlInternalFormat Depth24Stencil8 = gl_DEPTH24_STENCIL8
 getGlInternalFormat Depth32FStencil8 = gl_DEPTH32F_STENCIL8
-getGlInternalFormat _ = error "getGlInternalFormat: Unknown internal format"
 
 class TextureFormat f where
     getGlFormat  :: f -> GLenum
@@ -469,7 +467,6 @@ stencilBits Stencil8 = 8
 stencilBits Stencil16 = 16
 
 depthStencilBits :: Format DepthStencil -> (Int, Int)
-depthStencilBits (DepthStencil d s) = (depthBits d, stencilBits s)
 depthStencilBits Depth32FStencil8 = (32, 8)
 depthStencilBits Depth24Stencil8 = (24, 8)
 
@@ -478,17 +475,21 @@ data ContextFormat c ds where
     ContextFormatColor :: ContextColorFormat c => Format c -> ContextFormat c ()
     ContextFormatColorDepth :: ContextColorFormat c => Format c -> Format Depth -> ContextFormat c Depth
     ContextFormatColorStencil :: ContextColorFormat c => Format c -> Format Stencil -> ContextFormat c Stencil
-    ContextFormatColorDepthStencil :: ContextColorFormat c => Format c -> Format DepthStencil -> ContextFormat c DepthStencil
+    ContextFormatColorDepthStencilSeparate :: ContextColorFormat c => Format c -> Format Depth -> Format Stencil -> ContextFormat c DepthStencil
+    ContextFormatColorDepthStencilCombined :: ContextColorFormat c => Format c -> Format DepthStencil -> ContextFormat c DepthStencil
     ContextFormatDepth :: Format Depth -> ContextFormat () Depth
     ContextFormatStencil :: Format Stencil -> ContextFormat () Stencil
-    ContextFormatDepthStencil :: Format DepthStencil -> ContextFormat () DepthStencil
+    ContextFormatDepthStencilSeparate :: Format Depth -> Format Stencil -> ContextFormat () DepthStencil
+    ContextFormatDepthStencilCombined :: Format DepthStencil -> ContextFormat () DepthStencil
 
 contextBits :: ContextFormat c ds -> ((Int,Int,Int,Int,Bool),Int,Int)
 contextBits ContextFormatNone = ((0,0,0,0, False),0,0)
 contextBits (ContextFormatColor c) = (colorBits c, 0, 0)
 contextBits (ContextFormatColorDepth c d) = (colorBits c, depthBits d, 0)
 contextBits (ContextFormatColorStencil c s) = (colorBits c, 0, stencilBits s)
-contextBits (ContextFormatColorDepthStencil c ds) = let (d,s) = depthStencilBits ds in (colorBits c, d, s)
+contextBits (ContextFormatColorDepthStencilSeparate c d s) = (colorBits c, depthBits d, stencilBits s)
+contextBits (ContextFormatColorDepthStencilCombined c ds) = let (d,s) = depthStencilBits ds in (colorBits c, d, s)
 contextBits (ContextFormatDepth d) = ((0,0,0,0, False), depthBits d, 0)
 contextBits (ContextFormatStencil s) = ((0,0,0,0, False), 0, stencilBits s)
-contextBits (ContextFormatDepthStencil ds) = let (d,s) = depthStencilBits ds in ((0,0,0,0, False), d, s)
+contextBits (ContextFormatDepthStencilSeparate d s) = ((0,0,0,0, False), depthBits d, stencilBits s)
+contextBits (ContextFormatDepthStencilCombined ds) = let (d,s) = depthStencilBits ds in ((0,0,0,0, False), d, s)

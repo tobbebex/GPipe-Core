@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE EmptyDataDecls, NoMonomorphismRestriction,
   TypeFamilies, ScopedTypeVariables, FlexibleInstances, RankNTypes,
   MultiParamTypeClasses, FlexibleContexts, OverloadedStrings #-}
@@ -17,6 +18,7 @@ import Data.SNMap
 import qualified Data.IntMap as Map
 import Data.Boolean
 import Data.List (intercalate)
+import Control.Applicative ((<$>))
 
 type NextTempVar = Int
 type NextGlobal = Int
@@ -214,93 +216,102 @@ tellGlobalLn string = tell $ string `mappend` ";\n"
 tellGlobal :: String -> GlobDeclM ()
 tellGlobal = tell
 
-
-data CompiledExpr = CompiledExpr { cshaderName :: Int, cshaderUniBlockNameToIndex :: Map.IntMap Int, cshaderSamplerNameToIndex :: Map.IntMap Int } 
-
-
 -----------------------
 
-class ShaderBase a x where
-    shaderbaseDeclare :: x -> a -> WriterT [String] ExprM a
-    shaderbaseAssign :: x -> a -> StateT [String] ExprM ()
-    shaderbaseReturn :: x -> a -> ReaderT (ExprM [String]) (State Int) a
-    shaderbaseDeclare = error "You cannot create your own instances of ShaderBase"
-    shaderbaseAssign = error "You cannot create your own instances of ShaderBase"
-    shaderbaseReturn = error "You cannot create your own instances of ShaderBase"
+data ShaderBase a x where
+    ShaderBaseFloat :: S x Float -> ShaderBase (S x Float) x 
+    ShaderBaseInt :: S x Int -> ShaderBase (S x Int) x 
+    ShaderBaseWord :: S x Word -> ShaderBase (S x Word) x 
+    ShaderBaseBool :: S x Bool -> ShaderBase (S x Bool) x 
+    ShaderBaseUnit :: ShaderBase () x 
+    ShaderBaseProd :: ShaderBase a x -> ShaderBase b x -> ShaderBase (a,b) x 
 
-instance (ShaderBase a x, ShaderBase b x) => ShaderBase (a, b) x where
-    shaderbaseDeclare _ _ = do a' <- shaderbaseDeclare (undefined :: x) (undefined :: a)
-                               b' <- shaderbaseDeclare (undefined :: x) (undefined :: b)
-                               return (a', b')
-    shaderbaseAssign _ (a,b) = do shaderbaseAssign (undefined :: x) a
-                                  shaderbaseAssign (undefined :: x) b    
-    shaderbaseReturn _ _ = do a' <- shaderbaseReturn (undefined :: x) (undefined :: a)
-                              b' <- shaderbaseReturn (undefined :: x) (undefined :: b)
-                              return (a', b')  
+shaderbaseDeclare :: ShaderBase a x -> WriterT [String] ExprM (ShaderBase a x)
+shaderbaseAssign :: ShaderBase a x -> StateT [String] ExprM ()
+shaderbaseReturn :: ShaderBase a x -> ReaderT (ExprM [String]) (State Int) (ShaderBase a x)
 
-instance ShaderBase (S c Int) c where
-    shaderbaseDeclare _ _ = do var <- T.lift $ T.lift $ T.lift $ T.lift getNext
+shaderbaseDeclare (ShaderBaseFloat _) = ShaderBaseFloat <$> shaderbaseDeclareDef STypeFloat
+shaderbaseDeclare (ShaderBaseInt _) = ShaderBaseInt <$> shaderbaseDeclareDef STypeInt
+shaderbaseDeclare (ShaderBaseWord _) = ShaderBaseWord <$> shaderbaseDeclareDef STypeUInt
+shaderbaseDeclare (ShaderBaseBool _) = ShaderBaseBool <$> shaderbaseDeclareDef STypeBool
+shaderbaseDeclare ShaderBaseUnit = return ShaderBaseUnit 
+shaderbaseDeclare (ShaderBaseProd a b) = do a' <- shaderbaseDeclare a
+                                            b' <- shaderbaseDeclare b
+                                            return $ ShaderBaseProd a' b'
+
+shaderbaseAssign (ShaderBaseFloat a) = shaderbaseAssignDef a
+shaderbaseAssign (ShaderBaseInt a) = shaderbaseAssignDef a
+shaderbaseAssign (ShaderBaseWord a) = shaderbaseAssignDef a
+shaderbaseAssign (ShaderBaseBool a) = shaderbaseAssignDef a
+shaderbaseAssign ShaderBaseUnit = return ()
+shaderbaseAssign (ShaderBaseProd a b) = do shaderbaseAssign a
+                                           shaderbaseAssign b
+
+shaderbaseReturn (ShaderBaseFloat _) = ShaderBaseFloat <$> shaderbaseReturnDef
+shaderbaseReturn (ShaderBaseInt _) = ShaderBaseInt <$> shaderbaseReturnDef
+shaderbaseReturn (ShaderBaseWord _) = ShaderBaseWord <$> shaderbaseReturnDef
+shaderbaseReturn (ShaderBaseBool _) = ShaderBaseBool <$> shaderbaseReturnDef
+shaderbaseReturn ShaderBaseUnit = return ShaderBaseUnit 
+shaderbaseReturn (ShaderBaseProd a b) = do a' <- shaderbaseReturn a
+                                           b' <- shaderbaseReturn b
+                                           return $ ShaderBaseProd a' b'
+
+shaderbaseDeclareDef :: SType -> WriterT [String] ExprM (S x a)
+shaderbaseDeclareDef styp = do var <- T.lift $ T.lift $ T.lift $ T.lift getNext
                                let root = 't' : show var
-                               T.lift $ T.lift $ T.lift $ tell $ mconcat [stypeName STypeInt, ' ':root, ";\n"]
+                               T.lift $ T.lift $ T.lift $ tell $ mconcat [stypeName styp, ' ':root, ";\n"]
                                tell [root]
                                return $ S $ return root
-    shaderbaseAssign _ (S shaderM) = do ul <- T.lift shaderM
-                                        x:xs <- get
-                                        put xs
-                                        T.lift $ tellAssignment' x ul
-                                        return ()
-    shaderbaseReturn _ _ = do i <- T.lift getNext
-                              m <- ask
-                              return $ S $ fmap (!!i) m
 
-instance ShaderBase (S c Float) c where
-    shaderbaseDeclare _ _ = do var <- T.lift $ T.lift $ T.lift $ T.lift getNext
-                               let root = 't' : show var
-                               T.lift $ T.lift $ T.lift $ tell $ mconcat [stypeName STypeFloat, ' ':root, ";\n"]
-                               tell [root]
-                               return $ S $ return root
-    shaderbaseAssign _ (S shaderM) = do ul <- T.lift shaderM
-                                        x:xs <- get
-                                        put xs
-                                        T.lift $ tellAssignment' x ul
-                                        return ()
-    shaderbaseReturn _ _ = do i <- T.lift getNext
-                              m <- ask
-                              return $ S $ fmap (!!i) m
+shaderbaseAssignDef  (S shaderM) = do ul <- T.lift shaderM
+                                      x:xs <- get
+                                      put xs
+                                      T.lift $ tellAssignment' x ul
+                                      return ()
+shaderbaseReturnDef :: ReaderT (ExprM [String]) (State Int) (S x a)
+shaderbaseReturnDef = do i <- T.lift getNext
+                         m <- ask
+                         return $ S $ fmap (!!i) m
 
-instance ShaderBase () x where
-    shaderbaseDeclare _ = return
-    shaderbaseAssign _ _ = return ()
-    shaderbaseReturn _ = return   
     
-class ShaderBase (ShaderBaseType a) x => ShaderType a x where
+class ShaderType a x where
     type ShaderBaseType a
-    toBase :: x -> a -> ShaderBaseType a
-    fromBase :: x -> ShaderBaseType a -> a
+    toBase :: x -> a -> ShaderBase (ShaderBaseType a) x
+    fromBase :: x -> ShaderBase (ShaderBaseType a) x -> a
     
-instance ShaderType (S c Int) c where
-    type ShaderBaseType (S c Int) = S c Int
-    toBase _ = id
-    fromBase _ = id
+instance ShaderType (S x Float) x where
+    type ShaderBaseType (S x Float) = (S x Float)
+    toBase _ = ShaderBaseFloat
+    fromBase _ (ShaderBaseFloat a) = a
 
-instance ShaderType (S c Float) c where
-    type ShaderBaseType (S c Float) = S c Float
-    toBase _ = id
-    fromBase _ = id
+instance ShaderType (S x Int) x where
+    type ShaderBaseType (S x Int) = (S x Int)
+    toBase _ = ShaderBaseInt
+    fromBase _ (ShaderBaseInt a) = a
+    
+instance ShaderType (S x Word) x where
+    type ShaderBaseType (S x Word) = (S x Word)
+    toBase _ = ShaderBaseWord
+    fromBase _ (ShaderBaseWord a) = a
 
+instance ShaderType (S x Bool) x where
+    type ShaderBaseType (S x Bool) = (S x Bool)
+    toBase _ = ShaderBaseBool
+    fromBase _ (ShaderBaseBool a) = a
+    
 instance ShaderType () x where
     type ShaderBaseType () = ()
-    toBase _ = id
-    fromBase _ = id
+    toBase _ () = ShaderBaseUnit
+    fromBase _ ShaderBaseUnit = ()
 
 instance (ShaderType a x, ShaderType b x) => ShaderType (a,b) x where
     type ShaderBaseType (a,b) = (ShaderBaseType a, ShaderBaseType b)
-    toBase x (a,b) = (toBase x a, toBase x b)
-    fromBase x (a,b) = (fromBase x a, fromBase x b)
+    toBase x ~(a,b) = ShaderBaseProd (toBase x a) (toBase x b)
+    fromBase x (ShaderBaseProd a b) = (fromBase x a, fromBase x b)
 instance (ShaderType a x, ShaderType b x, ShaderType c x) => ShaderType (a,b,c) x where
     type ShaderBaseType (a,b,c) = (ShaderBaseType a, (ShaderBaseType b, ShaderBaseType c))
-    toBase x (a,b,c) = (toBase x a, (toBase x b, toBase x c))
-    fromBase x (a,(b,c)) = (fromBase x a, fromBase x b, fromBase x c)
+    toBase x ~(a,b,c) = ShaderBaseProd (toBase x a) (ShaderBaseProd (toBase x b) (toBase x c))
+    fromBase x (ShaderBaseProd a (ShaderBaseProd b c)) = (fromBase x a, fromBase x b, fromBase x c)
     
 ifThenElse' :: forall a x. (ShaderType a x) => S x Bool -> a -> a -> a
 ifThenElse' b t e = ifThenElse b (const t) (const e) ()
@@ -309,36 +320,36 @@ ifThenElse :: forall a b x. (ShaderType a x, ShaderType b x) => S x Bool -> (a -
 ifThenElse c t e i = fromBase x $ ifThenElse_ c (toBase x . t . fromBase x) (toBase x . e . fromBase x) (toBase x i)
     where
         x = undefined :: x
-        ifThenElse_ :: S x Bool -> (ShaderBaseType a -> ShaderBaseType b) -> (ShaderBaseType a -> ShaderBaseType b) -> ShaderBaseType a -> ShaderBaseType b
+        ifThenElse_ :: S x Bool -> (ShaderBase (ShaderBaseType a) x -> ShaderBase (ShaderBaseType b) x) -> (ShaderBase (ShaderBaseType a) x -> ShaderBase (ShaderBaseType b) x) -> ShaderBase (ShaderBaseType a) x -> ShaderBase (ShaderBaseType b) x
         ifThenElse_ bool thn els a = 
             let ifM = memoizeM $ do
                            boolStr <- unS bool
-                           (lifted, aDecls) <- runWriterT $ shaderbaseDeclare x undefined
-                           void $ evalStateT (shaderbaseAssign x a) aDecls
-                           decls <- execWriterT $ shaderbaseDeclare x (undefined :: ShaderBaseType b)
+                           (lifted, aDecls) <- runWriterT $ shaderbaseDeclare (toBase x (undefined :: a))
+                           void $ evalStateT (shaderbaseAssign a) aDecls
+                           decls <- execWriterT $ shaderbaseDeclare (toBase x (undefined :: b))
                            tellIf boolStr                
-                           void $ evalStateT (shaderbaseAssign x $ thn lifted) decls                                    
+                           void $ evalStateT (shaderbaseAssign $ thn lifted) decls                                    
                            T.lift $ T.lift $ tell "} else {\n"                   
-                           void $ evalStateT (shaderbaseAssign x $ els lifted) decls
+                           void $ evalStateT (shaderbaseAssign $ els lifted) decls
                            T.lift $ T.lift $ tell "}\n"                                                 
                            return decls
-            in evalState (runReaderT (shaderbaseReturn x undefined) ifM) 0
+            in evalState (runReaderT (shaderbaseReturn (toBase x (undefined :: b))) ifM) 0
 
 ifThen :: forall a x. (ShaderType a x) => S x Bool -> (a -> a) -> a -> a
 ifThen c t i = fromBase x $ ifThen_ c (toBase x . t . fromBase x) (toBase x i)
     where
         x = undefined :: x
-        ifThen_ :: S x Bool -> (ShaderBaseType a -> ShaderBaseType a) -> ShaderBaseType a -> ShaderBaseType a
+        ifThen_ :: S x Bool -> (ShaderBase (ShaderBaseType a) x -> ShaderBase (ShaderBaseType a) x) -> ShaderBase (ShaderBaseType a) x -> ShaderBase (ShaderBaseType a) x
         ifThen_ bool thn a = 
             let ifM = memoizeM $ do
                            boolStr <- unS bool
-                           (lifted, decls) <- runWriterT $ shaderbaseDeclare x undefined
-                           void $ evalStateT (shaderbaseAssign x a) decls
+                           (lifted, decls) <- runWriterT $ shaderbaseDeclare (toBase x (undefined :: a))
+                           void $ evalStateT (shaderbaseAssign a) decls
                            tellIf boolStr
-                           void $ evalStateT (shaderbaseAssign x $ thn lifted) decls                                    
+                           void $ evalStateT (shaderbaseAssign $ thn lifted) decls                                    
                            T.lift $ T.lift $ tell "}\n"
                            return decls
-            in evalState (runReaderT (shaderbaseReturn x undefined) ifM) 0
+            in evalState (runReaderT (shaderbaseReturn (toBase x (undefined :: a))) ifM) 0
     
 
 tellIf :: RValue -> ExprM ()
@@ -347,19 +358,19 @@ while :: forall a x. (ShaderType a x) => (a -> S x Bool) -> (a -> a) -> a -> a
 while c f i = fromBase x $ while_ (c . fromBase x) (toBase x . f . fromBase x) (toBase x i)            
     where
         x = undefined :: x
-        while_ :: (ShaderBaseType a -> S x Bool) -> (ShaderBaseType a -> ShaderBaseType a) -> ShaderBaseType a -> ShaderBaseType a                                 
+        while_ :: (ShaderBase (ShaderBaseType a) x -> S x Bool) -> (ShaderBase (ShaderBaseType a) x -> ShaderBase (ShaderBaseType a) x) -> ShaderBase (ShaderBaseType a) x -> ShaderBase (ShaderBaseType a) x                                 
         while_ bool loopF a = let whileM = memoizeM $ do
-                                           (lifted, decls) <- runWriterT $ shaderbaseDeclare x a
-                                           void $ evalStateT (shaderbaseAssign x a) decls
+                                           (lifted, decls) <- runWriterT $ shaderbaseDeclare (toBase x (undefined :: a))
+                                           void $ evalStateT (shaderbaseAssign a) decls
                                            boolDecl <- tellAssignment STypeBool (unS $ bool a)
                                            T.lift $ T.lift $ tell $ mconcat ["while(", boolDecl, "){\n" ]
                                            let looped = loopF lifted                                
-                                           void $ evalStateT (shaderbaseAssign x looped) decls 
+                                           void $ evalStateT (shaderbaseAssign looped) decls 
                                            loopedBoolStr <- unS $ bool looped
                                            tellAssignment' boolDecl loopedBoolStr
                                            T.lift $ T.lift $ tell "}\n"
                                            return decls
-                             in evalState (runReaderT (shaderbaseReturn x undefined) whileM) 0
+                             in evalState (runReaderT (shaderbaseReturn (toBase x (undefined :: a))) whileM) 0
 
 
 --------------------------------------------------------------------------------------------------------------------------------

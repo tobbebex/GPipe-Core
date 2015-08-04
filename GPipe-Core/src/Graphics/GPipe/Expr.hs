@@ -1,5 +1,5 @@
 module Graphics.GPipe.Expr (
-    ShaderBase(),
+    ShaderBase(..),
     ShaderType(..),
     S(),   
     V, F,

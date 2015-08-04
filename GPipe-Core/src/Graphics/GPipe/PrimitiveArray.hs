@@ -8,7 +8,7 @@ module Graphics.GPipe.PrimitiveArray (
     replicateEach,
     
     IndexArray(),    
-    IndexFormat(),
+    IndexFormat,
     newIndexArray,
     takeIndices,
     dropIndices,

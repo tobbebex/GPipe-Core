@@ -1,5 +1,7 @@
+{-# LANGUAGE TypeFamilies #-}
+
 module Graphics.GPipe.Buffer (
-    BufferFormat(..),
+    BufferFormat(type HostFormat, toBuffer),
     Buffer(),
     ToBuffer(),
     B(), B2(..), B3(..), B4(..),
@@ -8,10 +10,7 @@ module Graphics.GPipe.Buffer (
     newBuffer,
     writeBuffer,
     copyBuffer,
-    BufferTextureFormat(),
-    BufferColor,
-    BFloat, BInt32, BInt16, BInt8, BWord32, BWord16, BWord8, 
-    BInt32Norm, BInt16Norm, BInt8Norm, BWord32Norm, BWord16Norm, BWord8Norm    
+    BufferColor
 )
 where
 

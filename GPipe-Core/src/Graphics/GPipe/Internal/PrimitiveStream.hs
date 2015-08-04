@@ -117,44 +117,44 @@ makeVertexI x f styp typ b = do
 -- scalars
 
 unBnorm (BNormalized a) = a
-instance VertexInput BFloat where
-    type VertexFormat BFloat = VFloat
+instance VertexInput (B Float) where
+    type VertexFormat (B Float) = VFloat
     toVertex = ToVertex $ Kleisli $ makeVertexF 1 (const S) STypeFloat gl_FLOAT
-instance VertexInput BInt32Norm where
-    type VertexFormat BInt32Norm = VFloat
+instance VertexInput (BNormalized (B Int32)) where
+    type VertexFormat (BNormalized (B Int32)) = VFloat
     toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat gl_INT . unBnorm
-instance VertexInput BInt16Norm where
-    type VertexFormat BInt16Norm = VFloat
+instance VertexInput (BNormalized (B Int16)) where
+    type VertexFormat (BNormalized (B Int16)) = VFloat
     toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat gl_SHORT . unBnorm
-instance VertexInput BInt8Norm where
-    type VertexFormat BInt8Norm = VFloat
+instance VertexInput (BNormalized (B Int8)) where
+    type VertexFormat (BNormalized (B Int8)) = VFloat
     toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat gl_BYTE . unBnorm
-instance VertexInput BWord32Norm where
-    type VertexFormat BWord32Norm = VFloat
+instance VertexInput (BNormalized (B Word32)) where
+    type VertexFormat (BNormalized (B Word32)) = VFloat
     toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat gl_UNSIGNED_INT . unBnorm
-instance VertexInput BWord16Norm where
-    type VertexFormat BWord16Norm = VFloat
+instance VertexInput (BNormalized (B Word16)) where
+    type VertexFormat (BNormalized (B Word16)) = VFloat
     toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat gl_UNSIGNED_SHORT . unBnorm
-instance VertexInput BWord8Norm where
-    type VertexFormat BWord8Norm = VFloat
+instance VertexInput (BNormalized (B Word8)) where
+    type VertexFormat (BNormalized (B Word8)) = VFloat
     toVertex = ToVertex $ Kleisli $ makeVertexFnorm 1 (const S) STypeFloat gl_UNSIGNED_BYTE . unBnorm
-instance VertexInput BInt32 where
-    type VertexFormat BInt32 = VInt
+instance VertexInput (B Int32) where
+    type VertexFormat (B Int32) = VInt
     toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeInt gl_INT
-instance VertexInput BInt16 where
-    type VertexFormat BInt16 = VInt
+instance VertexInput (B Int16) where
+    type VertexFormat (B Int16) = VInt
     toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeInt gl_SHORT
-instance VertexInput BInt8 where
-    type VertexFormat BInt8 = VInt
+instance VertexInput (B Int8) where
+    type VertexFormat (B Int8) = VInt
     toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeInt gl_BYTE
-instance VertexInput BWord32 where
-    type VertexFormat BWord32 = VWord
+instance VertexInput (B Word32) where
+    type VertexFormat (B Word32) = VWord
     toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeUInt gl_UNSIGNED_INT
-instance VertexInput BWord16 where
-    type VertexFormat BWord16 = VWord
+instance VertexInput (B Word16) where
+    type VertexFormat (B Word16) = VWord
     toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeUInt gl_UNSIGNED_SHORT
-instance VertexInput BWord8 where
-    type VertexFormat BWord8 = VWord
+instance VertexInput (B Word8) where
+    type VertexFormat (B Word8) = VWord
     toVertex = ToVertex $ Kleisli $ makeVertexI 1 (const S) STypeUInt gl_UNSIGNED_BYTE
 
        

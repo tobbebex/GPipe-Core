@@ -13,10 +13,11 @@ import Control.Monad.Trans.Class (lift)
 import Control.Category hiding ((.))
 import qualified Data.IntMap as Map
 import Data.IntMap.Lazy (insert)
-import Data.Word (Word)
+import Data.Word
 
 import Graphics.Rendering.OpenGL.Raw.Core33
 import Data.IORef
+import Data.Int
 
 class BufferFormat (UniformBufferFormat a) => Uniform a where
     type UniformBufferFormat a
@@ -66,15 +67,15 @@ makeUniform styp = ToUniform $ Kleisli $ \bIn -> do let offset = bOffset bIn
                                                     return $ S $ useF offset
 
 instance Uniform (S x Float) where
-    type UniformBufferFormat (S x Float) = BFloat
+    type UniformBufferFormat (S x Float) = (B Float)
     toUniform = makeUniform STypeFloat
 
 instance Uniform (S x Int) where
-    type UniformBufferFormat (S x Int) = BInt32
+    type UniformBufferFormat (S x Int) = (B Int32)
     toUniform = makeUniform STypeInt
 
 instance Uniform (S x Word) where
-    type UniformBufferFormat (S x Word) = BWord32
+    type UniformBufferFormat (S x Word) = (B Word32)
     toUniform = makeUniform STypeUInt
 
 instance (Uniform a, Uniform b) => Uniform (a,b) where

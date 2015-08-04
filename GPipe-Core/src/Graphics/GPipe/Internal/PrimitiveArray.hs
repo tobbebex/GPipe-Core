@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, ScopedTypeVariables, EmptyDataDecls #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, ScopedTypeVariables, EmptyDataDecls, TypeFamilies #-}
 module Graphics.GPipe.Internal.PrimitiveArray where
 
 import Graphics.GPipe.Internal.Buffer
@@ -7,7 +7,7 @@ import Data.Monoid
 import Foreign.C.Types
 import Data.IORef
 
-import Graphics.Rendering.OpenGL.Raw.Core33
+import Data.Word
 
 data VertexArray t a = VertexArray  { vertexArrayLength :: Int, bArrBFunc:: BInput -> a }
 
@@ -34,25 +34,14 @@ dropVertices n (VertexArray m f) = VertexArray n' g
 replicateEach :: Int -> VertexArray t a -> VertexArray Instances a
 replicateEach n (VertexArray m f) = VertexArray (n*m) (\x -> f $ x {bInInstanceDiv = bInInstanceDiv x * n})
 
-class BufferFormat a => IndexFormat a where
-    indexToInt :: a -> HostFormat a -> Int
-    glIndexType :: a -> CUInt
-    indexToInt = error "You cannot create your own instances of IndexFormat"
-    glIndexType = error "You cannot create your own instances of IndexFormat"
-        
-instance IndexFormat BWord32 where
-    indexToInt _ = fromIntegral  
-    glIndexType _ = gl_INT
-instance IndexFormat BWord16 where
-    indexToInt _ = fromIntegral  
-    glIndexType _ = gl_SHORT
-instance IndexFormat BWord8 where
-    indexToInt _ = fromIntegral    
-    glIndexType _ = gl_BYTE
+type family IndexFormat a where
+    IndexFormat (B Word32) = Word32 
+    IndexFormat (B Word16) = Word16 
+    IndexFormat (B Word8) = Word8 
     
 data IndexArray = IndexArray { iArrName :: IORef CUInt, indexArrayLength:: Int, offset:: Int, restart:: Maybe Int, indexType :: CUInt } 
-newIndexArray :: forall os f a. IndexFormat a => Buffer os a -> Maybe (HostFormat a) -> Render os f IndexArray
-newIndexArray buf r = let a = undefined :: a in Render $ return $ IndexArray (bufName buf) (bufElementCount buf) 0 (fmap (indexToInt a) r) (glIndexType a) 
+newIndexArray :: forall os f b a. (BufferFormat b, Integral a, IndexFormat b ~ a) => Buffer os b -> Maybe a -> Render os f IndexArray
+newIndexArray buf r = let a = undefined :: b in Render $ return $ IndexArray (bufName buf) (bufElementCount buf) 0 (fmap fromIntegral r) (glType a) 
  
 takeIndices :: Int -> IndexArray -> IndexArray
 takeIndices n i = i { indexArrayLength = min n (indexArrayLength i) }

@@ -4,7 +4,6 @@
 module Graphics.GPipe.Internal.Buffer 
 (
     BufferFormat(..),
-    BufferTextureFormat(..),
     BufferColor,
     Buffer(),
     ToBuffer(),
@@ -16,8 +15,6 @@ module Graphics.GPipe.Internal.Buffer
     writeBuffer,
     readBuffer,
     copyBuffer,
-    BFloat, BInt32, BInt16, BInt8, BWord32, BWord16, BWord8, 
-    BInt32Norm, BInt16Norm, BInt8Norm, BWord32Norm, BWord16Norm, BWord8Norm,
     bufSize, bufName, bufElementSize, bufElementCount, bufBElement, makeBuffer
 ) where
 
@@ -45,6 +42,10 @@ import Data.IORef
 class BufferFormat f where
     type HostFormat f
     toBuffer :: ToBuffer (HostFormat f) f
+    glType :: f -> GLenum
+    pixelByteSize :: f -> Int
+    glType = error "This is only defined for BufferColor types"
+    pixelByteSize = error "This is only defined for BufferColor types"                                 
 
 data Buffer os b = Buffer {
                     bufName :: BufferName,                   
@@ -84,22 +85,7 @@ instance Arrow ToBuffer where
     
 data B a = B { bName :: IORef CUInt, bOffset :: Int, bStride :: Int, bSkipElems :: Int, bInstanceDiv :: Int}
 
-           
-type BFloat = B Float
-type BInt32 = B Int32
-type BInt16 = B Int16
-type BInt8 = B Int8
-type BWord32 = B Word32
-type BWord16 = B Word16
-type BWord8 = B Word8
-
-type BInt32Norm = BNormalized BInt32
-type BInt16Norm = BNormalized BInt16
-type BInt8Norm = BNormalized BInt8
-type BWord32Norm = BNormalized BWord32
-type BWord16Norm = BNormalized BWord16
-type BWord8Norm = BNormalized BWord8
-
+          
 newtype B2 a = B2 { unB2 :: B a } -- Internal
 newtype B3 a = B3 { unB3 :: B a } -- Internal
 newtype B4 a = B4 { unB4 :: B a } -- Internal
@@ -121,25 +107,35 @@ toB1B1 (B2 b) = (b, b { bOffset = bOffset b + sizeOf (undefined :: a) })
 newtype BUniform a = BUniform a
 newtype BNormalized a = BNormalized a
 
-instance Storable a => BufferFormat (B a) where
-    type HostFormat (B a) = a
-    toBuffer = ToBuffer 
-                    (Kleisli $ const static)
-                    (Kleisli writer)
-                    (Kleisli $ const static)
-                    (Kleisli writer)
-               . align size
-                where
-                    size = sizeOf (undefined :: a)
-                    static = do (name, stride, bIn) <- lift ask
-                                offset <- get
-                                put $ offset + size
-                                return $ B name offset stride (bInSkipElems bIn) (bInInstanceDiv bIn)
-                    writer a = do ptr <- get
-                                  put $ ptr `plusPtr` size
-                                  liftIO $ poke (castPtr ptr) a
-                                  return undefined
-                                 
+toBufferB :: forall a. Storable a => ToBuffer a (B a)
+toBufferB = ToBuffer 
+                (Kleisli $ const static)
+                (Kleisli writer)
+                (Kleisli $ const static)
+                (Kleisli writer)
+           . align size
+            where
+                size = sizeOf (undefined :: a)
+                static = do (name, stride, bIn) <- lift ask
+                            offset <- get
+                            put $ offset + size
+                            return $ B name offset stride (bInSkipElems bIn) (bInInstanceDiv bIn)
+                writer a = do ptr <- get
+                              put $ ptr `plusPtr` size
+                              liftIO $ poke (castPtr ptr) a
+                              return undefined
+toBufferB2 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a) (B2 a)
+toBufferB2 = proc (a, b) -> do
+        (a', _::B a) <- toBuffer . align (2 * sizeOf (undefined :: a)) -< (a, b)
+        returnA -< B2 a'
+toBufferB3 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a,a) (B3 a)
+toBufferB3 = proc (a, b, c) -> do
+        (a', _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c)
+        returnA -< B3 a'
+toBufferB4 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a,a,a) (B4 a)
+toBufferB4 = proc (a, b, c, d) -> do
+        (a', _::B a, _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c, d)
+        returnA -< B4 a'
 
 instance BufferFormat a => BufferFormat (BUniform a) where
     type HostFormat (BUniform a) = HostFormat a
@@ -153,24 +149,10 @@ instance BufferFormat a => BufferFormat (BUniform a) where
     
 instance BufferFormat a => BufferFormat (BNormalized a) where
     type HostFormat (BNormalized a) = HostFormat a
-    toBuffer = arr BNormalized . toBuffer
-                                   
-instance Storable a => BufferFormat (B2 a) where
-    type HostFormat (B2 a) = (a,a)
-    toBuffer = proc (a, b) -> do
-            (a', _::B a) <- toBuffer . align (2 * sizeOf (undefined :: a)) -< (a, b)
-            returnA -< B2 a'
-instance Storable a => BufferFormat (B3 a) where
-    type HostFormat (B3 a) = (a,a,a)
-    toBuffer = proc (a, b, c) -> do
-            (a', _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c)
-            returnA -< B3 a'
-instance Storable a => BufferFormat (B4 a) where
-    type HostFormat (B4 a) = (a,a,a,a)
-    toBuffer = proc (a, b, c, d) -> do
-            (a', _::B a, _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c, d)
-            returnA -< B4 a'
-    
+    toBuffer = arr BNormalized . toBuffer                                   
+    glType (BNormalized a) = glType a
+    pixelByteSize (BNormalized a) = pixelByteSize a
+   
 instance (BufferFormat a, BufferFormat b) => BufferFormat (a, b) where
     type HostFormat (a,b) = (HostFormat a, HostFormat b)
     toBuffer = proc (a, b) -> do
@@ -259,26 +241,19 @@ makeBuffer name elementCount =
         writer ptr x = void $ runReaderT (runStateT (runKleisli b x) ptr) ptr
     in Buffer name elementSize elementCount elementF writer
 
-
-class BufferFormat f => BufferTextureFormat f where
-    glType :: f -> GLenum
-    pixelByteSize :: f -> Int
-    glType = error "You cannot create your own instances of BufferTextureFormat"
-    pixelByteSize = error "You cannot create your own instances of BufferTextureFormat"
-
 type family BufferColor f where
-    BufferColor (BNormalized BInt32) = Float
-    BufferColor (BNormalized BInt16) = Float
-    BufferColor (BNormalized BInt8) = Float
-    BufferColor BFloat = Float
+    BufferColor (BNormalized (B Int32)) = Float
+    BufferColor (BNormalized (B Int16)) = Float
+    BufferColor (BNormalized (B Int8)) = Float
+    BufferColor (B Float) = Float
 
-    BufferColor BInt32 = Int
-    BufferColor BInt16 = Int
-    BufferColor BInt8 = Int
+    BufferColor (B Int32) = Int
+    BufferColor (B Int16) = Int
+    BufferColor (B Int8) = Int
 
-    BufferColor BWord32 = Word
-    BufferColor BWord16 = Word
-    BufferColor BWord8 = Word
+    BufferColor (B Word32) = Word
+    BufferColor (B Word16) = Word
+    BufferColor (B Word8) = Word
 
     BufferColor (BNormalized (B2 Int32)) = (Float, Float)
     BufferColor (BNormalized (B2 Int16)) = (Float, Float)
@@ -319,120 +294,173 @@ type family BufferColor f where
     BufferColor (B4 Word16) = (Word, Word, Word, Word)
     BufferColor (B4 Word8) = (Word, Word, Word, Word)
 
-instance BufferTextureFormat BInt32 where
+instance BufferFormat (B Int32) where
+    type HostFormat (B Int32) = Int32
+    toBuffer = toBufferB
     glType _ = gl_INT
     pixelByteSize _ = 4
 
-instance BufferTextureFormat BInt16 where
+instance BufferFormat (B Int16) where
+    type HostFormat (B Int16) = Int16
+    toBuffer = toBufferB
     glType _ = gl_SHORT
     pixelByteSize _ = 2
 
-instance BufferTextureFormat BInt8 where
+instance BufferFormat (B Int8) where
+    type HostFormat (B Int8) = Int8
+    toBuffer = toBufferB
     glType _ = gl_BYTE
     pixelByteSize _ = 1
 
-instance BufferTextureFormat BWord32 where
+instance BufferFormat (B Word32) where
+    type HostFormat (B Word32) = Word32
+    toBuffer = toBufferB
     glType _ = gl_UNSIGNED_INT
     pixelByteSize _ = 4
 
-instance BufferTextureFormat BWord16 where
+instance BufferFormat (B Word16) where
+    type HostFormat (B Word16) = Word16
+    toBuffer = toBufferB
     glType _ = gl_UNSIGNED_SHORT
     pixelByteSize _ = 2
 
-instance BufferTextureFormat BWord8 where
+instance BufferFormat (B Word8) where
+    type HostFormat (B Word8) = Word8
+    toBuffer = toBufferB
     glType _ = gl_UNSIGNED_BYTE
     pixelByteSize _ = 1
 
-instance BufferTextureFormat BFloat where
+instance BufferFormat (B Float) where
+    type HostFormat (B Float) = Float
+    toBuffer = toBufferB
     glType _ = gl_FLOAT
     pixelByteSize _ = 4
 
-instance BufferTextureFormat (B2 Int32) where
+instance BufferFormat (B2 Int32) where
+    type HostFormat (B2 Int32) = (Int32, Int32)
+    toBuffer = toBufferB2
     glType _ = gl_INT
     pixelByteSize _ = 4*2
 
-instance BufferTextureFormat (B2 Int16) where
+instance BufferFormat (B2 Int16) where
+    type HostFormat (B2 Int16) = (Int16, Int16)
+    toBuffer = toBufferB2
     glType _ = gl_SHORT
     pixelByteSize _ = 2*2
 
-instance BufferTextureFormat (B2 Int8) where
+instance BufferFormat (B2 Int8) where
+    type HostFormat (B2 Int8) = (Int8, Int8)
+    toBuffer = toBufferB2
     glType _ = gl_BYTE
     pixelByteSize _ = 1*2
 
-instance BufferTextureFormat (B2 Word32) where
+instance BufferFormat (B2 Word32) where
+    type HostFormat (B2 Word32) = (Word32, Word32)
+    toBuffer = toBufferB2
     glType _ = gl_UNSIGNED_INT
     pixelByteSize _ = 4*2
 
-instance BufferTextureFormat (B2 Word16) where
+instance BufferFormat (B2 Word16) where
+    type HostFormat (B2 Word16) = (Word16, Word16)
+    toBuffer = toBufferB2
     glType _ = gl_UNSIGNED_SHORT
     pixelByteSize _ = 2*2
 
-instance BufferTextureFormat (B2 Word8) where
+instance BufferFormat (B2 Word8) where
+    type HostFormat (B2 Word8) = (Word8, Word8)
+    toBuffer = toBufferB2
     glType _ = gl_UNSIGNED_BYTE
     pixelByteSize _ = 1*2
 
-instance BufferTextureFormat (B2 Float) where
+instance BufferFormat (B2 Float) where
+    type HostFormat (B2 Float) = (Float, Float)
+    toBuffer = toBufferB2
     glType _ = gl_FLOAT
     pixelByteSize _ = 4*2
 
-instance BufferTextureFormat (B3 Int32) where
+instance BufferFormat (B3 Int32) where
+    type HostFormat (B3 Int32) = (Int32, Int32, Int32)
+    toBuffer = toBufferB3
     glType _ = gl_INT
     pixelByteSize _ = 4*3
 
-instance BufferTextureFormat (B3 Int16) where
+instance BufferFormat (B3 Int16) where
+    type HostFormat (B3 Int16) = (Int16, Int16, Int16)
+    toBuffer = toBufferB3
     glType _ = gl_SHORT
     pixelByteSize _ = 2*3
 
-instance BufferTextureFormat (B3 Int8) where
+instance BufferFormat (B3 Int8) where
+    type HostFormat (B3 Int8) = (Int8, Int8, Int8)
+    toBuffer = toBufferB3
     glType _ = gl_BYTE
     pixelByteSize _ = 1*3
 
-instance BufferTextureFormat (B3 Word32) where
+instance BufferFormat (B3 Word32) where
+    type HostFormat (B3 Word32) = (Word32, Word32, Word32)
+    toBuffer = toBufferB3
     glType _ = gl_UNSIGNED_INT
     pixelByteSize _ = 4*3
 
-instance BufferTextureFormat (B3 Word16) where
+instance BufferFormat (B3 Word16) where
+    type HostFormat (B3 Word16) = (Word16, Word16, Word16)
+    toBuffer = toBufferB3
     glType _ = gl_UNSIGNED_SHORT
     pixelByteSize _ = 2*3
 
-instance BufferTextureFormat (B3 Word8) where
+instance BufferFormat (B3 Word8) where
+    type HostFormat (B3 Word8) = (Word8, Word8, Word8)
+    toBuffer = toBufferB3
     glType _ = gl_UNSIGNED_BYTE
     pixelByteSize _ = 1*3
 
-instance BufferTextureFormat (B3 Float) where
+instance BufferFormat (B3 Float) where
+    type HostFormat (B3 Float) = (Float, Float, Float)
+    toBuffer = toBufferB3
     glType _ = gl_FLOAT
     pixelByteSize _ = 4*3
 
-instance BufferTextureFormat (B4 Int32) where
+instance BufferFormat (B4 Int32) where
+    type HostFormat (B4 Int32) = (Int32, Int32, Int32, Int32)
+    toBuffer = toBufferB4
     glType _ = gl_INT
     pixelByteSize _ = 4*4
 
-instance BufferTextureFormat (B4 Int16) where
+instance BufferFormat (B4 Int16) where
+    type HostFormat (B4 Int16) = (Int16, Int16, Int16, Int16)
+    toBuffer = toBufferB4
     glType _ = gl_SHORT
     pixelByteSize _ = 2*4
 
-instance BufferTextureFormat (B4 Int8) where
+instance BufferFormat (B4 Int8) where
+    type HostFormat (B4 Int8) = (Int8, Int8, Int8, Int8)
+    toBuffer = toBufferB4
     glType _ = gl_BYTE
     pixelByteSize _ = 1*4
 
-instance BufferTextureFormat (B4 Word32) where
+instance BufferFormat (B4 Word32) where
+    type HostFormat (B4 Word32) = (Word32, Word32, Word32, Word32)
+    toBuffer = toBufferB4
     glType _ = gl_UNSIGNED_INT
     pixelByteSize _ = 4*4
 
-instance BufferTextureFormat (B4 Word16) where
+instance BufferFormat (B4 Word16) where
+    type HostFormat (B4 Word16) = (Word16, Word16, Word16, Word16)
+    toBuffer = toBufferB4
     glType _ = gl_UNSIGNED_SHORT
     pixelByteSize _ = 2*4
 
-instance BufferTextureFormat (B4 Word8) where
+instance BufferFormat (B4 Word8) where
+    type HostFormat (B4 Word8) = (Word8, Word8, Word8, Word8)
+    toBuffer = toBufferB4
     glType _ = gl_UNSIGNED_BYTE
     pixelByteSize _ = 1*4
 
-instance BufferTextureFormat (B4 Float) where
+instance BufferFormat (B4 Float) where
+    type HostFormat (B4 Float) = (Float, Float, Float, Float)
+    toBuffer = toBufferB4
     glType _ = gl_FLOAT
     pixelByteSize _ = 4*4
     
-instance BufferTextureFormat a => BufferTextureFormat (BNormalized a) where
-    glType (BNormalized a) = glType a
-    pixelByteSize (BNormalized a) = pixelByteSize a
 
     

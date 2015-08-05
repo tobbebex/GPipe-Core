@@ -36,12 +36,12 @@ replicateEach n (VertexArray m f) = VertexArray (n*m) (\x -> f $ x {bInInstanceD
 
 type family IndexFormat a where
     IndexFormat (B Word32) = Word32 
-    IndexFormat (B Word16) = Word16 
-    IndexFormat (B Word8) = Word8 
+    IndexFormat (BPacked Word16) = Word16 
+    IndexFormat (BPacked Word8) = Word8 
     
 data IndexArray = IndexArray { iArrName :: IORef CUInt, indexArrayLength:: Int, offset:: Int, restart:: Maybe Int, indexType :: CUInt } 
 newIndexArray :: forall os f b a. (BufferFormat b, Integral a, IndexFormat b ~ a) => Buffer os b -> Maybe a -> Render os f IndexArray
-newIndexArray buf r = let a = undefined :: b in Render $ return $ IndexArray (bufName buf) (bufElementCount buf) 0 (fmap fromIntegral r) (glType a) 
+newIndexArray buf r = let a = undefined :: b in Render $ return $ IndexArray (bufName buf) (bufElementCount buf) 0 (fmap fromIntegral r) (getGlType a) 
  
 takeIndices :: Int -> IndexArray -> IndexArray
 takeIndices n i = i { indexArrayLength = min n (indexArrayLength i) }

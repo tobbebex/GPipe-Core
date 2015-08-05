@@ -8,14 +8,12 @@ module Graphics.GPipe.Internal.Buffer
     Buffer(),
     ToBuffer(),
     B(..), B2(..), B3(..), B4(..),
-    toB3B1, toB2B2, toB1B3, toB2B1, toB1B2, toB1B1,
-    BUniform(..), BNormalized(..),
+    BUniform(..), BNormalized(..), BPacked(),
     BInput(..),
     newBuffer,
     writeBuffer,
-    readBuffer,
     copyBuffer,
-    bufSize, bufName, bufElementSize, bufElementCount, bufBElement, makeBuffer
+    bufSize, bufName, bufElementSize, bufElementCount, bufBElement, bufferWriteInternal, makeBuffer, getUniformAlignment, UniformAlignment
 ) where
 
 import Graphics.GPipe.Internal.Context
@@ -28,7 +26,7 @@ import Prelude hiding ((.), id)
 import Control.Monad.Trans.State
 import Control.Category
 import Control.Arrow
-import Control.Monad (void)
+import Control.Monad (void, when)
 import Foreign.Storable
 import Foreign.Ptr
 import Control.Monad.IO.Class
@@ -38,14 +36,17 @@ import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
 import Foreign.C.Types
 import Data.IORef
+import Control.Applicative ((<$>))
 
 class BufferFormat f where
     type HostFormat f
     toBuffer :: ToBuffer (HostFormat f) f
-    glType :: f -> GLenum
-    pixelByteSize :: f -> Int
-    glType = error "This is only defined for BufferColor types"
-    pixelByteSize = error "This is only defined for BufferColor types"                                 
+    getGlType :: f -> GLenum
+    peekPixel :: f -> Ptr () -> IO (HostFormat f)
+    getGlPaddedFormat :: f -> GLenum  
+    getGlType = error "This is only defined for BufferColor types"
+    peekPixel = error "This is only defined for BufferColor types"
+    getGlPaddedFormat = error "This is only defined for BufferColor types"
 
 data Buffer os b = Buffer {
                     bufName :: BufferName,                   
@@ -69,19 +70,30 @@ data BInput = BInput {bInSkipElems :: Int, bInInstanceDiv :: Int}
 
 type ToBufferInput = (BufferName, Stride, BInput)
 
+type UniformAlignment = Int
+
+data AlignmentMode = Align4 | AlignUniform | AlignPackedIndices | AlignUnknown deriving (Eq)
+
 data ToBuffer a b = ToBuffer
-    (Kleisli (StateT Offset (Reader ToBufferInput)) a b) -- Normal = packed
-    (Kleisli (StateT (Ptr ()) (ReaderT (Ptr ()) IO)) a b) -- Normal = packed
-    (Kleisli (StateT Offset (Reader ToBufferInput)) a b) -- Aligned
-    (Kleisli (StateT (Ptr ()) (ReaderT (Ptr ()) IO)) a b) -- Aligned
+    (Kleisli (StateT Offset (Reader (ToBufferInput, UniformAlignment, AlignmentMode))) a b) -- Normal = aligned to 4 bytes
+    (Kleisli (StateT (Ptr ()) (ReaderT (Ptr (), UniformAlignment, AlignmentMode) IO)) a b) -- Normal = aligned to 4 bytes
+    AlignmentMode 
 
 instance Category ToBuffer where
-    id = ToBuffer id id id id
-    ToBuffer a b c d . ToBuffer x y z w = ToBuffer (a.x) (b.y) (c.z) (d.w)
+    id = ToBuffer id id AlignUnknown
+    ToBuffer a b m1 . ToBuffer x y m2 = ToBuffer (a.x) (b.y) (comb m1 m2)
+        where
+            -- If only one uniform or one PackedIndices, use that, otherwise use Align4  
+            comb AlignUniform AlignUnknown = AlignUniform
+            comb AlignUnknown AlignUniform = AlignUniform
+            comb AlignUnknown AlignPackedIndices = AlignPackedIndices 
+            comb AlignPackedIndices AlignUnknown = AlignPackedIndices 
+            comb AlignUnknown AlignUnknown = AlignUnknown 
+            comb _ _ = Align4
     
 instance Arrow ToBuffer where
-    arr f = ToBuffer (arr f) (arr f) (arr f) (arr f)
-    first (ToBuffer a b c d) = ToBuffer (first a) (first b) (first c) (first d)
+    arr f = ToBuffer (arr f) (arr f) AlignUnknown
+    first (ToBuffer a b m) = ToBuffer (first a) (first b) m
     
 data B a = B { bName :: IORef CUInt, bOffset :: Int, bStride :: Int, bSkipElems :: Int, bInstanceDiv :: Int}
 
@@ -90,33 +102,18 @@ newtype B2 a = B2 { unB2 :: B a } -- Internal
 newtype B3 a = B3 { unB3 :: B a } -- Internal
 newtype B4 a = B4 { unB4 :: B a } -- Internal
 
-toB2B2 :: forall a. Storable a => B4 a -> (B2 a, B2 a)
-toB3B1 :: forall a. Storable a => B4 a -> (B3 a, B a)
-toB1B3 :: forall a. Storable a => B4 a -> (B a, B3 a)
-toB2B1 :: forall a. Storable a => B3 a -> (B2 a, B a)
-toB1B2 :: forall a. Storable a => B3 a -> (B a, B2 a)
-toB1B1 :: forall a. Storable a => B2 a -> (B a, B a)
-
-toB2B2 (B4 b) = (B2 b, B2 $ b { bOffset = bOffset b + 2 * sizeOf (undefined :: a) }) 
-toB3B1 (B4 b) = (B3 b, b { bOffset = bOffset b + 3 * sizeOf (undefined :: a) }) 
-toB1B3 (B4 b) = (b, B3 $ b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
-toB2B1 (B3 b) = (B2 b, b { bOffset = bOffset b + 2 * sizeOf (undefined :: a) }) 
-toB1B2 (B3 b) = (b, B2 $ b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
-toB1B1 (B2 b) = (b, b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
-
 newtype BUniform a = BUniform a
 newtype BNormalized a = BNormalized a
+newtype BPacked a = BPacked (B a) 
 
-toBufferB :: forall a. Storable a => ToBuffer a (B a)
-toBufferB = ToBuffer 
+toBufferBUnaligned :: forall a. Storable a => ToBuffer a (B a)
+toBufferBUnaligned = ToBuffer 
                 (Kleisli $ const static)
                 (Kleisli writer)
-                (Kleisli $ const static)
-                (Kleisli writer)
-           . align size
+                Align4
             where
                 size = sizeOf (undefined :: a)
-                static = do (name, stride, bIn) <- lift ask
+                static = do ((name, stride, bIn),_,_) <- lift ask
                             offset <- get
                             put $ offset + size
                             return $ B name offset stride (bInSkipElems bIn) (bInInstanceDiv bIn)
@@ -124,34 +121,64 @@ toBufferB = ToBuffer
                               put $ ptr `plusPtr` size
                               liftIO $ poke (castPtr ptr) a
                               return undefined
+
+toBufferB :: forall a. Storable a => ToBuffer a (B a)
+toBufferB = alignWhen AlignUniform (sizeOf (undefined :: a)) >>> toBufferBUnaligned >>> alignWhen Align4 4                               
+                              
 toBufferB2 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a) (B2 a)
 toBufferB2 = proc (a, b) -> do
-        (a', _::B a) <- toBuffer . align (2 * sizeOf (undefined :: a)) -< (a, b)
+        alignWhen AlignUniform (2 * sizeOf (undefined :: a)) -< () -- For align4, we are always at 4 alignment here 
+        a' <- toBufferBUnaligned  -< a
+        toBufferBUnaligned -< b
+        alignWhen Align4 4 -< () -- For uniform, here we are already aligned to 2*size 
         returnA -< B2 a'
 toBufferB3 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a,a) (B3 a)
 toBufferB3 = proc (a, b, c) -> do
-        (a', _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c)
+        alignWhen AlignUniform (4 * sizeOf (undefined :: a)) -< () -- For align4, we are always at 4 alignment here
+        a' <- toBufferBUnaligned -< a
+        toBufferBUnaligned -< b
+        toBufferBUnaligned -< c
+        alignWhen Align4 4 -< ()
+        alignWhen AlignUniform (4 * sizeOf (undefined :: a)) -< ()
         returnA -< B3 a'
 toBufferB4 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a,a,a) (B4 a)
 toBufferB4 = proc (a, b, c, d) -> do
-        (a', _::B a, _::B a, _::B a) <- toBuffer . align (4 * sizeOf (undefined :: a)) -< (a, b, c, d)
+        alignWhen AlignUniform (4 * sizeOf (undefined :: a)) -< () -- For align4, we are always at 4 alignment here
+        a' <- toBufferBUnaligned -< a
+        toBufferBUnaligned -< b
+        toBufferBUnaligned -< c
+        toBufferBUnaligned -< d
+        alignWhen Align4 4 -< () -- For uniform, here we are already aligned to 4*size 
         returnA -< B4 a'
 
 instance BufferFormat a => BufferFormat (BUniform a) where
     type HostFormat (BUniform a) = HostFormat a
     toBuffer = arr BUniform . ToBuffer 
-                    elementBuilderA
-                    writerA
-                    elementBuilderA
-                    writerA
+                    (Kleisli elementBuilderA)
+                    (Kleisli writerA)
+                    AlignUniform
         where
-            ToBuffer _ _ elementBuilderA writerA = align (fromIntegral gl_UNIFORM_BUFFER_OFFSET_ALIGNMENT) . (toBuffer :: ToBuffer (HostFormat a) a)
-    
+            ToBuffer (Kleisli elementBuilderA') (Kleisli writerA') _ = toBuffer :: ToBuffer (HostFormat a) a
+            elementBuilderA a = do (_,x,_) <- lift ask
+                                   a' <- elementBuilderA' a                                   
+                                   let ToBuffer (Kleisli m) _ _ = alignWhen AlignUniform x
+                                   m ()
+                                   return a'
+            writerA a = do (_,x,_) <- lift ask
+                           a' <- writerA' a
+                           let ToBuffer _ (Kleisli m) _ = alignWhen AlignUniform x
+                           m ()    
+                           return a'
 instance BufferFormat a => BufferFormat (BNormalized a) where
     type HostFormat (BNormalized a) = HostFormat a
     toBuffer = arr BNormalized . toBuffer                                   
-    glType (BNormalized a) = glType a
-    pixelByteSize (BNormalized a) = pixelByteSize a
+    getGlType (BNormalized a) = getGlType a
+    getGlPaddedFormat (BNormalized a) = case getGlPaddedFormat a of
+                                            x | x == gl_RGBA_INTEGER -> gl_RGBA
+                                              | x == gl_RGB_INTEGER -> gl_RGB
+                                              | x == gl_RG_INTEGER -> gl_RG
+                                              | x == gl_RED_INTEGER -> gl_RED
+                                              | otherwise -> x
    
 instance (BufferFormat a, BufferFormat b) => BufferFormat (a, b) where
     type HostFormat (a,b) = (HostFormat a, HostFormat b)
@@ -177,7 +204,8 @@ newBuffer elementCount = do
     (buffer, nameRef, name) <- liftContextIO $ do
                        name <- alloca (\ptr -> glGenBuffers 1 ptr >> peek ptr) 
                        nameRef <- newIORef name
-                       let buffer = makeBuffer nameRef elementCount
+                       uniAl <- getUniformAlignment
+                       let buffer = makeBuffer nameRef elementCount uniAl
                        bname <- readIORef $ bufName buffer
                        glBindBuffer gl_COPY_WRITE_BUFFER (fromIntegral bname )  
                        glBufferData gl_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr gl_DYNAMIC_DRAW
@@ -186,26 +214,29 @@ newBuffer elementCount = do
     addVAOBufferFinalizer nameRef
     return buffer 
 
+bufferWriteInternal :: Buffer os f -> Ptr () -> [HostFormat f] -> IO (Ptr ())         
+bufferWriteInternal b ptr (x:xs) = do bufWriter b ptr x
+                                      bufferWriteInternal b (ptr `plusPtr` bufElementSize b) xs
+bufferWriteInternal _ ptr [] = return ptr
+
 writeBuffer :: MonadIO m => [HostFormat f] -> Int -> Buffer os f -> ContextT os f2 m ()
 writeBuffer elems offset buffer = 
     let maxElems = max 0 $ bufElementCount buffer - offset
         elemSize = bufElementSize buffer
         off = fromIntegral $ offset * elemSize
-        writeElem = bufWriter buffer 
-        write ptr 0 _ = return ptr
-        write ptr n (x:xs) = do writeElem ptr x
-                                write (ptr `plusPtr` elemSize) (n-1) xs
-        write ptr _ [] = return ptr
+        
     in liftContextIOAsync $ do 
                           bname <- readIORef $ bufName buffer
                           glBindBuffer gl_COPY_WRITE_BUFFER bname
                           ptr <- glMapBufferRange gl_COPY_WRITE_BUFFER off (fromIntegral $ maxElems * elemSize) (gl_MAP_WRITE_BIT + gl_MAP_FLUSH_EXPLICIT_BIT)
-                          end <- write ptr maxElems elems
+                          end <- bufferWriteInternal buffer ptr (take maxElems elems)
                           glFlushMappedBufferRange gl_COPY_WRITE_BUFFER off (fromIntegral $ end `minusPtr` ptr) 
                           void $ glUnmapBuffer gl_COPY_WRITE_BUFFER 
 
+{-
 readBuffer :: MonadIO m => Int -> Int -> Buffer os f -> (HostFormat f -> a -> m a) -> a ->  ContextT os f2 m a
 readBuffer = undefined
+-}
 
 copyBuffer :: MonadIO m => Int -> Int -> Buffer os f -> Int -> Buffer os f -> ContextT os f2 m ()
 copyBuffer len from bFrom to bTo = liftContextIOAsync $ do 
@@ -218,28 +249,35 @@ copyBuffer len from bFrom to bTo = liftContextIOAsync $ do
 
 ----------------------------------------------
 
-align :: Int -> ToBuffer a a
-align x = ToBuffer (Kleisli return) (Kleisli return) (Kleisli setElemAlignM) (Kleisli setWriterAlignM) where
-            setElemAlignM a = do offset <- get
-                                 put $ alignedTo x offset
-                                 return a   
-            setWriterAlignM a = do ptr <- get
-                                   basePtr <- lift ask
-                                   let base = ptrToWordPtr basePtr
-                                       p = ptrToWordPtr ptr
-                                   put $ wordPtrToPtr $ base + alignedTo (fromIntegral x) (p - base)
-                                   return a
-            alignedTo a b  = b + a - 1 - ((b - 1) `mod` a)
+alignWhen :: AlignmentMode -> Int -> ToBuffer a a
+alignWhen m x = ToBuffer (Kleisli setElemAlignM) (Kleisli setWriterAlignM) AlignUniform where
+        setElemAlignM a = do (_,_,m') <- lift ask
+                             when (m == m') $ do
+                                offset <- get
+                                put $ alignedTo x offset
+                             return a   
+        setWriterAlignM a = do (basePtr, _,m') <- lift ask
+                               when (m == m') $ do
+                                    ptr <- get
+                                    let base = ptrToWordPtr basePtr
+                                        p = ptrToWordPtr ptr
+                                    put $ wordPtrToPtr $ base + alignedTo (fromIntegral x) (p - base)
+                               return a
+        alignedTo a b  = b + a - 1 - ((b - 1) `mod` a)
+
+
+getUniformAlignment :: IO Int
+getUniformAlignment = fromIntegral <$> alloca (\ ptr -> glGetIntegerv gl_UNIFORM_BUFFER_OFFSET_ALIGNMENT ptr >> peek ptr)
             
-makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> Buffer os b
-makeBuffer name elementCount =
-    let ToBuffer a b _ _ = toBuffer :: ToBuffer (HostFormat b) b
+makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignment -> Buffer os b
+makeBuffer name elementCount uniformAlignment  = do
+    let ToBuffer a b m = toBuffer :: ToBuffer (HostFormat b) b
         err = error "toBuffer or toVertex are creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders" :: HostFormat b
         elementM = runStateT (runKleisli a err) 0
-        elementSize = snd $ runReader elementM (name, undefined, undefined)
-        elementF bIn = fst $ runReader elementM (name, elementSize, bIn)
-        writer ptr x = void $ runReaderT (runStateT (runKleisli b x) ptr) ptr
-    in Buffer name elementSize elementCount elementF writer
+        elementSize = snd $ runReader elementM ((name, undefined, undefined), uniformAlignment, m)
+        elementF bIn = fst $ runReader elementM ((name, elementSize, bIn), uniformAlignment, m)
+        writer ptr x = void $ runReaderT (runStateT (runKleisli b x) ptr) (ptr, uniformAlignment, m)
+    Buffer name elementSize elementCount elementF writer
 
 type family BufferColor f where
     BufferColor (BNormalized (B Int32)) = Float
@@ -254,6 +292,8 @@ type family BufferColor f where
     BufferColor (B Word32) = Word
     BufferColor (B Word16) = Word
     BufferColor (B Word8) = Word
+    BufferColor (BPacked Word16) = Word
+    BufferColor (BPacked Word8) = Word
 
     BufferColor (BNormalized (B2 Int32)) = (Float, Float)
     BufferColor (BNormalized (B2 Int16)) = (Float, Float)
@@ -294,173 +334,234 @@ type family BufferColor f where
     BufferColor (B4 Word16) = (Word, Word, Word, Word)
     BufferColor (B4 Word8) = (Word, Word, Word, Word)
 
+peekPixel1 :: Storable a => t -> Ptr x -> IO a
+peekPixel1 _ = peek . castPtr 
+peekPixel2 :: (Storable a) => t -> Ptr x -> IO (a, a)
+peekPixel2 _ ptr = do x <- peek (castPtr ptr)
+                      y <- peekElemOff (castPtr ptr ) 1
+                      return (x,y) 
+peekPixel3 :: (Storable a) => t -> Ptr x -> IO (a, a, a)
+peekPixel3 _ ptr = do x <- peek (castPtr ptr)
+                      y <- peekElemOff (castPtr ptr ) 1
+                      z <- peekElemOff (castPtr ptr ) 2
+                      return (x,y,z) 
+peekPixel4 :: (Storable a) => t -> Ptr x -> IO (a, a, a, a)
+peekPixel4 _ ptr = do x <- peek (castPtr ptr)
+                      y <- peekElemOff (castPtr ptr ) 1
+                      z <- peekElemOff (castPtr ptr ) 2
+                      w <- peekElemOff (castPtr ptr ) 3
+                      return (x,y,z,w) 
+
+
 instance BufferFormat (B Int32) where
     type HostFormat (B Int32) = Int32
     toBuffer = toBufferB
-    glType _ = gl_INT
-    pixelByteSize _ = 4
+    getGlType _ = gl_INT
+    peekPixel = peekPixel1 
+    getGlPaddedFormat _ = gl_RED_INTEGER
 
 instance BufferFormat (B Int16) where
     type HostFormat (B Int16) = Int16
     toBuffer = toBufferB
-    glType _ = gl_SHORT
-    pixelByteSize _ = 2
+    getGlType _ = gl_SHORT
+    peekPixel = peekPixel1 
+    getGlPaddedFormat _ = gl_RG_INTEGER
 
 instance BufferFormat (B Int8) where
     type HostFormat (B Int8) = Int8
     toBuffer = toBufferB
-    glType _ = gl_BYTE
-    pixelByteSize _ = 1
+    getGlType _ = gl_BYTE
+    peekPixel = peekPixel1 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B Word32) where
     type HostFormat (B Word32) = Word32
     toBuffer = toBufferB
-    glType _ = gl_UNSIGNED_INT
-    pixelByteSize _ = 4
+    getGlType _ = gl_UNSIGNED_INT
+    peekPixel = peekPixel1 
+    getGlPaddedFormat _ = gl_RED_INTEGER
 
 instance BufferFormat (B Word16) where
     type HostFormat (B Word16) = Word16
     toBuffer = toBufferB
-    glType _ = gl_UNSIGNED_SHORT
-    pixelByteSize _ = 2
+    getGlType _ = gl_UNSIGNED_SHORT
+    peekPixel = peekPixel1 
+    getGlPaddedFormat _ = gl_RG_INTEGER
 
 instance BufferFormat (B Word8) where
     type HostFormat (B Word8) = Word8
     toBuffer = toBufferB
-    glType _ = gl_UNSIGNED_BYTE
-    pixelByteSize _ = 1
+    getGlType _ = gl_UNSIGNED_BYTE
+    peekPixel = peekPixel1 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
+    
+instance BufferFormat (BPacked Word16) where
+    type HostFormat (BPacked Word16) = Word16
+    toBuffer = let ToBuffer a b _ = toBufferB :: ToBuffer Word16 (B Word16) in arr BPacked . ToBuffer a b AlignPackedIndices 
+    getGlType _ = gl_SHORT
+    peekPixel = peekPixel1 
+    getGlPaddedFormat _ = gl_RED_INTEGER
+
+instance BufferFormat (BPacked Word8) where
+    type HostFormat (BPacked Word8) = Word8
+    toBuffer = let ToBuffer a b _ = toBufferB :: ToBuffer Word8 (B Word8) in arr BPacked . ToBuffer a b AlignPackedIndices 
+    getGlType _ = gl_BYTE
+    peekPixel = peekPixel1 
+    getGlPaddedFormat _ = gl_RED_INTEGER      
 
 instance BufferFormat (B Float) where
     type HostFormat (B Float) = Float
     toBuffer = toBufferB
-    glType _ = gl_FLOAT
-    pixelByteSize _ = 4
+    getGlType _ = gl_FLOAT
+    peekPixel = peekPixel1 
+    getGlPaddedFormat _ = gl_RED
 
 instance BufferFormat (B2 Int32) where
     type HostFormat (B2 Int32) = (Int32, Int32)
     toBuffer = toBufferB2
-    glType _ = gl_INT
-    pixelByteSize _ = 4*2
+    getGlType _ = gl_INT
+    peekPixel = peekPixel2 
+    getGlPaddedFormat _ = gl_RG_INTEGER
 
 instance BufferFormat (B2 Int16) where
     type HostFormat (B2 Int16) = (Int16, Int16)
     toBuffer = toBufferB2
-    glType _ = gl_SHORT
-    pixelByteSize _ = 2*2
+    getGlType _ = gl_SHORT
+    peekPixel = peekPixel2 
+    getGlPaddedFormat _ = gl_RG_INTEGER
 
 instance BufferFormat (B2 Int8) where
     type HostFormat (B2 Int8) = (Int8, Int8)
     toBuffer = toBufferB2
-    glType _ = gl_BYTE
-    pixelByteSize _ = 1*2
+    getGlType _ = gl_BYTE
+    peekPixel = peekPixel2 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B2 Word32) where
     type HostFormat (B2 Word32) = (Word32, Word32)
     toBuffer = toBufferB2
-    glType _ = gl_UNSIGNED_INT
-    pixelByteSize _ = 4*2
+    getGlType _ = gl_UNSIGNED_INT
+    peekPixel = peekPixel2 
+    getGlPaddedFormat _ = gl_RG_INTEGER
 
 instance BufferFormat (B2 Word16) where
     type HostFormat (B2 Word16) = (Word16, Word16)
     toBuffer = toBufferB2
-    glType _ = gl_UNSIGNED_SHORT
-    pixelByteSize _ = 2*2
+    getGlType _ = gl_UNSIGNED_SHORT
+    peekPixel = peekPixel2 
+    getGlPaddedFormat _ = gl_RG_INTEGER
 
 instance BufferFormat (B2 Word8) where
     type HostFormat (B2 Word8) = (Word8, Word8)
     toBuffer = toBufferB2
-    glType _ = gl_UNSIGNED_BYTE
-    pixelByteSize _ = 1*2
+    getGlType _ = gl_UNSIGNED_BYTE
+    peekPixel = peekPixel2 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B2 Float) where
     type HostFormat (B2 Float) = (Float, Float)
     toBuffer = toBufferB2
-    glType _ = gl_FLOAT
-    pixelByteSize _ = 4*2
+    getGlType _ = gl_FLOAT
+    peekPixel = peekPixel2 
+    getGlPaddedFormat _ = gl_RG
 
 instance BufferFormat (B3 Int32) where
     type HostFormat (B3 Int32) = (Int32, Int32, Int32)
     toBuffer = toBufferB3
-    glType _ = gl_INT
-    pixelByteSize _ = 4*3
+    getGlType _ = gl_INT
+    peekPixel = peekPixel3 
+    getGlPaddedFormat _ = gl_RGB_INTEGER
 
 instance BufferFormat (B3 Int16) where
     type HostFormat (B3 Int16) = (Int16, Int16, Int16)
     toBuffer = toBufferB3
-    glType _ = gl_SHORT
-    pixelByteSize _ = 2*3
+    getGlType _ = gl_SHORT
+    peekPixel = peekPixel3 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B3 Int8) where
     type HostFormat (B3 Int8) = (Int8, Int8, Int8)
     toBuffer = toBufferB3
-    glType _ = gl_BYTE
-    pixelByteSize _ = 1*3
+    getGlType _ = gl_BYTE
+    peekPixel = peekPixel3 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B3 Word32) where
     type HostFormat (B3 Word32) = (Word32, Word32, Word32)
     toBuffer = toBufferB3
-    glType _ = gl_UNSIGNED_INT
-    pixelByteSize _ = 4*3
+    getGlType _ = gl_UNSIGNED_INT
+    peekPixel = peekPixel3 
+    getGlPaddedFormat _ = gl_RGB_INTEGER
 
 instance BufferFormat (B3 Word16) where
     type HostFormat (B3 Word16) = (Word16, Word16, Word16)
     toBuffer = toBufferB3
-    glType _ = gl_UNSIGNED_SHORT
-    pixelByteSize _ = 2*3
+    getGlType _ = gl_UNSIGNED_SHORT
+    peekPixel = peekPixel3 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B3 Word8) where
     type HostFormat (B3 Word8) = (Word8, Word8, Word8)
     toBuffer = toBufferB3
-    glType _ = gl_UNSIGNED_BYTE
-    pixelByteSize _ = 1*3
+    getGlType _ = gl_UNSIGNED_BYTE
+    peekPixel = peekPixel3 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B3 Float) where
     type HostFormat (B3 Float) = (Float, Float, Float)
     toBuffer = toBufferB3
-    glType _ = gl_FLOAT
-    pixelByteSize _ = 4*3
+    getGlType _ = gl_FLOAT
+    peekPixel = peekPixel3 
+    getGlPaddedFormat _ = gl_RGB
 
 instance BufferFormat (B4 Int32) where
     type HostFormat (B4 Int32) = (Int32, Int32, Int32, Int32)
     toBuffer = toBufferB4
-    glType _ = gl_INT
-    pixelByteSize _ = 4*4
+    getGlType _ = gl_INT
+    peekPixel = peekPixel4 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B4 Int16) where
     type HostFormat (B4 Int16) = (Int16, Int16, Int16, Int16)
     toBuffer = toBufferB4
-    glType _ = gl_SHORT
-    pixelByteSize _ = 2*4
+    getGlType _ = gl_SHORT
+    peekPixel = peekPixel4 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B4 Int8) where
     type HostFormat (B4 Int8) = (Int8, Int8, Int8, Int8)
     toBuffer = toBufferB4
-    glType _ = gl_BYTE
-    pixelByteSize _ = 1*4
+    getGlType _ = gl_BYTE
+    peekPixel = peekPixel4 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B4 Word32) where
     type HostFormat (B4 Word32) = (Word32, Word32, Word32, Word32)
     toBuffer = toBufferB4
-    glType _ = gl_UNSIGNED_INT
-    pixelByteSize _ = 4*4
+    getGlType _ = gl_UNSIGNED_INT
+    peekPixel = peekPixel4 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B4 Word16) where
     type HostFormat (B4 Word16) = (Word16, Word16, Word16, Word16)
     toBuffer = toBufferB4
-    glType _ = gl_UNSIGNED_SHORT
-    pixelByteSize _ = 2*4
+    getGlType _ = gl_UNSIGNED_SHORT
+    peekPixel = peekPixel4 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B4 Word8) where
     type HostFormat (B4 Word8) = (Word8, Word8, Word8, Word8)
     toBuffer = toBufferB4
-    glType _ = gl_UNSIGNED_BYTE
-    pixelByteSize _ = 1*4
+    getGlType _ = gl_UNSIGNED_BYTE
+    peekPixel = peekPixel4 
+    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B4 Float) where
     type HostFormat (B4 Float) = (Float, Float, Float, Float)
     toBuffer = toBufferB4
-    glType _ = gl_FLOAT
-    pixelByteSize _ = 4*4
+    getGlType _ = gl_FLOAT
+    peekPixel = peekPixel4 
+    getGlPaddedFormat _ = gl_RGBA
     
 
     

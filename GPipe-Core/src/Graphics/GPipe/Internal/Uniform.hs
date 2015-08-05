@@ -26,19 +26,20 @@ class BufferFormat (UniformBufferFormat a) => Uniform a where
 type UniformHostFormat x = HostFormat (UniformBufferFormat x)
 
 toUniformBlock :: forall os f s b. Uniform b => (s -> (Buffer os (BUniform (UniformBufferFormat b)), Int)) -> Shader os f s b
-toUniformBlock sf = Shader $ do 
+toUniformBlock sf = Shader $ do
+                   uniAl <- askUniformAlignment 
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
+                       sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os (BUniform (UniformBufferFormat b))
+                       shaderGen :: (Int -> ExprM String) -> (b, OffsetToSType) -- Int is name of uniform block
+                       shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
                    doForUniform blockId $ \s bind -> let (ub, i) = sf s 
                                                      in do bname <- readIORef $ bufName ub
                                                            glBindBufferRange gl_UNIFORM_BUFFER (fromIntegral bind) bname (fromIntegral $ i * bufElementSize ub) (fromIntegral $ bufElementSize ub)
                    return u
     where
-            sampleBuffer = makeBuffer undefined undefined :: Buffer os (BUniform (UniformBufferFormat b))
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform (UniformBufferFormat b) b
             fromBUnifom (BUniform b) = b
-            shaderGen :: (Int -> ExprM String) -> (b, OffsetToSType) -- Int is name of uniform block
-            shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
 
             doForUniform :: Int -> (s -> Binding -> IO()) -> ShaderM s ()
             doForUniform n io = modifyRenderIO (\s -> s { uniformNameToRenderIO = insert n io (uniformNameToRenderIO s) } )

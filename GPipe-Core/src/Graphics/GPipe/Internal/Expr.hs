@@ -165,7 +165,7 @@ useUniform decls blockI offset =
     where
         gDeclUniformBlock =
             do  let blockStr = show blockI
-                tellGlobal "uniform uBlock"
+                tellGlobal "layout(std140) uniform uBlock"
                 tellGlobal blockStr
                 tellGlobal " {\n"
                 decls

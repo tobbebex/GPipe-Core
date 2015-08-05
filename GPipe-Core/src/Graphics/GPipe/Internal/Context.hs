@@ -88,6 +88,8 @@ runSharedContextT f (ContextT m) =
 initGlState :: MonadIO m => ContextT os f m ()
 initGlState = liftContextIOAsync $ do glEnable gl_FRAMEBUFFER_SRGB
                                       glEnable gl_SCISSOR_TEST
+                                      glPixelStorei gl_PACK_ALIGNMENT 1
+                                      glPixelStorei gl_UNPACK_ALIGNMENT 1
 
 liftContextIO :: MonadIO m => IO a -> ContextT os f m a
 liftContextIO m = ContextT (asks fst) >>= liftIO . flip contextDoSync m

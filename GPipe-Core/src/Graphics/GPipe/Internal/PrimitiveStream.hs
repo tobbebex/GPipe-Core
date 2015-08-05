@@ -44,7 +44,8 @@ newtype ToVertex a b = ToVertex (Kleisli (StateT Int (Writer [Binding -> (IO VAO
 
 toPrimitiveStream :: forall os f s a p. (VertexInput a, PrimitiveTopology p) => (s -> PrimitiveArray p a) -> Shader os f s (PrimitiveStream p (VertexFormat a))   
 toPrimitiveStream sf = Shader $ do n <- getName
-                                   let sampleBuffer = makeBuffer undefined undefined :: Buffer os a
+                                   uniAl <- askUniformAlignment
+                                   let sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os a
                                        x = fst $ runWriter (evalStateT (mf $ bufBElement sampleBuffer $ BInput 0 0) 0)
                                    doForInputArray n (map drawcall . getPrimitiveArray . sf)
                                    return $ PrimitiveStream [(x, PrimitiveStreamData n)] 

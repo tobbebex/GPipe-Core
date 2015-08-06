@@ -36,6 +36,9 @@ stypeName (STypeIVec n) = "ivec" ++ show n
 stypeName (STypeUVec n) = "uvec" ++ show n
 
 stypeSize :: SType -> Int
+stypeSize (STypeVec 3) = 4 * 4
+stypeSize (STypeIVec 3) = 4 * 4
+stypeSize (STypeUVec 3) = 4 * 4
 stypeSize (STypeVec n) = n * 4
 stypeSize (STypeIVec n) = n * 4
 stypeSize (STypeUVec n) = n * 4

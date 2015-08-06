@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, FlexibleContexts, GADTs, TypeSynonymInstances, ScopedTypeVariables, FlexibleInstances, GeneralizedNewtypeDeriving, Arrows #-}
+{-# LANGUAGE TypeFamilies, FlexibleContexts, GADTs, TypeSynonymInstances, ScopedTypeVariables, FlexibleInstances, GeneralizedNewtypeDeriving, Arrows, MultiParamTypeClasses, AllowAmbiguousTypes #-}
 
 module Graphics.GPipe.Internal.Uniform where
 
@@ -19,26 +19,24 @@ import Graphics.Rendering.OpenGL.Raw.Core33
 import Data.IORef
 import Data.Int
 
-class BufferFormat (UniformBufferFormat a) => Uniform a where
-    type UniformBufferFormat a
-    toUniform :: ToUniform (UniformBufferFormat a) a 
+class BufferFormat a => UniformInput a where
+    type UniformFormat a x
+    toUniform :: ToUniform x a (UniformFormat a x) 
 
-type UniformHostFormat x = HostFormat (UniformBufferFormat x)
-
-toUniformBlock :: forall os f s b. Uniform b => (s -> (Buffer os (BUniform (UniformBufferFormat b)), Int)) -> Shader os f s b
+toUniformBlock :: forall os f s b x. (UniformInput b) => (s -> (Buffer os (BUniform b), Int)) -> Shader os f s (UniformFormat b x)
 toUniformBlock sf = Shader $ do
                    uniAl <- askUniformAlignment 
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
-                       sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os (BUniform (UniformBufferFormat b))
-                       shaderGen :: (Int -> ExprM String) -> (b, OffsetToSType) -- Int is name of uniform block
+                       sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os (BUniform b)
+                       shaderGen :: (Int -> ExprM String) -> (UniformFormat b x, OffsetToSType) -- Int is name of uniform block
                        shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
                    doForUniform blockId $ \s bind -> let (ub, i) = sf s 
                                                      in do bname <- readIORef $ bufName ub
                                                            glBindBufferRange gl_UNIFORM_BUFFER (fromIntegral bind) bname (fromIntegral $ i * bufElementSize ub) (fromIntegral $ bufElementSize ub)
                    return u
     where
-            ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform (UniformBufferFormat b) b
+            ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform x b (UniformFormat b x)
             fromBUnifom (BUniform b) = b
 
             doForUniform :: Int -> (s -> Binding -> IO()) -> ShaderM s ()
@@ -53,51 +51,85 @@ buildUDecl = buildUDecl' 0 . Map.assocs
                                           | off > p = do tellGlobal " float pad"
                                                          tellGlobalLn $ show p
                                                          buildUDecl' (p + 4) xs
-                                          | otherwise = error "buildUDecl: Expected all sizes to be multiple of 4"
+                                          | otherwise = error "buildUDecl: Expected all offsets to be multiple of 4"
           buildUDecl' _ [] = return ()
 
 type OffsetToSType = Map.IntMap SType  
                     
 
-newtype ToUniform a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader (Int -> ExprM String))) a b) deriving (Category, Arrow) 
+newtype ToUniform x a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader (Int -> ExprM String))) a b) deriving (Category, Arrow) 
 
-makeUniform :: SType -> ToUniform (B a) (S c b)
+makeUniform :: SType -> ToUniform x (B a) (S x b)
 makeUniform styp = ToUniform $ Kleisli $ \bIn -> do let offset = bOffset bIn
                                                     tell $ Map.singleton offset styp
                                                     useF <- lift ask
                                                     return $ S $ useF offset
 
-instance Uniform (S x Float) where
-    type UniformBufferFormat (S x Float) = (B Float)
+instance UniformInput (B Float) where
+    type UniformFormat (B Float) x = (S x Float)
     toUniform = makeUniform STypeFloat
 
-instance Uniform (S x Int) where
-    type UniformBufferFormat (S x Int) = (B Int32)
+instance UniformInput (B Int32) where
+    type UniformFormat (B Int32) x = (S x Int)
     toUniform = makeUniform STypeInt
 
-instance Uniform (S x Word) where
-    type UniformBufferFormat (S x Word) = (B Word32)
+instance UniformInput (B Word32) where
+    type UniformFormat (B Word32) x = (S x Word)
     toUniform = makeUniform STypeUInt
 
-instance (Uniform a, Uniform b) => Uniform (a,b) where
-    type UniformBufferFormat (a,b) = (UniformBufferFormat a, UniformBufferFormat b)
+instance UniformInput (B2 Float) where
+    type UniformFormat (B2 Float) x = (S x Float, S x Float)
+    toUniform = arr unB2 >>> makeUniform (STypeVec 2) >>> arr vec2S''
+
+instance UniformInput (B2 Int32) where
+    type UniformFormat (B2 Int32) x = (S x Int, S x Int)
+    toUniform = arr unB2 >>> makeUniform (STypeIVec 2) >>> arr vec2S''
+
+instance UniformInput (B2 Word32) where
+    type UniformFormat (B2 Word32) x = (S x Word, S x Word)
+    toUniform = arr unB2 >>> makeUniform (STypeVec 2) >>> arr vec2S''
+
+instance UniformInput (B3 Float) where
+    type UniformFormat (B3 Float) x = (S x Float, S x Float, S x Float)
+    toUniform = arr unB3 >>> makeUniform (STypeVec 3) >>> arr vec3S''
+
+instance UniformInput (B3 Int32) where
+    type UniformFormat (B3 Int32) x = (S x Int, S x Int, S x Int)
+    toUniform = arr unB3 >>> makeUniform (STypeIVec 3) >>> arr vec3S''
+
+instance UniformInput (B3 Word32) where
+    type UniformFormat (B3 Word32) x = (S x Word, S x Word, S x Word)
+    toUniform = arr unB3 >>> makeUniform (STypeVec 3) >>> arr vec3S''
+
+instance UniformInput (B4 Float) where
+    type UniformFormat (B4 Float) x = (S x Float, S x Float, S x Float, S x Float)
+    toUniform = arr unB4 >>> makeUniform (STypeVec 4) >>> arr vec4S''
+
+instance UniformInput (B4 Int32) where
+    type UniformFormat (B4 Int32) x = (S x Int, S x Int, S x Int, S x Int)
+    toUniform = arr unB4 >>> makeUniform (STypeIVec 4) >>> arr vec4S''
+
+instance UniformInput (B4 Word32) where
+    type UniformFormat (B4 Word32) x = (S x Word, S x Word, S x Word, S x Word)
+    toUniform = arr unB4 >>> makeUniform (STypeVec 4) >>> arr vec4S''
+
+instance (UniformInput a, UniformInput b) => UniformInput (a,b) where
+    type UniformFormat (a,b) x = (UniformFormat a x, UniformFormat b x)
     toUniform = proc (a,b) -> do a' <- toUniform -< a
                                  b' <- toUniform -< b
                                  returnA -< (a', b')
 
-instance (Uniform a, Uniform b, Uniform c) => Uniform (a,b,c) where
-    type UniformBufferFormat (a,b,c) = (UniformBufferFormat a, UniformBufferFormat b, UniformBufferFormat c)
+instance (UniformInput a, UniformInput b, UniformInput c) => UniformInput (a,b,c) where
+    type UniformFormat (a,b,c) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x)
     toUniform = proc (a,b,c) -> do a' <- toUniform -< a
                                    b' <- toUniform -< b
                                    c' <- toUniform -< c
                                    returnA -< (a', b', c')
 
-instance (Uniform a, Uniform b, Uniform c, Uniform d) => Uniform (a,b,c,d) where
-    type UniformBufferFormat (a,b,c,d) = (UniformBufferFormat a, UniformBufferFormat b, UniformBufferFormat c, UniformBufferFormat d)
+instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d) => UniformInput (a,b,c,d)  where
+    type UniformFormat (a,b,c,d) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x, UniformFormat d x)
     toUniform = proc (a,b,c,d) -> do a' <- toUniform -< a
                                      b' <- toUniform -< b
                                      c' <- toUniform -< c
                                      d' <- toUniform -< d
                                      returnA -< (a', b', c', d')                                                   
-
--- TODO: Add B3 -> V3 vec instances

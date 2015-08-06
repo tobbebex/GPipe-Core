@@ -1,6 +1,5 @@
 module Graphics.GPipe.Uniform (
-    Uniform(..),
-    UniformHostFormat,
+    UniformInput(..),
     ToUniform(),
     toUniformBlock,   
     BUniform(..), 

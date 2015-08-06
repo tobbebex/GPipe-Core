@@ -8,7 +8,7 @@ module Graphics.GPipe.Internal.Buffer
     Buffer(),
     ToBuffer(),
     B(..), B2(..), B3(..), B4(..),
-    BUniform(..), BNormalized(..), BPacked(),
+    Uniform(..), Normalized(..), BPacked(),
     BInput(..),
     newBuffer,
     writeBuffer,
@@ -103,8 +103,8 @@ newtype B2 a = B2 { unB2 :: B a } -- Internal
 newtype B3 a = B3 { unB3 :: B a } -- Internal
 newtype B4 a = B4 { unB4 :: B a } -- Internal
 
-newtype BUniform a = BUniform a
-newtype BNormalized a = BNormalized a
+newtype Uniform a = Uniform a
+newtype Normalized a = Normalized a
 newtype BPacked a = BPacked (B a) 
 
 toBufferBUnaligned :: forall a. Storable a => ToBuffer a (B a)
@@ -152,9 +152,9 @@ toBufferB4 = proc (a, b, c, d) -> do
         alignWhen Align4 4 -< () -- For uniform, here we are already aligned to 4*size 
         returnA -< B4 a'
 
-instance BufferFormat a => BufferFormat (BUniform a) where
-    type HostFormat (BUniform a) = HostFormat a
-    toBuffer = arr BUniform . ToBuffer 
+instance BufferFormat a => BufferFormat (Uniform a) where
+    type HostFormat (Uniform a) = HostFormat a
+    toBuffer = arr Uniform . ToBuffer 
                     (Kleisli elementBuilderA)
                     (Kleisli writerA)
                     AlignUniform
@@ -167,11 +167,11 @@ instance BufferFormat a => BufferFormat (BUniform a) where
             writerA a = do a' <- writerA' a
                            setWriterAlignM ()
                            return a'
-instance BufferFormat a => BufferFormat (BNormalized a) where
-    type HostFormat (BNormalized a) = HostFormat a
-    toBuffer = arr BNormalized . toBuffer                                   
-    getGlType (BNormalized a) = getGlType a
-    getGlPaddedFormat (BNormalized a) = case getGlPaddedFormat a of
+instance BufferFormat a => BufferFormat (Normalized a) where
+    type HostFormat (Normalized a) = HostFormat a
+    toBuffer = arr Normalized . toBuffer                                   
+    getGlType (Normalized a) = getGlType a
+    getGlPaddedFormat (Normalized a) = case getGlPaddedFormat a of
                                             x | x == gl_RGBA_INTEGER -> gl_RGBA
                                               | x == gl_RGB_INTEGER -> gl_RGB
                                               | x == gl_RG_INTEGER -> gl_RG
@@ -285,9 +285,9 @@ makeBuffer name elementCount uniformAlignment  = do
     Buffer name elementSize elementCount elementF writer
 
 type family BufferColor f where
-    BufferColor (BNormalized (B Int32)) = Float
-    BufferColor (BNormalized (B Int16)) = Float
-    BufferColor (BNormalized (B Int8)) = Float
+    BufferColor (Normalized (B Int32)) = Float
+    BufferColor (Normalized (B Int16)) = Float
+    BufferColor (Normalized (B Int8)) = Float
     BufferColor (B Float) = Float
 
     BufferColor (B Int32) = Int
@@ -300,9 +300,9 @@ type family BufferColor f where
     BufferColor (BPacked Word16) = Word
     BufferColor (BPacked Word8) = Word
 
-    BufferColor (BNormalized (B2 Int32)) = (Float, Float)
-    BufferColor (BNormalized (B2 Int16)) = (Float, Float)
-    BufferColor (BNormalized (B2 Int8)) = (Float, Float)
+    BufferColor (Normalized (B2 Int32)) = (Float, Float)
+    BufferColor (Normalized (B2 Int16)) = (Float, Float)
+    BufferColor (Normalized (B2 Int8)) = (Float, Float)
     BufferColor (B2 Float) = (Float, Float)
 
     BufferColor (B2 Int32) = (Int, Int)
@@ -313,9 +313,9 @@ type family BufferColor f where
     BufferColor (B2 Word16) = (Word, Word)
     BufferColor (B2 Word8) = (Word, Word)
 
-    BufferColor (BNormalized (B3 Int32)) = (Float, Float, Float)
-    BufferColor (BNormalized (B3 Int16)) = (Float, Float, Float)
-    BufferColor (BNormalized (B3 Int8)) = (Float, Float, Float)
+    BufferColor (Normalized (B3 Int32)) = (Float, Float, Float)
+    BufferColor (Normalized (B3 Int16)) = (Float, Float, Float)
+    BufferColor (Normalized (B3 Int8)) = (Float, Float, Float)
     BufferColor (B3 Float) = (Float, Float, Float)
 
     BufferColor (B3 Int32) = (Int, Int, Int)
@@ -326,9 +326,9 @@ type family BufferColor f where
     BufferColor (B3 Word16) = (Word, Word, Word)
     BufferColor (B3 Word8) = (Word, Word, Word)
 
-    BufferColor (BNormalized (B4 Int32)) = (Float, Float, Float, Float)
-    BufferColor (BNormalized (B4 Int16)) = (Float, Float, Float, Float)
-    BufferColor (BNormalized (B4 Int8)) = (Float, Float, Float, Float)
+    BufferColor (Normalized (B4 Int32)) = (Float, Float, Float, Float)
+    BufferColor (Normalized (B4 Int16)) = (Float, Float, Float, Float)
+    BufferColor (Normalized (B4 Int8)) = (Float, Float, Float, Float)
     BufferColor (B4 Float) = (Float, Float, Float, Float)
 
     BufferColor (B4 Int32) = (Int, Int, Int, Int)

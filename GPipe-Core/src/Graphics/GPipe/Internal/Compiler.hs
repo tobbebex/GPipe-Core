@@ -182,7 +182,8 @@ compile dcs s = do
                                            )
 
     compileShader name source = do 
-        withCStringLen source $ \ (ptr, len) ->
+        let header = "#version 330"
+        withCStringLen (header++source) $ \ (ptr, len) ->
                                     with ptr $ \ pptr ->
                                         with (fromIntegral len) $ \ plen ->
                                             glShaderSource name 1 pptr plen

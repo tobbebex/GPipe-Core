@@ -23,12 +23,12 @@ class BufferFormat a => UniformInput a where
     type UniformFormat a x
     toUniform :: ToUniform x a (UniformFormat a x) 
 
-toUniformBlock :: forall os f s b x. (UniformInput b) => (s -> (Buffer os (BUniform b), Int)) -> Shader os f s (UniformFormat b x)
+toUniformBlock :: forall os f s b x. (UniformInput b) => (s -> (Buffer os (Uniform b), Int)) -> Shader os f s (UniformFormat b x)
 toUniformBlock sf = Shader $ do
                    uniAl <- askUniformAlignment 
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
-                       sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os (BUniform b)
+                       sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os (Uniform b)
                        shaderGen :: (Int -> ExprM String) -> (UniformFormat b x, OffsetToSType) -- Int is name of uniform block
                        shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
                    doForUniform blockId $ \s bind -> let (ub, i) = sf s 
@@ -37,7 +37,7 @@ toUniformBlock sf = Shader $ do
                    return u
     where
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform x b (UniformFormat b x)
-            fromBUnifom (BUniform b) = b
+            fromBUnifom (Uniform b) = b
 
             doForUniform :: Int -> (s -> Binding -> IO()) -> ShaderM s ()
             doForUniform n io = modifyRenderIO (\s -> s { uniformNameToRenderIO = insert n io (uniformNameToRenderIO s) } )

@@ -72,7 +72,7 @@ runExprM d m = do
 
 type GlobDeclM = Writer String
 
-newtype S c a = S { unS :: ExprM String } 
+newtype S x a = S { unS :: ExprM String } 
 
 scalarS :: SType -> ExprM RValue -> S c a
 scalarS typ = S . tellAssignment typ 
@@ -551,6 +551,8 @@ class (IfB a, OrdB a, Floating a) => Real' a where
   mod' x y = x - y* floor' (x/y)
   floor' x = -ceiling' (-x)
   ceiling' x = -floor' (-x)
+  
+  {-# MINIMAL floor' | ceiling' #-}
 
 
 instance Real' Float where

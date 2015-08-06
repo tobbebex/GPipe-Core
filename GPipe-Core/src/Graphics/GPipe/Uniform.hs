@@ -2,7 +2,7 @@ module Graphics.GPipe.Uniform (
     UniformInput(..),
     ToUniform(),
     toUniformBlock,   
-    BUniform(..), 
+    Uniform(..), 
 )
 where
 

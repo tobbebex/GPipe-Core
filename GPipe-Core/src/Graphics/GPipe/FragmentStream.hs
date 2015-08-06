@@ -5,9 +5,9 @@ module Graphics.GPipe.FragmentStream (
 
     rasterize,
     VPos,
-    Side,
-    ViewPort,
-    DepthRange,
+    Side(..),
+    ViewPort(..),
+    DepthRange(..),
     
     Flat(..),
     NoPerspective(..),

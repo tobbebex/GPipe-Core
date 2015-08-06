@@ -26,7 +26,7 @@ import Prelude hiding ((.), id)
 import Control.Monad.Trans.State
 import Control.Category
 import Control.Arrow
-import Control.Monad (void, when)
+import Control.Monad (void)
 import Foreign.Storable
 import Foreign.Ptr
 import Control.Monad.IO.Class
@@ -37,6 +37,7 @@ import Control.Monad.Trans.Class (lift)
 import Foreign.C.Types
 import Data.IORef
 import Control.Applicative ((<$>))
+import Control.Monad.Trans.Writer.Lazy
 
 class BufferFormat f where
     type HostFormat f
@@ -75,8 +76,8 @@ type UniformAlignment = Int
 data AlignmentMode = Align4 | AlignUniform | AlignPackedIndices | AlignUnknown deriving (Eq)
 
 data ToBuffer a b = ToBuffer
-    (Kleisli (StateT Offset (Reader (ToBufferInput, UniformAlignment, AlignmentMode))) a b) -- Normal = aligned to 4 bytes
-    (Kleisli (StateT (Ptr ()) (ReaderT (Ptr (), UniformAlignment, AlignmentMode) IO)) a b) -- Normal = aligned to 4 bytes
+    (Kleisli (StateT Offset (WriterT [Int] (Reader (ToBufferInput, UniformAlignment, AlignmentMode)))) a b) -- Normal = aligned to 4 bytes
+    (Kleisli (StateT (Ptr (), [Int]) IO) a b) -- Normal = aligned to 4 bytes
     AlignmentMode 
 
 instance Category ToBuffer where
@@ -113,12 +114,12 @@ toBufferBUnaligned = ToBuffer
                 Align4
             where
                 size = sizeOf (undefined :: a)
-                static = do ((name, stride, bIn),_,_) <- lift ask
+                static = do ((name, stride, bIn),_,_) <- lift $ lift ask
                             offset <- get
                             put $ offset + size
                             return $ B name offset stride (bInSkipElems bIn) (bInInstanceDiv bIn)
-                writer a = do ptr <- get
-                              put $ ptr `plusPtr` size
+                writer a = do (ptr,pads) <- get
+                              put (ptr `plusPtr` size, pads)
                               liftIO $ poke (castPtr ptr) a
                               return undefined
 
@@ -159,15 +160,12 @@ instance BufferFormat a => BufferFormat (BUniform a) where
                     AlignUniform
         where
             ToBuffer (Kleisli elementBuilderA') (Kleisli writerA') _ = toBuffer :: ToBuffer (HostFormat a) a
-            elementBuilderA a = do (_,x,_) <- lift ask
-                                   a' <- elementBuilderA' a                                   
-                                   let ToBuffer (Kleisli m) _ _ = alignWhen AlignUniform x
-                                   m ()
+            elementBuilderA a = do (_,x,_) <- lift $ lift ask
+                                   a' <- elementBuilderA' a
+                                   setElemAlignM AlignUniform x ()                                   
                                    return a'
-            writerA a = do (_,x,_) <- lift ask
-                           a' <- writerA' a
-                           let ToBuffer _ (Kleisli m) _ = alignWhen AlignUniform x
-                           m ()    
+            writerA a = do a' <- writerA' a
+                           setWriterAlignM ()
                            return a'
 instance BufferFormat a => BufferFormat (BNormalized a) where
     type HostFormat (BNormalized a) = HostFormat a
@@ -250,20 +248,27 @@ copyBuffer len from bFrom to bTo = liftContextIOAsync $ do
 ----------------------------------------------
 
 alignWhen :: AlignmentMode -> Int -> ToBuffer a a
-alignWhen m x = ToBuffer (Kleisli setElemAlignM) (Kleisli setWriterAlignM) AlignUniform where
-        setElemAlignM a = do (_,_,m') <- lift ask
-                             when (m == m') $ do
-                                offset <- get
-                                put $ alignedTo x offset
-                             return a   
-        setWriterAlignM a = do (basePtr, _,m') <- lift ask
-                               when (m == m') $ do
-                                    ptr <- get
-                                    let base = ptrToWordPtr basePtr
-                                        p = ptrToWordPtr ptr
-                                    put $ wordPtrToPtr $ base + alignedTo (fromIntegral x) (p - base)
-                               return a
-        alignedTo a b  = b + a - 1 - ((b - 1) `mod` a)
+alignWhen m x = ToBuffer (Kleisli $ setElemAlignM m x) (Kleisli setWriterAlignM) AlignUniform where
+
+setElemAlignM :: AlignmentMode -> Int -> b -> StateT Offset (WriterT [Int] (Reader (ToBufferInput, UniformAlignment, AlignmentMode))) b
+setElemAlignM m x a = do
+                     (_,_,m') <- lift $ lift ask
+                     pad <- if m == m'
+                                then do
+                                    offset <- get
+                                    let pad = alignToPadding x offset
+                                        alignToPadding a b  = a - 1 - ((b - 1) `mod` a)
+                                    put $ offset + pad
+                                    return pad
+                                else
+                                    return 0
+                     lift $ tell [pad]
+                     return a   
+setWriterAlignM :: b -> StateT (Ptr a, [Int]) IO b
+setWriterAlignM a = do (ptr, pad:pads) <- get
+                       put (ptr `plusPtr` pad, pads)
+                       return a
+        
 
 
 getUniformAlignment :: IO Int
@@ -273,10 +278,10 @@ makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignme
 makeBuffer name elementCount uniformAlignment  = do
     let ToBuffer a b m = toBuffer :: ToBuffer (HostFormat b) b
         err = error "toBuffer or toVertex are creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders" :: HostFormat b
-        elementM = runStateT (runKleisli a err) 0
-        elementSize = snd $ runReader elementM ((name, undefined, undefined), uniformAlignment, m)
-        elementF bIn = fst $ runReader elementM ((name, elementSize, bIn), uniformAlignment, m)
-        writer ptr x = void $ runReaderT (runStateT (runKleisli b x) ptr) (ptr, uniformAlignment, m)
+        elementM = runWriterT (runStateT (runKleisli a err) 0)
+        ((_,elementSize),pads) = runReader elementM ((name, undefined, undefined), uniformAlignment, m)
+        elementF bIn = (fst . fst) $ runReader elementM ((name, elementSize, bIn), uniformAlignment, m)
+        writer ptr x = void $ runStateT (runKleisli b x) (ptr,pads)
     Buffer name elementSize elementCount elementF writer
 
 type family BufferColor f where

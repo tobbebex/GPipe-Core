@@ -403,14 +403,14 @@ instance BufferFormat (B Word8) where
 instance BufferFormat (BPacked Word16) where
     type HostFormat (BPacked Word16) = Word16
     toBuffer = let ToBuffer a b _ = toBufferB :: ToBuffer Word16 (B Word16) in arr BPacked . ToBuffer a b AlignPackedIndices 
-    getGlType _ = gl_SHORT
+    getGlType _ = gl_UNSIGNED_SHORT
     peekPixel = peekPixel1 
     getGlPaddedFormat _ = gl_RED_INTEGER
 
 instance BufferFormat (BPacked Word8) where
     type HostFormat (BPacked Word8) = Word8
     toBuffer = let ToBuffer a b _ = toBufferB :: ToBuffer Word8 (B Word8) in arr BPacked . ToBuffer a b AlignPackedIndices 
-    getGlType _ = gl_BYTE
+    getGlType _ = gl_UNSIGNED_BYTE
     peekPixel = peekPixel1 
     getGlPaddedFormat _ = gl_RED_INTEGER      
 

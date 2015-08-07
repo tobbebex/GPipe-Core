@@ -16,20 +16,20 @@ library
                    OpenGLRaw >= 2.5.0.0 && < 2.6
   ghc-options:      -Wall
   exposed-modules:  
-                    Data.SNMap,
-                    Graphics.GPipe.Context,
-                    Graphics.GPipe.Format,
                     Graphics.GPipe.Buffer,
-                    Graphics.GPipe.Shader,
+                    Graphics.GPipe.Context,
                     Graphics.GPipe.Expr,
+                    Graphics.GPipe.Format,
+                    Graphics.GPipe.FragmentStream,
+                    Graphics.GPipe.FrameBuffer,
                     Graphics.GPipe.PrimitiveArray,
                     Graphics.GPipe.PrimitiveStream,
-                    Graphics.GPipe.FragmentStream,
-                    Graphics.GPipe.Uniform,
-                    Graphics.GPipe.Texture,
                     Graphics.GPipe.Sampler,
-                    Graphics.GPipe.FrameBuffer
+                    Graphics.GPipe.Shader,
+                    Graphics.GPipe.Texture,
+                    Graphics.GPipe.Uniform
   other-modules:    
+                    Data.SNMap,
                     Graphics.GPipe.Internal.Buffer,
                     Graphics.GPipe.Internal.Compiler,
                     Graphics.GPipe.Internal.Context,

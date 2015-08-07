@@ -124,32 +124,31 @@ toBufferBUnaligned = ToBuffer
                               return undefined
 
 toBufferB :: forall a. Storable a => ToBuffer a (B a)
-toBufferB = alignWhen AlignUniform (sizeOf (undefined :: a)) >>> toBufferBUnaligned >>> alignWhen Align4 4                               
+toBufferB = toBufferBUnaligned >>> alignWhen [(Align4, 4), (AlignUniform, 4)]                                
                               
 toBufferB2 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a) (B2 a)
 toBufferB2 = proc (a, b) -> do
-        alignWhen AlignUniform (2 * sizeOf (undefined :: a)) -< () -- For align4, we are always at 4 alignment here 
+        (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 2 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform
         a' <- toBufferBUnaligned  -< a
         toBufferBUnaligned -< b
-        alignWhen Align4 4 -< () -- For uniform, here we are already aligned to 2*size 
+        alignWhen [(Align4, 4), (AlignUniform, 4)] -< () 
         returnA -< B2 a'
 toBufferB3 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a,a) (B3 a)
 toBufferB3 = proc (a, b, c) -> do
-        alignWhen AlignUniform (4 * sizeOf (undefined :: a)) -< () -- For align4, we are always at 4 alignment here
+        (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 4 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform 
         a' <- toBufferBUnaligned -< a
         toBufferBUnaligned -< b
         toBufferBUnaligned -< c
-        alignWhen Align4 4 -< ()
-        alignWhen AlignUniform (4 * sizeOf (undefined :: a)) -< ()
+        alignWhen [(Align4, 4), (AlignUniform, 4)] -< () 
         returnA -< B3 a'
 toBufferB4 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a,a,a) (B4 a)
 toBufferB4 = proc (a, b, c, d) -> do
-        alignWhen AlignUniform (4 * sizeOf (undefined :: a)) -< () -- For align4, we are always at 4 alignment here
+        (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 4 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform 
         a' <- toBufferBUnaligned -< a
         toBufferBUnaligned -< b
         toBufferBUnaligned -< c
         toBufferBUnaligned -< d
-        alignWhen Align4 4 -< () -- For uniform, here we are already aligned to 4*size 
+        alignWhen [(Align4, 4), (AlignUniform, 4)] -< () 
         returnA -< B4 a'
 
 instance BufferFormat a => BufferFormat (Uniform a) where
@@ -162,7 +161,7 @@ instance BufferFormat a => BufferFormat (Uniform a) where
             ToBuffer (Kleisli elementBuilderA') (Kleisli writerA') _ = toBuffer :: ToBuffer (HostFormat a) a
             elementBuilderA a = do (_,x,_) <- lift $ lift ask
                                    a' <- elementBuilderA' a
-                                   setElemAlignM AlignUniform x ()                                   
+                                   setElemAlignM [(AlignUniform, x)] ()                                   
                                    return a'
             writerA a = do a' <- writerA' a
                            setWriterAlignM ()
@@ -247,21 +246,19 @@ copyBuffer len from bFrom to bTo = liftContextIOAsync $ do
 
 ----------------------------------------------
 
-alignWhen :: AlignmentMode -> Int -> ToBuffer a a
-alignWhen m x = ToBuffer (Kleisli $ setElemAlignM m x) (Kleisli setWriterAlignM) AlignUniform where
+alignWhen :: [(AlignmentMode, Int)] -> ToBuffer a a
+alignWhen x = ToBuffer (Kleisli $ setElemAlignM x) (Kleisli setWriterAlignM) AlignUniform where
 
-setElemAlignM :: AlignmentMode -> Int -> b -> StateT Offset (WriterT [Int] (Reader (ToBufferInput, UniformAlignment, AlignmentMode))) b
-setElemAlignM m x a = do
-                     (_,_,m') <- lift $ lift ask
-                     pad <- if m == m'
-                                then do
+setElemAlignM :: [(AlignmentMode, Int)] -> b -> StateT Offset (WriterT [Int] (Reader (ToBufferInput, UniformAlignment, AlignmentMode))) b
+setElemAlignM x a = do
+                     (_,_,m) <- lift $ lift ask
+                     pad <- case lookup m x of
+                                Nothing -> return 0
+                                Just al -> do
                                     offset <- get
-                                    let pad = alignToPadding x offset
-                                        alignToPadding a b  = a - 1 - ((b - 1) `mod` a)
+                                    let pad = al - 1 - ((offset - 1) `mod` al)
                                     put $ offset + pad
                                     return pad
-                                else
-                                    return 0
                      lift $ tell [pad]
                      return a   
 setWriterAlignM :: b -> StateT (Ptr a, [Int]) IO b

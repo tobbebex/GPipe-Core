@@ -22,6 +22,7 @@ import Foreign.C.Types
 import Data.IORef
 import Control.Arrow ((&&&))
 import Control.Applicative
+import Control.Monad.Exception (bracket, MonadException, MonadAsyncException)
 
 data Texture1D os a = Texture1D TexName Int MaxLevels
 data Texture1DArray os a = Texture1DArray TexName (Int, Int)  MaxLevels
@@ -225,39 +226,64 @@ writeTexture3DFromBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, C
 writeTextureCubeFromBuffer   :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
 
 
-readTexture1D      :: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
-readTexture1DArray :: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
-readTexture2D      :: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
-readTexture2DArray :: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
-readTexture3D      :: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
-readTextureCube    :: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> (HostFormat f -> a -> m a) -> a -> Proxy b -> ContextT os f m ()
+readTexture1D      :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
+readTexture1DArray :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
+readTexture2D      :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
+readTexture2DArray :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
+readTexture3D      :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size2) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
+readTextureCube    :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
 
-readTexture1DToBuffer     :: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTexture1DArrayToBuffer:: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTexture2DToBuffer     :: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTexture2DArrayToBuffer:: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTexture3DToBuffer     :: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTextureCubeToBuffer   :: (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> Buffer os b-> BufferStartPos -> ContextT os f m ()
+readTexture1DToBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTexture1DArrayToBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTexture2DToBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTexture2DArrayToBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTexture3DToBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTextureCubeToBuffer   :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> Buffer os b-> BufferStartPos -> ContextT os f m ()
 
 getGlColorFormat :: TextureFormat f => f -> GLenum
 getGlColorFormat f = let x = getGlFormat f in if x == gl_DEPTH_STENCIL then gl_DEPTH_COMPONENT else x
 
 --todo: fix depth component to always take 4 bytes!
 
+
 writeTexture1D = undefined
 writeTexture1DArray = undefined
-writeTexture2D (Texture2D texn _ mx) l ((x,y),(w,h)) d _ = liftContextIOAsync $ do useTexSync texn gl_TEXTURE_2D
-                                                                                   let b = makeBuffer undefined undefined 0 :: Buffer os b
-                                                                                   allocaBytes (w*h*bufElementSize b) $ \ ptr -> do
-                                                                                         void $ bufferWriteInternal b ptr (take (w*h) d) 
-                                                                                         glTexSubImage2D gl_TEXTURE_2D (fromIntegral $ min mx l) (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+writeTexture2D t@(Texture2D texn _ ml) l ((x,y),(w,h)) d _ | l < 0 || l >= ml = error "writeTexture2D, level out of bounds"
+                                                           | x < 0 || x >= mx = error "writeTexture2D, x out of bounds"
+                                                           | w < 0 || x+w > mx = error "writeTexture2D, w out of bounds"
+                                                           | y < 0 || y >= my = error "writeTexture2D, y out of bounds"
+                                                           | h < 0 || y+h >= my = error "writeTexture2D, h out of bounds"
+                                                           | otherwise = liftContextIOAsync $ do 
+                                                                         let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                             size = w*h*bufElementSize b
+                                                                         allocaBytes size $ \ ptr -> do
+                                                                             end <- bufferWriteInternal b ptr (take (w*h) d)
+                                                                             if end `minusPtr` ptr /= size 
+                                                                                then error "writeTexture2D, data list too short"
+                                                                                else do
+                                                                                    useTexSync texn gl_TEXTURE_2D
+                                                                                    glTexSubImage2D gl_TEXTURE_2D (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+        where (mx,my) = texture2DSizes t !! l                                                                                
 writeTexture2DArray = undefined
 writeTexture3D = undefined
 writeTextureCube = undefined
 
 writeTexture1DFromBuffer = undefined
 writeTexture1DArrayFromBuffer = undefined
-writeTexture2DFromBuffer = undefined
+writeTexture2DFromBuffer t@(Texture2D texn _ ml) l ((x,y),(w,h)) b i | l < 0 || l >= ml = error "writeTexture2DFromBuffer, level out of bounds"
+                                                                     | x < 0 || x >= mx = error "writeTexture2DFromBuffer, x out of bounds"
+                                                                     | w < 0 || x+w > mx = error "writeTexture2DFromBuffer, w out of bounds"
+                                                                     | y < 0 || y >= my = error "writeTexture2DFromBuffer, y out of bounds"
+                                                                     | h < 0 || y+h >= my = error "writeTexture2DFromBuffer, h out of bounds"
+                                                                     | i < 0 || i > bufElementCount b = error "writeTexture2DFromBuffer, i out of bounds"
+                                                                     | bufElementCount b - i < w*h = error "writeTexture2DFromBuffer, buffer data too small"
+                                                                     | otherwise = liftContextIOAsync $ do 
+                                                                            useTexSync texn gl_TEXTURE_2D
+                                                                            bname <- readIORef $ bufName b
+                                                                            glBindBuffer gl_PIXEL_UNPACK_BUFFER bname
+                                                                            glTexSubImage2D gl_TEXTURE_2D (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)        
+                                                                            glBindBuffer gl_PIXEL_UNPACK_BUFFER 0
+        where (mx,my) = texture2DSizes t !! l                                                                                
 writeTexture2DArrayFromBuffer = undefined
 writeTexture3DFromBuffer = undefined
 writeTextureCubeFromBuffer = undefined
@@ -265,14 +291,54 @@ writeTextureCubeFromBuffer = undefined
 
 readTexture1D = undefined
 readTexture1DArray = undefined
-readTexture2D = undefined
+readTexture2D t@(Texture2D texn _ ml) l ((x,y),(w,h)) f s _ | l < 0 || l >= ml = error "readTexture2D, level out of bounds"
+                                                            | x < 0 || x >= mx = error "readTexture2D, x out of bounds"
+                                                            | w < 0 || x+w > mx = error "readTexture2D, w out of bounds"
+                                                            | y < 0 || y >= my = error "readTexture2D, y out of bounds"
+                                                            | h < 0 || y+h >= my = error "readTexture2D, h out of bounds"
+                                                            | otherwise =  
+                                                                         let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                             f' ptr a off = f a =<< liftIO (peekPixel (undefined :: b) (ptr `plusPtr` off))
+                                                                         in bracket
+                                                                           (liftContextIO $ do
+                                                                             ptr <- mallocBytes $ w*h*bufElementSize b 
+                                                                             glPixelStorei gl_PACK_SKIP_PIXELS $ fromIntegral x
+                                                                             glPixelStorei gl_PACK_SKIP_ROWS $ fromIntegral y
+                                                                             glPixelStorei gl_PACK_SKIP_IMAGES 0
+                                                                             glPixelStorei gl_PACK_ROW_LENGTH $ fromIntegral w
+                                                                             glPixelStorei gl_PACK_IMAGE_HEIGHT $ fromIntegral h
+                                                                             useTexSync texn gl_TEXTURE_2D
+                                                                             glGetTexImage gl_TEXTURE_2D (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+                                                                             return ptr)
+                                                                           (liftIO . free)
+                                                                           (\ptr -> foldM (f' ptr) s [0,bufElementSize b..w*h*bufElementSize b -1])
+        where (mx,my) = texture2DSizes t !! l                                                                                
 readTexture2DArray = undefined
 readTexture3D = undefined
 readTextureCube = undefined
 
 readTexture1DToBuffer = undefined
 readTexture1DArrayToBuffer = undefined
-readTexture2DToBuffer = undefined
+readTexture2DToBuffer t@(Texture2D texn _ ml) l ((x,y),(w,h)) b i | l < 0 || l >= ml = error "readTexture2D, level out of bounds"
+                                                                  | x < 0 || x >= mx = error "readTexture2D, x out of bounds"
+                                                                  | w < 0 || x+w > mx = error "readTexture2D, w out of bounds"
+                                                                  | y < 0 || y >= my = error "readTexture2D, y out of bounds"
+                                                                  | h < 0 || y+h >= my = error "readTexture2D, h out of bounds"
+                                                                  | i < 0 || i > bufElementCount b = error "writeTexture2DFromBuffer, i out of bounds"
+                                                                  | bufElementCount b - i < w*h = error "writeTexture2DFromBuffer, buffer data too small"
+                                                                  | otherwise = liftContextIOAsync $ do
+                                                                             bname <- readIORef $ bufName b
+                                                                             glBindBuffer gl_PIXEL_PACK_BUFFER bname
+                                                                             glPixelStorei gl_PACK_SKIP_PIXELS $ fromIntegral x
+                                                                             glPixelStorei gl_PACK_SKIP_ROWS $ fromIntegral y
+                                                                             glPixelStorei gl_PACK_SKIP_IMAGES 0
+                                                                             glPixelStorei gl_PACK_ROW_LENGTH $ fromIntegral w
+                                                                             glPixelStorei gl_PACK_IMAGE_HEIGHT $ fromIntegral h
+                                                                             useTexSync texn gl_TEXTURE_2D
+                                                                             glGetTexImage gl_TEXTURE_2D (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)
+                                                                             glBindBuffer gl_PIXEL_PACK_BUFFER 0
+        where (mx,my) = texture2DSizes t !! l                                                                                
+ 
 readTexture2DArrayToBuffer = undefined
 readTexture3DToBuffer = undefined
 readTextureCubeToBuffer = undefined

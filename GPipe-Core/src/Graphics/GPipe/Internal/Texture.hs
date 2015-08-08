@@ -199,7 +199,6 @@ useTexSync tn t = do maxUnits <- alloca (\ptr -> glGetIntegerv gl_MAX_COMBINED_T
                                  
 
 type Level = Int
-type Slice = Int
 data CubeSide = CubePosX | CubeNegX | CubePosY | CubeNegY | CubePosZ | CubeNegZ deriving (Eq, Enum, Bounded)
 
 data Proxy t = Proxy
@@ -212,47 +211,76 @@ type BufferStartPos = Int
 
 
 writeTexture1D      :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
-writeTexture1DArray :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
+writeTexture1DArray :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> (StartPos2, Size2) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
 writeTexture2D      :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
-writeTexture2DArray :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
+writeTexture2DArray :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> (StartPos3, Size3) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
 writeTexture3D      :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
 writeTextureCube    :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> [HostFormat b] -> Proxy b -> ContextT os f m ()
 
 writeTexture1DFromBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-writeTexture1DArrayFromBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+writeTexture1DArrayFromBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
 writeTexture2DFromBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-writeTexture2DArrayFromBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+writeTexture2DArrayFromBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> (StartPos3, Size3) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
 writeTexture3DFromBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
 writeTextureCubeFromBuffer   :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
 
 
 readTexture1D      :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
-readTexture1DArray :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
+readTexture1DArray :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> (StartPos2, Size1) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
 readTexture2D      :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
-readTexture2DArray :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
+readTexture2DArray :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> (StartPos3, Size2) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
 readTexture3D      :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size2) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
 readTextureCube    :: forall a b c os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> (a -> HostFormat b -> ContextT os f m a) -> a -> Proxy b -> ContextT os f m a
 
 readTexture1DToBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1D os (Format c) -> Level -> (StartPos1, Size1) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTexture1DArrayToBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> Slice -> (StartPos1, Size1) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTexture1DArrayToBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture1DArray os (Format c) -> Level -> (StartPos2, Size1) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
 readTexture2DToBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2D os (Format c) -> Level -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTexture2DArrayToBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> Slice -> (StartPos2, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTexture3DToBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size3) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTexture2DArrayToBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture2DArray os (Format c) -> Level -> (StartPos3, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+readTexture3DToBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => Texture3D os (Format c) -> Level -> (StartPos3, Size2) -> Buffer os b -> BufferStartPos -> ContextT os f m ()
 readTextureCubeToBuffer   :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, Color c (ColorElement c) ~ BufferColor b) => TextureCube os (Format c) -> Level -> CubeSide -> (StartPos2, Size2) -> Buffer os b-> BufferStartPos -> ContextT os f m ()
 
 getGlColorFormat :: TextureFormat f => f -> GLenum
 getGlColorFormat f = let x = getGlFormat f in if x == gl_DEPTH_STENCIL then gl_DEPTH_COMPONENT else x
 
---todo: fix depth component to always take 4 bytes!
+--todo: fix depth component to always take 4 bytes!, use endianess and always INT to perform scaling to short and byte
 
 
-writeTexture1D = undefined
-writeTexture1DArray = undefined
+writeTexture1D t@(Texture1D texn _ ml) l (x,w) d _ | l < 0 || l >= ml = error "writeTexture1D, level out of bounds"
+                                                   | x < 0 || x >= mx = error "writeTexture1D, x out of bounds"
+                                                   | w < 0 || x+w > mx = error "writeTexture1D, w out of bounds"
+                                                   | otherwise = liftContextIOAsync $ do 
+                                                                         let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                             size = w*bufElementSize b
+                                                                         allocaBytes size $ \ ptr -> do
+                                                                             end <- bufferWriteInternal b ptr (take w d)
+                                                                             if end `minusPtr` ptr /= size 
+                                                                                then error "writeTexture1D, data list too short"
+                                                                                else do
+                                                                                    useTexSync texn gl_TEXTURE_1D
+                                                                                    glTexSubImage1D gl_TEXTURE_1D (fromIntegral l) (fromIntegral x) (fromIntegral w) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+        where mx = texture1DSizes t !! l  
+
+writeTexture1DArray t@(Texture1DArray texn _ ml) l  ((x,y),(w,h)) d _ | l < 0 || l >= ml = error "writeTexture1DArray, level out of bounds"
+                                                                      | x < 0 || x >= mx = error "writeTexture1DArray, x out of bounds"
+                                                                      | w < 0 || x+w > mx = error "writeTexture1DArray, w out of bounds"
+                                                                      | y < 0 || y >= my = error "writeTexture1DArray, y out of bounds"
+                                                                      | h < 0 || y+h > my = error "writeTexture2D, h out of bounds"
+                                                                      | otherwise = liftContextIOAsync $ do 
+                                                                         let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                             size = w*h*bufElementSize b
+                                                                         allocaBytes size $ \ ptr -> do
+                                                                             end <- bufferWriteInternal b ptr (take (w*h) d)
+                                                                             if end `minusPtr` ptr /= size 
+                                                                                then error "writeTexture1DArray, data list too short"
+                                                                                else do
+                                                                                    useTexSync texn gl_TEXTURE_1D_ARRAY
+                                                                                    glTexSubImage2D gl_TEXTURE_1D_ARRAY (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+        where (mx,my) = texture1DArraySizes t !! l  
 writeTexture2D t@(Texture2D texn _ ml) l ((x,y),(w,h)) d _ | l < 0 || l >= ml = error "writeTexture2D, level out of bounds"
                                                            | x < 0 || x >= mx = error "writeTexture2D, x out of bounds"
                                                            | w < 0 || x+w > mx = error "writeTexture2D, w out of bounds"
                                                            | y < 0 || y >= my = error "writeTexture2D, y out of bounds"
-                                                           | h < 0 || y+h >= my = error "writeTexture2D, h out of bounds"
+                                                           | h < 0 || y+h > my = error "writeTexture2D, h out of bounds"
                                                            | otherwise = liftContextIOAsync $ do 
                                                                          let b = makeBuffer undefined undefined 0 :: Buffer os b
                                                                              size = w*h*bufElementSize b
@@ -264,17 +292,90 @@ writeTexture2D t@(Texture2D texn _ ml) l ((x,y),(w,h)) d _ | l < 0 || l >= ml = 
                                                                                     useTexSync texn gl_TEXTURE_2D
                                                                                     glTexSubImage2D gl_TEXTURE_2D (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
         where (mx,my) = texture2DSizes t !! l                                                                                
-writeTexture2DArray = undefined
-writeTexture3D = undefined
-writeTextureCube = undefined
+writeTexture2DArray t@(Texture2DArray texn _ ml) l ((x,y,z),(w,h,d)) dat _ | l < 0 || l >= ml = error "writeTexture2DArray, level out of bounds"
+                                                                           | x < 0 || x >= mx = error "writeTexture2DArray, x out of bounds"
+                                                                           | w < 0 || x+w > mx = error "writeTexture2DArray, w out of bounds"
+                                                                           | y < 0 || y >= my = error "writeTexture2DArray, y out of bounds"
+                                                                           | h < 0 || y+h > my = error "writeTexture2DArray, h out of bounds"
+                                                                           | z < 0 || z >= mz = error "writeTexture2DArray, z out of bounds"
+                                                                           | d < 0 || z+d > mz = error "writeTexture2DArray, d out of bounds"
+                                                                           | otherwise = liftContextIOAsync $ do 
+                                                                                 let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                                     size = w*h*d*bufElementSize b
+                                                                                 allocaBytes size $ \ ptr -> do
+                                                                                     end <- bufferWriteInternal b ptr (take (w*h*d) dat)
+                                                                                     if end `minusPtr` ptr /= size 
+                                                                                        then error "writeTexture2DArray, data list too short"
+                                                                                        else do
+                                                                                            useTexSync texn gl_TEXTURE_2D_ARRAY
+                                                                                            glTexSubImage3D gl_TEXTURE_2D_ARRAY (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral z) (fromIntegral w) (fromIntegral h) (fromIntegral d) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+        where (mx,my,mz) = texture2DArraySizes t !! l 
+writeTexture3D t@(Texture3D texn _ ml) l ((x,y,z),(w,h,d)) dat _ | l < 0 || l >= ml = error "writeTexture3D, level out of bounds"
+                                                                 | x < 0 || x >= mx = error "writeTexture3D, x out of bounds"
+                                                                 | w < 0 || x+w > mx = error "writeTexture3D, w out of bounds"
+                                                                 | y < 0 || y >= my = error "writeTexture3D, y out of bounds"
+                                                                 | h < 0 || y+h > my = error "writeTexture3D, h out of bounds"
+                                                                 | z < 0 || z >= mz = error "writeTexture3D, z out of bounds"
+                                                                 | d < 0 || z+d > mz = error "writeTexture3D, d out of bounds"
+                                                                 | otherwise = liftContextIOAsync $ do 
+                                                                         let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                             size = w*h*d*bufElementSize b
+                                                                         allocaBytes size $ \ ptr -> do
+                                                                             end <- bufferWriteInternal b ptr (take (w*h*d) dat)
+                                                                             if end `minusPtr` ptr /= size 
+                                                                                then error "writeTexture3D, data list too short"
+                                                                                else do
+                                                                                    useTexSync texn gl_TEXTURE_3D
+                                                                                    glTexSubImage3D gl_TEXTURE_3D (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral z) (fromIntegral w) (fromIntegral h) (fromIntegral d) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+        where (mx,my,mz) = texture3DSizes t !! l                                       
+writeTextureCube t@(TextureCube texn _ ml) l s ((x,y),(w,h)) d _ | l < 0 || l >= ml = error "writeTextureCube, level out of bounds"
+                                                                 | x < 0 || x >= mxy = error "writeTextureCube, x out of bounds"
+                                                                 | w < 0 || x+w > mxy = error "writeTextureCube, w out of bounds"
+                                                                 | y < 0 || y >= mxy = error "writeTextureCube, y out of bounds"
+                                                                 | h < 0 || y+h > mxy = error "writeTextureCube, h out of bounds"
+                                                                 | otherwise = liftContextIOAsync $ do 
+                                                                         let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                             size = w*h*bufElementSize b
+                                                                         allocaBytes size $ \ ptr -> do
+                                                                             end <- bufferWriteInternal b ptr (take (w*h) d)
+                                                                             if end `minusPtr` ptr /= size 
+                                                                                then error "writeTextureCube, data list too short"
+                                                                                else do
+                                                                                    useTexSync texn gl_TEXTURE_CUBE_MAP
+                                                                                    glTexSubImage2D (getGlCubeSide s) (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+        where mxy = textureCubeSizes t !! l
 
-writeTexture1DFromBuffer = undefined
-writeTexture1DArrayFromBuffer = undefined
+writeTexture1DFromBuffer t@(Texture1D texn _ ml) l (x,w) b i | l < 0 || l >= ml = error "writeTexture1DFromBuffer, level out of bounds"
+                                                             | x < 0 || x >= mx = error "writeTexture1DFromBuffer, x out of bounds"
+                                                             | w < 0 || x+w > mx = error "writeTexture1DFromBuffer, w out of bounds"
+                                                             | i < 0 || i > bufElementCount b = error "writeTexture1DFromBuffer, i out of bounds"
+                                                             | bufElementCount b - i < w = error "writeTexture1DFromBuffer, buffer data too small"
+                                                             | otherwise = liftContextIOAsync $ do 
+                                                                                    useTexSync texn gl_TEXTURE_1D
+                                                                                    bname <- readIORef $ bufName b
+                                                                                    glBindBuffer gl_PIXEL_UNPACK_BUFFER bname
+                                                                                    glTexSubImage1D gl_TEXTURE_1D (fromIntegral l) (fromIntegral x) (fromIntegral w) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)        
+                                                                                    glBindBuffer gl_PIXEL_UNPACK_BUFFER 0
+        where mx = texture1DSizes t !! l
+writeTexture1DArrayFromBuffer t@(Texture1DArray texn _ ml) l ((x,y),(w,h)) b i | l < 0 || l >= ml = error "writeTexture1DArrayFromBuffer, level out of bounds"
+                                                                               | x < 0 || x >= mx = error "writeTexture1DArrayFromBuffer, x out of bounds"
+                                                                               | w < 0 || x+w > mx = error "writeTexture1DArrayFromBuffer, w out of bounds"
+                                                                               | y < 0 || y >= my = error "writeTexture1DArrayFromBuffer, y out of bounds"
+                                                                               | h < 0 || y+h > my = error "writeTexture1DArrayFromBuffer, h out of bounds"
+                                                                               | i < 0 || i > bufElementCount b = error "writeTexture1DArrayFromBuffer, i out of bounds"
+                                                                               | bufElementCount b - i < w*h = error "writeTexture1DArrayFromBuffer, buffer data too small"
+                                                                               | otherwise = liftContextIOAsync $ do 
+                                                                                    useTexSync texn gl_TEXTURE_1D_ARRAY
+                                                                                    bname <- readIORef $ bufName b
+                                                                                    glBindBuffer gl_PIXEL_UNPACK_BUFFER bname
+                                                                                    glTexSubImage2D gl_TEXTURE_1D_ARRAY (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)        
+                                                                                    glBindBuffer gl_PIXEL_UNPACK_BUFFER 0
+        where (mx,my) = texture1DArraySizes t !! l
 writeTexture2DFromBuffer t@(Texture2D texn _ ml) l ((x,y),(w,h)) b i | l < 0 || l >= ml = error "writeTexture2DFromBuffer, level out of bounds"
                                                                      | x < 0 || x >= mx = error "writeTexture2DFromBuffer, x out of bounds"
                                                                      | w < 0 || x+w > mx = error "writeTexture2DFromBuffer, w out of bounds"
                                                                      | y < 0 || y >= my = error "writeTexture2DFromBuffer, y out of bounds"
-                                                                     | h < 0 || y+h >= my = error "writeTexture2DFromBuffer, h out of bounds"
+                                                                     | h < 0 || y+h > my = error "writeTexture2DFromBuffer, h out of bounds"
                                                                      | i < 0 || i > bufElementCount b = error "writeTexture2DFromBuffer, i out of bounds"
                                                                      | bufElementCount b - i < w*h = error "writeTexture2DFromBuffer, buffer data too small"
                                                                      | otherwise = liftContextIOAsync $ do 
@@ -284,65 +385,261 @@ writeTexture2DFromBuffer t@(Texture2D texn _ ml) l ((x,y),(w,h)) b i | l < 0 || 
                                                                             glTexSubImage2D gl_TEXTURE_2D (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)        
                                                                             glBindBuffer gl_PIXEL_UNPACK_BUFFER 0
         where (mx,my) = texture2DSizes t !! l                                                                                
-writeTexture2DArrayFromBuffer = undefined
-writeTexture3DFromBuffer = undefined
-writeTextureCubeFromBuffer = undefined
+writeTexture2DArrayFromBuffer t@(Texture2DArray texn _ ml) l ((x,y,z),(w,h,d)) b i | l < 0 || l >= ml = error "writeTexture2DArrayFromBuffer, level out of bounds"
+                                                                                   | x < 0 || x >= mx = error "writeTexture2DArrayFromBuffer, x out of bounds"
+                                                                                   | w < 0 || x+w > mx = error "writeTexture2DArrayFromBuffer, w out of bounds"
+                                                                                   | y < 0 || y >= my = error "writeTexture2DArrayFromBuffer, y out of bounds"
+                                                                                   | h < 0 || y+h > my = error "writeTexture2DArrayFromBuffer, h out of bounds"
+                                                                                   | z < 0 || z >= mz = error "writeTexture2DArrayFromBuffer, z out of bounds"
+                                                                                   | d < 0 || z+d > mz = error "writeTexture2DArrayFromBuffer, d out of bounds"
+                                                                                   | i < 0 || i > bufElementCount b = error "writeTexture2DArrayFromBuffer, i out of bounds"
+                                                                                   | bufElementCount b - i < w*h = error "writeTexture2DArrayFromBuffer, buffer data too small"
+                                                                                   | otherwise = liftContextIOAsync $ do 
+                                                                                        useTexSync texn gl_TEXTURE_2D_ARRAY
+                                                                                        bname <- readIORef $ bufName b
+                                                                                        glBindBuffer gl_PIXEL_UNPACK_BUFFER bname
+                                                                                        glTexSubImage3D gl_TEXTURE_2D_ARRAY (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral z) (fromIntegral w) (fromIntegral h) (fromIntegral d) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)        
+                                                                                        glBindBuffer gl_PIXEL_UNPACK_BUFFER 0
+        where (mx,my,mz) = texture2DArraySizes t !! l    
+writeTexture3DFromBuffer t@(Texture3D texn _ ml) l ((x,y,z),(w,h,d)) b i | l < 0 || l >= ml = error "writeTexture3DFromBuffer, level out of bounds"
+                                                                                   | x < 0 || x >= mx = error "writeTexture3DFromBuffer, x out of bounds"
+                                                                                   | w < 0 || x+w > mx = error "writeTexture3DFromBuffer, w out of bounds"
+                                                                                   | y < 0 || y >= my = error "writeTexture3DFromBuffer, y out of bounds"
+                                                                                   | h < 0 || y+h > my = error "writeTexture3DFromBuffer, h out of bounds"
+                                                                                   | z < 0 || z >= mz = error "writeTexture3DFromBuffer, z out of bounds"
+                                                                                   | d < 0 || z+d > mz = error "writeTexture3DFromBuffer, d out of bounds"
+                                                                                   | i < 0 || i > bufElementCount b = error "writeTexture3DFromBuffer, i out of bounds"
+                                                                                   | bufElementCount b - i < w*h = error "writeTexture3DFromBuffer, buffer data too small"
+                                                                                   | otherwise = liftContextIOAsync $ do 
+                                                                                        useTexSync texn gl_TEXTURE_3D
+                                                                                        bname <- readIORef $ bufName b
+                                                                                        glBindBuffer gl_PIXEL_UNPACK_BUFFER bname
+                                                                                        glTexSubImage3D gl_TEXTURE_3D (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral z) (fromIntegral w) (fromIntegral h) (fromIntegral d) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)        
+                                                                                        glBindBuffer gl_PIXEL_UNPACK_BUFFER 0
+        where (mx,my,mz) = texture3DSizes t !! l    
+writeTextureCubeFromBuffer t@(TextureCube texn _ ml) l s ((x,y),(w,h)) b i | l < 0 || l >= ml = error "writeTextureCubeFromBuffer, level out of bounds"
+                                                                           | x < 0 || x >= mxy = error "writeTextureCubeFromBuffer, x out of bounds"
+                                                                           | w < 0 || x+w > mxy = error "writeTextureCubeFromBuffer, w out of bounds"
+                                                                           | y < 0 || y >= mxy = error "writeTextureCubeFromBuffer, y out of bounds"
+                                                                           | h < 0 || y+h > mxy = error "writeTextureCubeFromBuffer, h out of bounds"
+                                                                           | i < 0 || i > bufElementCount b = error "writeTextureCubeFromBuffer, i out of bounds"
+                                                                           | bufElementCount b - i < w*h = error "writeTextureCubeFromBuffer, buffer data too small"
+                                                                           | otherwise = liftContextIOAsync $ do 
+                                                                                useTexSync texn gl_TEXTURE_CUBE_MAP
+                                                                                bname <- readIORef $ bufName b
+                                                                                glBindBuffer gl_PIXEL_UNPACK_BUFFER bname
+                                                                                glTexSubImage2D (getGlCubeSide s) (fromIntegral l) (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)        
+                                                                                glBindBuffer gl_PIXEL_UNPACK_BUFFER 0
+        where mxy = textureCubeSizes t !! l           
 
+        
+readTexture1D t@(Texture1D texn _ ml) l (x,w) f s _ | l < 0 || l >= ml = error "readTexture1DArray, level out of bounds"
+                                                    | x < 0 || x >= mx = error "readTexture1DArray, x out of bounds"
+                                                    | w < 0 || x+w > mx = error "readTexture1DArray, w out of bounds"
+                                                    | otherwise =  
+                                                                     let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                         f' ptr a off = f a =<< liftIO (peekPixel (undefined :: b) (ptr `plusPtr` off))
+                                                                     in bracket
+                                                                       (liftContextIO $ do
+                                                                         ptr <- mallocBytes $ w*bufElementSize b 
+                                                                         setGlPixelStoreRange x 0 0 w 1
+                                                                         useTexSync texn gl_TEXTURE_1D_ARRAY
+                                                                         glGetTexImage gl_TEXTURE_1D_ARRAY (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+                                                                         return ptr)
+                                                                       (liftIO . free)
+                                                                       (\ptr -> foldM (f' ptr) s [0,bufElementSize b..w*bufElementSize b -1])
+        where mx = texture1DSizes t !! l                                             
 
-readTexture1D = undefined
-readTexture1DArray = undefined
+readTexture1DArray t@(Texture1DArray texn _ ml) l ((x,y),w) f s _ | l < 0 || l >= ml = error "readTexture1DArray, level out of bounds"
+                                                                  | x < 0 || x >= mx = error "readTexture1DArray, x out of bounds"
+                                                                  | w < 0 || x+w > mx = error "readTexture1DArray, w out of bounds"
+                                                                  | y < 0 || y >= my = error "readTexture1DArray, y out of bounds"
+                                                                  | otherwise =  
+                                                                         let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                             f' ptr a off = f a =<< liftIO (peekPixel (undefined :: b) (ptr `plusPtr` off))
+                                                                         in bracket
+                                                                           (liftContextIO $ do
+                                                                             ptr <- mallocBytes $ w*bufElementSize b 
+                                                                             setGlPixelStoreRange x y 0 w 1
+                                                                             useTexSync texn gl_TEXTURE_1D_ARRAY
+                                                                             glGetTexImage gl_TEXTURE_1D_ARRAY (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+                                                                             return ptr)
+                                                                           (liftIO . free)
+                                                                           (\ptr -> foldM (f' ptr) s [0,bufElementSize b..w*bufElementSize b -1])
+        where (mx,my) = texture1DArraySizes t !! l                                             
 readTexture2D t@(Texture2D texn _ ml) l ((x,y),(w,h)) f s _ | l < 0 || l >= ml = error "readTexture2D, level out of bounds"
                                                             | x < 0 || x >= mx = error "readTexture2D, x out of bounds"
                                                             | w < 0 || x+w > mx = error "readTexture2D, w out of bounds"
                                                             | y < 0 || y >= my = error "readTexture2D, y out of bounds"
-                                                            | h < 0 || y+h >= my = error "readTexture2D, h out of bounds"
+                                                            | h < 0 || y+h > my = error "readTexture2D, h out of bounds"
                                                             | otherwise =  
                                                                          let b = makeBuffer undefined undefined 0 :: Buffer os b
                                                                              f' ptr a off = f a =<< liftIO (peekPixel (undefined :: b) (ptr `plusPtr` off))
                                                                          in bracket
                                                                            (liftContextIO $ do
                                                                              ptr <- mallocBytes $ w*h*bufElementSize b 
-                                                                             glPixelStorei gl_PACK_SKIP_PIXELS $ fromIntegral x
-                                                                             glPixelStorei gl_PACK_SKIP_ROWS $ fromIntegral y
-                                                                             glPixelStorei gl_PACK_SKIP_IMAGES 0
-                                                                             glPixelStorei gl_PACK_ROW_LENGTH $ fromIntegral w
-                                                                             glPixelStorei gl_PACK_IMAGE_HEIGHT $ fromIntegral h
+                                                                             setGlPixelStoreRange x y 0 w h
                                                                              useTexSync texn gl_TEXTURE_2D
                                                                              glGetTexImage gl_TEXTURE_2D (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
                                                                              return ptr)
                                                                            (liftIO . free)
                                                                            (\ptr -> foldM (f' ptr) s [0,bufElementSize b..w*h*bufElementSize b -1])
         where (mx,my) = texture2DSizes t !! l                                                                                
-readTexture2DArray = undefined
-readTexture3D = undefined
-readTextureCube = undefined
+readTexture2DArray t@(Texture2DArray texn _ ml) l ((x,y,z),(w,h)) f s _ | l < 0 || l >= ml = error "readTexture2DArray, level out of bounds"
+                                                                        | x < 0 || x >= mx = error "readTexture2DArray, x out of bounds"
+                                                                        | w < 0 || x+w > mx = error "readTexture2DArray, w out of bounds"
+                                                                        | y < 0 || y >= my = error "readTexture2DArray, y out of bounds"
+                                                                        | h < 0 || y+h > my = error "readTexture2DArray, h out of bounds"
+                                                                        | z < 0 || z >= mz = error "readTexture2DArray, y out of bounds"
+                                                                        | otherwise =  
+                                                                             let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                                 f' ptr a off = f a =<< liftIO (peekPixel (undefined :: b) (ptr `plusPtr` off))
+                                                                             in bracket
+                                                                               (liftContextIO $ do
+                                                                                 ptr <- mallocBytes $ w*h*bufElementSize b 
+                                                                                 setGlPixelStoreRange x y z w h
+                                                                                 useTexSync texn gl_TEXTURE_2D_ARRAY
+                                                                                 glGetTexImage gl_TEXTURE_2D_ARRAY (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+                                                                                 return ptr)
+                                                                               (liftIO . free)
+                                                                               (\ptr -> foldM (f' ptr) s [0,bufElementSize b..w*h*bufElementSize b -1])
+        where (mx,my,mz) = texture2DArraySizes t !! l   
+readTexture3D t@(Texture3D texn _ ml) l ((x,y,z),(w,h)) f s _ | l < 0 || l >= ml = error "readTexture3D, level out of bounds"
+                                                                        | x < 0 || x >= mx = error "readTexture3D, x out of bounds"
+                                                                        | w < 0 || x+w > mx = error "readTexture3D, w out of bounds"
+                                                                        | y < 0 || y >= my = error "readTexture3D, y out of bounds"
+                                                                        | h < 0 || y+h > my = error "readTexture3D, h out of bounds"
+                                                                        | z < 0 || z >= mz = error "readTexture3D, y out of bounds"
+                                                                        | otherwise =  
+                                                                             let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                                 f' ptr a off = f a =<< liftIO (peekPixel (undefined :: b) (ptr `plusPtr` off))
+                                                                             in bracket
+                                                                               (liftContextIO $ do
+                                                                                 ptr <- mallocBytes $ w*h*bufElementSize b 
+                                                                                 setGlPixelStoreRange x y z w h
+                                                                                 useTexSync texn gl_TEXTURE_3D
+                                                                                 glGetTexImage gl_TEXTURE_3D (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+                                                                                 return ptr)
+                                                                               (liftIO . free)
+                                                                               (\ptr -> foldM (f' ptr) s [0,bufElementSize b..w*h*bufElementSize b -1])
+        where (mx,my,mz) = texture3DSizes t !! l
+readTextureCube t@(TextureCube texn _ ml) l si ((x,y),(w,h)) f s _ | l < 0 || l >= ml = error "readTextureCube, level out of bounds"
+                                                                   | x < 0 || x >= mxy = error "readTextureCube, x out of bounds"
+                                                                   | w < 0 || x+w > mxy = error "readTextureCube, w out of bounds"
+                                                                   | y < 0 || y >= mxy = error "readTextureCube, y out of bounds"
+                                                                   | h < 0 || y+h > mxy = error "readTextureCube, h out of bounds"
+                                                                   | otherwise =  
+                                                                         let b = makeBuffer undefined undefined 0 :: Buffer os b
+                                                                             f' ptr a off = f a =<< liftIO (peekPixel (undefined :: b) (ptr `plusPtr` off))
+                                                                         in bracket
+                                                                           (liftContextIO $ do
+                                                                             ptr <- mallocBytes $ w*h*bufElementSize b 
+                                                                             setGlPixelStoreRange x y 0 w h
+                                                                             useTexSync texn gl_TEXTURE_CUBE_MAP
+                                                                             glGetTexImage (getGlCubeSide si) (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) ptr
+                                                                             return ptr)
+                                                                           (liftIO . free)
+                                                                           (\ptr -> foldM (f' ptr) s [0,bufElementSize b..w*h*bufElementSize b -1])
+        where mxy = textureCubeSizes t !! l
 
-readTexture1DToBuffer = undefined
-readTexture1DArrayToBuffer = undefined
-readTexture2DToBuffer t@(Texture2D texn _ ml) l ((x,y),(w,h)) b i | l < 0 || l >= ml = error "readTexture2D, level out of bounds"
-                                                                  | x < 0 || x >= mx = error "readTexture2D, x out of bounds"
-                                                                  | w < 0 || x+w > mx = error "readTexture2D, w out of bounds"
-                                                                  | y < 0 || y >= my = error "readTexture2D, y out of bounds"
-                                                                  | h < 0 || y+h >= my = error "readTexture2D, h out of bounds"
-                                                                  | i < 0 || i > bufElementCount b = error "writeTexture2DFromBuffer, i out of bounds"
-                                                                  | bufElementCount b - i < w*h = error "writeTexture2DFromBuffer, buffer data too small"
+readTexture1DToBuffer t@(Texture1D texn _ ml) l (x,w) b i | l < 0 || l >= ml = error "readTexture1DToBuffer, level out of bounds"
+                                                          | x < 0 || x >= mx = error "readTexture1DToBuffer, x out of bounds"
+                                                          | w < 0 || x+w > mx = error "readTexture1DToBuffer, w out of bounds"
+                                                          | i < 0 || i > bufElementCount b = error "readTexture1DToBuffer, i out of bounds"
+                                                          | bufElementCount b - i < w = error "readTexture1DToBuffer, buffer data too small"
+                                                          | otherwise = liftContextIOAsync $ do
+                                                                             bname <- readIORef $ bufName b
+                                                                             glBindBuffer gl_PIXEL_PACK_BUFFER bname
+                                                                             setGlPixelStoreRange x 0 0 w 1
+                                                                             useTexSync texn gl_TEXTURE_1D
+                                                                             glGetTexImage gl_TEXTURE_1D (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)
+                                                                             glBindBuffer gl_PIXEL_PACK_BUFFER 0
+        where mx = texture1DSizes t !! l
+readTexture1DArrayToBuffer t@(Texture1DArray texn _ ml) l ((x,y),w) b i | l < 0 || l >= ml = error "readTexture1DArrayToBuffer, level out of bounds"
+                                                                        | x < 0 || x >= mx = error "readTexture1DArrayToBuffer, x out of bounds"
+                                                                        | w < 0 || x+w > mx = error "readTexture1DArrayToBuffer, w out of bounds"
+                                                                        | y < 0 || y >= my = error "readTexture1DArrayToBuffer, y out of bounds"
+                                                                        | i < 0 || i > bufElementCount b = error "readTexture1DArrayToBuffer, i out of bounds"
+                                                                        | bufElementCount b - i < w = error "readTexture1DArrayToBuffer, buffer data too small"
+                                                                        | otherwise = liftContextIOAsync $ do
+                                                                             bname <- readIORef $ bufName b
+                                                                             glBindBuffer gl_PIXEL_PACK_BUFFER bname
+                                                                             setGlPixelStoreRange x y 0 w 1
+                                                                             useTexSync texn gl_TEXTURE_1D_ARRAY
+                                                                             glGetTexImage gl_TEXTURE_1D_ARRAY (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)
+                                                                             glBindBuffer gl_PIXEL_PACK_BUFFER 0
+        where (mx,my) = texture1DArraySizes t !! l
+readTexture2DToBuffer t@(Texture2D texn _ ml) l ((x,y),(w,h)) b i | l < 0 || l >= ml = error "readTexture2DToBuffer, level out of bounds"
+                                                                  | x < 0 || x >= mx = error "readTexture2DToBuffer, x out of bounds"
+                                                                  | w < 0 || x+w > mx = error "readTexture2DToBuffer, w out of bounds"
+                                                                  | y < 0 || y >= my = error "readTexture2DToBuffer, y out of bounds"
+                                                                  | h < 0 || y+h > my = error "readTexture2DToBuffer, h out of bounds"
+                                                                  | i < 0 || i > bufElementCount b = error "readTexture2DToBuffer, i out of bounds"
+                                                                  | bufElementCount b - i < w*h = error "readTexture2DToBuffer, buffer data too small"
                                                                   | otherwise = liftContextIOAsync $ do
                                                                              bname <- readIORef $ bufName b
                                                                              glBindBuffer gl_PIXEL_PACK_BUFFER bname
-                                                                             glPixelStorei gl_PACK_SKIP_PIXELS $ fromIntegral x
-                                                                             glPixelStorei gl_PACK_SKIP_ROWS $ fromIntegral y
-                                                                             glPixelStorei gl_PACK_SKIP_IMAGES 0
-                                                                             glPixelStorei gl_PACK_ROW_LENGTH $ fromIntegral w
-                                                                             glPixelStorei gl_PACK_IMAGE_HEIGHT $ fromIntegral h
+                                                                             setGlPixelStoreRange x y 0 w h
                                                                              useTexSync texn gl_TEXTURE_2D
                                                                              glGetTexImage gl_TEXTURE_2D (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)
                                                                              glBindBuffer gl_PIXEL_PACK_BUFFER 0
         where (mx,my) = texture2DSizes t !! l                                                                                
- 
-readTexture2DArrayToBuffer = undefined
-readTexture3DToBuffer = undefined
-readTextureCubeToBuffer = undefined
+readTexture2DArrayToBuffer t@(Texture2DArray texn _ ml) l ((x,y,z),(w,h)) b i | l < 0 || l >= ml = error "readTexture2DArrayToBuffer, level out of bounds"
+                                                                              | x < 0 || x >= mx = error "readTexture2DArrayToBuffer, x out of bounds"
+                                                                              | w < 0 || x+w > mx = error "readTexture2DArrayToBuffer, w out of bounds"
+                                                                              | y < 0 || y >= my = error "readTexture2DArrayToBuffer, y out of bounds"
+                                                                              | h < 0 || y+h > my = error "readTexture2DArrayToBuffer, h out of bounds"
+                                                                              | z < 0 || z >= mz = error "readTexture2DArrayToBuffer, z out of bounds"
+                                                                              | i < 0 || i > bufElementCount b = error "readTexture2DArrayToBuffer, i out of bounds"
+                                                                              | bufElementCount b - i < w*h = error "readTexture2DArrayToBuffer, buffer data too small"
+                                                                              | otherwise = liftContextIOAsync $ do
+                                                                                     bname <- readIORef $ bufName b
+                                                                                     glBindBuffer gl_PIXEL_PACK_BUFFER bname
+                                                                                     setGlPixelStoreRange x y z w h
+                                                                                     useTexSync texn gl_TEXTURE_2D_ARRAY
+                                                                                     glGetTexImage gl_TEXTURE_2D_ARRAY (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)
+                                                                                     glBindBuffer gl_PIXEL_PACK_BUFFER 0
+        where (mx,my,mz) = texture2DArraySizes t !! l
+readTexture3DToBuffer t@(Texture3D texn _ ml) l ((x,y,z),(w,h)) b i | l < 0 || l >= ml = error "readTexture3DToBuffer, level out of bounds"
+                                                                    | x < 0 || x >= mx = error "readTexture3DToBuffer, x out of bounds"
+                                                                    | w < 0 || x+w > mx = error "readTexture3DToBuffer, w out of bounds"
+                                                                    | y < 0 || y >= my = error "readTexture3DToBuffer, y out of bounds"
+                                                                    | h < 0 || y+h > my = error "readTexture3DToBuffer, h out of bounds"
+                                                                    | z < 0 || z >= mz = error "readTexture3DToBuffer, z out of bounds"
+                                                                    | i < 0 || i > bufElementCount b = error "readTexture3DToBuffer, i out of bounds"
+                                                                    | bufElementCount b - i < w*h = error "readTexture3DToBuffer, buffer data too small"
+                                                                    | otherwise = liftContextIOAsync $ do
+                                                                         bname <- readIORef $ bufName b
+                                                                         glBindBuffer gl_PIXEL_PACK_BUFFER bname
+                                                                         setGlPixelStoreRange x y z w h
+                                                                         useTexSync texn gl_TEXTURE_3D
+                                                                         glGetTexImage gl_TEXTURE_3D (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)
+                                                                         glBindBuffer gl_PIXEL_PACK_BUFFER 0
+        where (mx,my,mz) = texture3DSizes t !! l
+readTextureCubeToBuffer t@(TextureCube texn _ ml) l s ((x,y),(w,h)) b i | l < 0 || l >= ml = error "readTextureCubeToBuffer, level out of bounds"
+                                                                        | x < 0 || x >= mxy = error "readTextureCubeToBuffer, x out of bounds"
+                                                                        | w < 0 || x+w > mxy = error "readTextureCubeToBuffer, w out of bounds"
+                                                                        | y < 0 || y >= mxy = error "readTextureCubeToBuffer, y out of bounds"
+                                                                        | h < 0 || y+h > mxy = error "readTextureCubeToBuffer, h out of bounds"
+                                                                        | i < 0 || i > bufElementCount b = error "readTextureCubeToBuffer, i out of bounds"
+                                                                        | bufElementCount b - i < w*h = error "readTextureCubeToBuffer, buffer data too small"
+                                                                        | otherwise = liftContextIOAsync $ do
+                                                                             setGlPixelStoreRange x y 0 w h
+                                                                             bname <- readIORef $ bufName b
+                                                                             glBindBuffer gl_PIXEL_PACK_BUFFER bname
+                                                                             useTexSync texn gl_TEXTURE_CUBE_MAP
+                                                                             glGetTexImage (getGlCubeSide s) (fromIntegral l) (getGlPaddedFormat (undefined :: b)) (getGlType (undefined :: b)) (wordPtrToPtr $ fromIntegral $ i*bufElementSize b)
+                                                                             glBindBuffer gl_PIXEL_PACK_BUFFER 0
+        where mxy = textureCubeSizes t !! l                                                                                
 
+setGlPixelStoreRange :: Int -> Int -> Int -> Int -> Int -> IO ()
+setGlPixelStoreRange x y z w h = do
+        glPixelStorei gl_PACK_SKIP_PIXELS $ fromIntegral x
+        glPixelStorei gl_PACK_SKIP_ROWS $ fromIntegral y
+        glPixelStorei gl_PACK_SKIP_IMAGES $ fromIntegral z
+        glPixelStorei gl_PACK_ROW_LENGTH $ fromIntegral w
+        glPixelStorei gl_PACK_IMAGE_HEIGHT $ fromIntegral h
+       
 ----------------------------------------------------------------------
 -- Samplers
 
@@ -772,9 +1069,9 @@ imageSize :: Image f -> (Int, Int)
 imageSize (Image _ _ _ s _) = s
 
 getTexture1DImage :: Texture1D os f -> Level -> Render os f' (Image f) 
-getTexture1DArrayImage :: Texture1DArray os f -> Level -> Slice -> Render os f' (Image f) 
+getTexture1DArrayImage :: Texture1DArray os f -> Level -> Int -> Render os f' (Image f) 
 getTexture2DImage :: Texture2D os f -> Level -> Render os f' (Image f) 
-getTexture2DArrayImage :: Texture2DArray os f -> Level -> Slice -> Render os f' (Image f) 
+getTexture2DArrayImage :: Texture2DArray os f -> Level -> Int -> Render os f' (Image f) 
 getTexture3DImage :: Texture3D os f -> Level -> Int -> Render os f' (Image f) 
 getTextureCubeImage :: TextureCube os f -> Level -> CubeSide -> Render os f' (Image f) 
 

@@ -53,7 +53,7 @@ module Graphics.GPipe.Texture (
     
     Proxy(..),
 
-    MaxLevels, Level, Slice,
+    MaxLevels, Level,
     Size1, Size2, Size3,
     StartPos1, StartPos2, StartPos3, 
     BufferStartPos,    

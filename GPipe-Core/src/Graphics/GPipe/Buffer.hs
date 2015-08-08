@@ -5,6 +5,7 @@ module Graphics.GPipe.Buffer (
     Buffer(),
     ToBuffer(),
     B(), B2(), B3(), B4(), BPacked(),
+    toB22, toB21, toB12, toB11,
     Normalized(..), 
     newBuffer,
     writeBuffer,

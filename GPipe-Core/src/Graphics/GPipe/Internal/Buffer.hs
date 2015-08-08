@@ -8,6 +8,7 @@ module Graphics.GPipe.Internal.Buffer
     Buffer(),
     ToBuffer(),
     B(..), B2(..), B3(..), B4(..),
+    toB22, toB21, toB12, toB11,
     Uniform(..), Normalized(..), BPacked(),
     BInput(..),
     newBuffer,
@@ -102,6 +103,17 @@ data B a = B { bName :: IORef CUInt, bOffset :: Int, bStride :: Int, bSkipElems 
 newtype B2 a = B2 { unB2 :: B a } -- Internal
 newtype B3 a = B3 { unB3 :: B a } -- Internal
 newtype B4 a = B4 { unB4 :: B a } -- Internal
+
+toB22 :: forall a. (Storable a, BufferFormat (B2 a)) => B4 a -> (B2 a, B2 a)
+toB21 :: forall a. (Storable a, BufferFormat (B a)) => B3 a -> (B2 a, B a)
+toB12 :: forall a. (Storable a, BufferFormat (B a)) => B3 a -> (B a, B2 a)
+toB11 :: forall a. (Storable a, BufferFormat (B a)) => B2 a -> (B a, B a)
+
+toB22 (B4 b) = (B2 b, B2 $ b { bOffset = bOffset b + 2 * sizeOf (undefined :: a) }) 
+toB21 (B3 b) = (B2 b, b { bOffset = bOffset b + 2*sizeOf (undefined :: a) }) 
+toB12 (B3 b) = (b, B2 $ b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
+toB11 (B2 b) = (b, b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
+
 
 newtype Uniform a = Uniform a
 newtype Normalized a = Normalized a

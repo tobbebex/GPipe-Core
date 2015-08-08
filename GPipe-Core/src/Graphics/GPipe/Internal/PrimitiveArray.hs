@@ -9,6 +9,8 @@ import Data.IORef
 
 import Data.Word
 
+import           Graphics.Rendering.OpenGL.Raw.Core33
+
 data VertexArray t a = VertexArray  { vertexArrayLength :: Int, bArrBFunc:: BInput -> a }
 
 data Instances
@@ -55,24 +57,26 @@ class PrimitiveTopology p where
     --data Geometry p :: * -> *
     --makeGeometry :: [a] -> Geometry p a  
    
-data Triangles = TriangleStrip | TriangleList
-data Lines = LineStrip | LineList
+data Triangles = TriangleList | TriangleStrip | TriangleFan
+data Lines = LineList | LineStrip | LineLoop
 data Points = PointList
 --data TrianglesWithAdjacency = TriangleStripWithAdjacency
 --data LinesWithAdjacency = LinesWithAdjacencyList | LinesWithAdjacencyStrip   
 
 instance PrimitiveTopology Triangles where
-    toGLtopology TriangleStrip = 0
-    toGLtopology TriangleList = 1
+    toGLtopology TriangleList = gl_TRIANGLES
+    toGLtopology TriangleStrip = gl_TRIANGLE_STRIP
+    toGLtopology TriangleFan = gl_TRIANGLE_FAN
     --data Geometry Triangles a = Triangle a a a
    
 instance PrimitiveTopology Lines where
-    toGLtopology LineStrip = 0
-    toGLtopology LineList = 1
+    toGLtopology LineList = gl_LINES
+    toGLtopology LineStrip = gl_LINE_STRIP
+    toGLtopology LineLoop = gl_LINE_LOOP
     --data Geometry Lines a = Line a a
 
 instance PrimitiveTopology Points where
-    toGLtopology PointList = 0
+    toGLtopology PointList = gl_POINTS
     --data Geometry Points a = Point a
 
 {-

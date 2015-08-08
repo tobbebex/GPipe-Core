@@ -87,6 +87,10 @@ unFlat (Flat s) = s
 unNPersp :: NoPerspective t -> t
 unNPersp (NoPerspective s) = s
 
+instance FragmentInput () where
+    type FragmentFormat () = ()
+    toFragment = arr (const ())
+
 instance FragmentInput VFloat where
         type FragmentFormat VFloat = FFloat
         toFragment = makeFragment "" STypeFloat unS
@@ -114,22 +118,22 @@ instance FragmentInput VBool where
         
 instance (FragmentInput a, FragmentInput b) => FragmentInput (a,b) where
     type FragmentFormat (a,b) = (FragmentFormat a, FragmentFormat b)
-    toFragment = proc (a,b) -> do a' <- toFragment -< a
-                                  b' <- toFragment -< b
-                                  returnA -< (a', b')
+    toFragment = proc ~(a,b) -> do a' <- toFragment -< a
+                                   b' <- toFragment -< b
+                                   returnA -< (a', b')
 
 instance (FragmentInput a, FragmentInput b, FragmentInput c) => FragmentInput (a,b,c) where
     type FragmentFormat (a,b,c) = (FragmentFormat a, FragmentFormat b, FragmentFormat c)
-    toFragment = proc (a,b,c) -> do a' <- toFragment -< a
-                                    b' <- toFragment -< b
-                                    c' <- toFragment -< c
-                                    returnA -< (a', b', c')
+    toFragment = proc ~(a,b,c) -> do a' <- toFragment -< a
+                                     b' <- toFragment -< b
+                                     c' <- toFragment -< c
+                                     returnA -< (a', b', c')
 
 instance (FragmentInput a, FragmentInput b, FragmentInput c, FragmentInput d) => FragmentInput (a,b,c,d) where
     type FragmentFormat (a,b,c,d) = (FragmentFormat a, FragmentFormat b, FragmentFormat c, FragmentFormat d)
-    toFragment = proc (a,b,c,d) -> do a' <- toFragment -< a
-                                      b' <- toFragment -< b
-                                      c' <- toFragment -< c
-                                      d' <- toFragment -< d
-                                      returnA -< (a', b', c', d')
+    toFragment = proc ~(a,b,c,d) -> do a' <- toFragment -< a
+                                       b' <- toFragment -< b
+                                       c' <- toFragment -< c
+                                       d' <- toFragment -< d
+                                       returnA -< (a', b', c', d')
 

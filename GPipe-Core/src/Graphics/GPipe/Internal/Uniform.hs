@@ -115,21 +115,21 @@ instance UniformInput (B4 Word32) where
 
 instance (UniformInput a, UniformInput b) => UniformInput (a,b) where
     type UniformFormat (a,b) x = (UniformFormat a x, UniformFormat b x)
-    toUniform = proc (a,b) -> do a' <- toUniform -< a
-                                 b' <- toUniform -< b
-                                 returnA -< (a', b')
+    toUniform = proc ~(a,b) -> do a' <- toUniform -< a
+                                  b' <- toUniform -< b
+                                  returnA -< (a', b')
 
 instance (UniformInput a, UniformInput b, UniformInput c) => UniformInput (a,b,c) where
     type UniformFormat (a,b,c) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x)
-    toUniform = proc (a,b,c) -> do a' <- toUniform -< a
-                                   b' <- toUniform -< b
-                                   c' <- toUniform -< c
-                                   returnA -< (a', b', c')
+    toUniform = proc ~(a,b,c) -> do a' <- toUniform -< a
+                                    b' <- toUniform -< b
+                                    c' <- toUniform -< c
+                                    returnA -< (a', b', c')
 
 instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d) => UniformInput (a,b,c,d)  where
     type UniformFormat (a,b,c,d) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x, UniformFormat d x)
-    toUniform = proc (a,b,c,d) -> do a' <- toUniform -< a
-                                     b' <- toUniform -< b
-                                     c' <- toUniform -< c
-                                     d' <- toUniform -< d
-                                     returnA -< (a', b', c', d')                                                   
+    toUniform = proc ~(a,b,c,d) -> do a' <- toUniform -< a
+                                      b' <- toUniform -< b
+                                      c' <- toUniform -< c
+                                      d' <- toUniform -< d
+                                      returnA -< (a', b', c', d')                                                   

@@ -139,13 +139,13 @@ toBufferB :: forall a. Storable a => ToBuffer a (B a)
 toBufferB = toBufferBUnaligned -- Will always be 4 aligned, only 4 size types defined for B1                                
                               
 toBufferB2 :: forall a. Storable a => ToBuffer (a,a) (B2 a)
-toBufferB2 = proc (a, b) -> do
+toBufferB2 = proc ~(a, b) -> do
         (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 2 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform
         a' <- toBufferBUnaligned  -< a
         toBufferBUnaligned -< b
         returnA -< B2 a' -- Will always be 4 aligned, only 4 size types defined for B2
 toBufferB3 :: forall a. Storable a => ToBuffer (a,a,a) (B3 a)
-toBufferB3 = proc (a, b, c) -> do
+toBufferB3 = proc ~(a, b, c) -> do
         (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 4 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform 
         a' <- toBufferBUnaligned -< a
         toBufferBUnaligned -< b
@@ -153,7 +153,7 @@ toBufferB3 = proc (a, b, c) -> do
         (if sizeOf (undefined :: a) < 4 then alignWhen [(Align4, 4), (AlignUniform, 4)] else id) -< () -- For types smaller than 4 we need to pad 
         returnA -< B3 a'
 toBufferB4 :: forall a. Storable a => ToBuffer (a,a,a,a) (B4 a)
-toBufferB4 = proc (a, b, c, d) -> do
+toBufferB4 = proc ~(a, b, c, d) -> do
         (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 4 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform 
         a' <- toBufferBUnaligned -< a
         toBufferBUnaligned -< b
@@ -189,18 +189,18 @@ instance BufferFormat a => BufferFormat (Normalized a) where
    
 instance (BufferFormat a, BufferFormat b) => BufferFormat (a, b) where
     type HostFormat (a,b) = (HostFormat a, HostFormat b)
-    toBuffer = proc (a, b) -> do
+    toBuffer = proc ~(a, b) -> do
                 a' <- toBuffer -< a
                 b' <- toBuffer -< b
                 returnA -< (a', b')
 instance (BufferFormat a, BufferFormat b, BufferFormat c) => BufferFormat (a, b, c) where
     type HostFormat (a,b,c) = (HostFormat a, HostFormat b, HostFormat c)
-    toBuffer = proc (a, b, c) -> do
+    toBuffer = proc ~(a, b, c) -> do
                 ((a', b'), c') <- toBuffer -< ((a, b), c)
                 returnA -< (a', b', c')
 instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => BufferFormat (a, b, c, d) where
     type HostFormat (a,b,c,d) = (HostFormat a, HostFormat b, HostFormat c, HostFormat d)
-    toBuffer = proc (a, b, c, d) -> do
+    toBuffer = proc ~(a, b, c, d) -> do
                 ((a', b', c'), d') <- toBuffer -< ((a, b, c), d)
                 returnA -< (a', b', c', d')
 
@@ -239,11 +239,6 @@ writeBuffer elems offset buffer =
                           end <- bufferWriteInternal buffer ptr (take maxElems elems)
                           glFlushMappedBufferRange gl_COPY_WRITE_BUFFER off (fromIntegral $ end `minusPtr` ptr) 
                           void $ glUnmapBuffer gl_COPY_WRITE_BUFFER 
-
-{-
-readBuffer :: MonadIO m => Int -> Int -> Buffer os f -> (HostFormat f -> a -> m a) -> a ->  ContextT os f2 m a
-readBuffer = undefined
--}
 
 copyBuffer :: MonadIO m => Int -> Int -> Buffer os b -> Int -> Buffer os b -> ContextT os f m ()
 copyBuffer len from bFrom to bTo = liftContextIOAsync $ do 

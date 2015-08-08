@@ -61,10 +61,11 @@ runExprM d m = do
                               sequence_ sampDecls
                               sequence_ inpDecls
                    source = mconcat [
+                                "#version 330\n",
                                 execWriter decls,
-                                "main() {\n",
+                                "void main() {\n",
                                 body,
-                                "}"]   
+                                "}\n"]   
                return (source, unis, samps, inps, sequence_ prevDecls, sequence_ prevSs)
 
 type GlobDeclM = Writer String

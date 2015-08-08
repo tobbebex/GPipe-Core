@@ -117,12 +117,12 @@ compile dcs s = do
                                         glDeleteShader fShader
                                         case mPErr of
                                             Just errP -> do glDeleteProgram pName 
-                                                            return $ Left errP
+                                                            return $ Left $ "Linking a GPU progam failed:\n" ++ errP ++ "\nVertex source:\n" ++ vsource ++ "\nFragment source:\n" ++ fsource
                                             Nothing -> return $ Right pName
                                 else do glDeleteShader vShader
                                         glDeleteShader fShader
-                                        let err = maybe "" (\e -> "A vertex shader compilation failed with the following error:\n" ++ e ++ "\n") mErrV
-                                              ++ maybe "" (\e -> "A fragment shader compilation failed with the following error:\n" ++ e ++ "\n") mErrF
+                                        let err = maybe "" (\e -> "A vertex shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ vsource) mErrV
+                                              ++ maybe "" (\e -> "A fragment shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ fsource) mErrF
                                         return $ Left err
                      case ePname of                   
                           Left err -> return $ Left err
@@ -180,8 +180,7 @@ compile dcs s = do
                                            )
 
     compileShader name source = do 
-        let header = "#version 330"
-        withCStringLen (header++source) $ \ (ptr, len) ->
+        withCStringLen source $ \ (ptr, len) ->
                                     with ptr $ \ pptr ->
                                         with (fromIntegral len) $ \ plen ->
                                             glShaderSource name 1 pptr plen

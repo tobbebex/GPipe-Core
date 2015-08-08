@@ -63,7 +63,7 @@ toPrimitiveStream sf = Shader $ do n <- getName
                                                               glPrimitiveRestartIndex (fromIntegral x)
                                                  Nothing -> glDisable gl_PRIMITIVE_RESTART
                                bname <- readIORef (iArrName i)
-                               glBindBuffer bname gl_ELEMENT_ARRAY_BUFFER
+                               glBindBuffer gl_ELEMENT_ARRAY_BUFFER bname 
 
         assignIxs :: Int -> Binding -> [Int] -> [Binding -> (IO VAOKey, IO ())] -> [(IO VAOKey, IO ())] 
         assignIxs n ix xxs@(x:xs) (f:fs) | x == n    = f ix : assignIxs (n+1) (ix+1) xs fs
@@ -93,7 +93,7 @@ makeVertexFx norm x f styp typ b = do
                                                  , do bn <- readIORef $ bName b
                                                       let ix' = fromIntegral ix
                                                       glEnableVertexAttribArray ix'
-                                                      glBindBuffer bn gl_ARRAY_BUFFER 
+                                                      glBindBuffer gl_ARRAY_BUFFER bn  
                                                       glVertexAttribDivisor ix' (fromIntegral $ bInstanceDiv b)
                                                       glVertexAttribPointer ix' x typ (fromBool norm) (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset))]
                              return (f styp $ useVInput styp n)
@@ -110,7 +110,7 @@ makeVertexI x f styp typ b = do
                                                  , do bn <- readIORef $ bName b
                                                       let ix' = fromIntegral ix
                                                       glEnableVertexAttribArray ix'
-                                                      glBindBuffer bn gl_ARRAY_BUFFER
+                                                      glBindBuffer gl_ARRAY_BUFFER bn
                                                       glVertexAttribDivisor ix' (fromIntegral $ bInstanceDiv b) 
                                                       glVertexAttribIPointer ix' x typ (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset))]
                              return (f styp $ useVInput styp n) 
@@ -141,135 +141,135 @@ instance VertexInput (B Word32) where
 
 instance VertexInput (B2 Float) where
     type VertexFormat (B2 Float) = (VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexF 2 vec2S STypeFloat gl_FLOAT . unB2
+    toVertex = ToVertex $ Kleisli $ makeVertexF 2 vec2S (STypeVec 2) gl_FLOAT . unB2
 instance VertexInput (Normalized (B2 Int32)) where
     type VertexFormat (Normalized (B2 Int32)) = (VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_INT . unB2 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S (STypeVec 2) gl_INT . unB2 . unBnorm
 instance VertexInput (Normalized (B2 Int16)) where
     type VertexFormat (Normalized (B2 Int16)) = (VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_SHORT . unB2 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S (STypeVec 2) gl_SHORT . unB2 . unBnorm
 instance VertexInput (Normalized (B2 Word32)) where
     type VertexFormat (Normalized (B2 Word32)) = (VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_UNSIGNED_INT . unB2 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S (STypeVec 2) gl_UNSIGNED_INT . unB2 . unBnorm
 instance VertexInput (Normalized (B2 Word16)) where
     type VertexFormat (Normalized (B2 Word16)) = (VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S STypeFloat gl_UNSIGNED_SHORT . unB2 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 2 vec2S (STypeVec 2) gl_UNSIGNED_SHORT . unB2 . unBnorm
 instance VertexInput  (B2 Int32) where
     type VertexFormat  (B2 Int32) = (VInt, VInt)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S STypeInt gl_INT . unB2
+    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S (STypeIVec 2) gl_INT . unB2
 instance VertexInput  (B2 Int16) where
     type VertexFormat  (B2 Int16) = (VInt, VInt)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S STypeInt gl_SHORT . unB2
+    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S (STypeIVec 2) gl_SHORT . unB2
 instance VertexInput  (B2 Word32) where
     type VertexFormat  (B2 Word32) = (VWord, VWord)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S STypeUInt gl_UNSIGNED_INT . unB2
+    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S (STypeUVec 2) gl_UNSIGNED_INT . unB2
 instance VertexInput  (B2 Word16) where
     type VertexFormat  (B2 Word16) = (VWord, VWord)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S STypeUInt gl_UNSIGNED_SHORT . unB2
+    toVertex = ToVertex $ Kleisli $ makeVertexI 2 vec2S (STypeUVec 2) gl_UNSIGNED_SHORT . unB2
 
 -- B3
 
 instance VertexInput (B3 Float) where
     type VertexFormat (B3 Float) = (VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexF 3 vec3S STypeFloat gl_FLOAT . unB3
+    toVertex = ToVertex $ Kleisli $ makeVertexF 3 vec3S (STypeVec 3) gl_FLOAT . unB3
 instance VertexInput (Normalized (B3 Int32)) where
     type VertexFormat (Normalized (B3 Int32)) = (VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat gl_INT . unB3 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S (STypeVec 3) gl_INT . unB3 . unBnorm
 instance VertexInput (Normalized (B3 Int16)) where
     type VertexFormat (Normalized (B3 Int16)) = (VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat gl_SHORT . unB3 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S (STypeVec 3) gl_SHORT . unB3 . unBnorm
 instance VertexInput (Normalized (B3 Int8)) where
     type VertexFormat (Normalized (B3 Int8)) = (VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat gl_BYTE . unB3 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S (STypeVec 3) gl_BYTE . unB3 . unBnorm
 instance VertexInput (Normalized (B3 Word32)) where
     type VertexFormat (Normalized (B3 Word32)) = (VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat gl_UNSIGNED_INT . unB3 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S (STypeVec 3) gl_UNSIGNED_INT . unB3 . unBnorm
 instance VertexInput (Normalized (B3 Word16)) where
     type VertexFormat (Normalized (B3 Word16)) = (VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat gl_UNSIGNED_SHORT . unB3 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S (STypeVec 3) gl_UNSIGNED_SHORT . unB3 . unBnorm
 instance VertexInput (Normalized (B3 Word8)) where
     type VertexFormat (Normalized (B3 Word8)) = (VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S STypeFloat gl_UNSIGNED_BYTE . unB3 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 3 vec3S (STypeVec 3) gl_UNSIGNED_BYTE . unB3 . unBnorm
 instance VertexInput  (B3 Int32) where
     type VertexFormat  (B3 Int32) = (VInt, VInt, VInt)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeInt gl_INT . unB3
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S (STypeIVec 3) gl_INT . unB3
 instance VertexInput  (B3 Int16) where
     type VertexFormat  (B3 Int16) = (VInt, VInt, VInt)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeInt gl_SHORT . unB3
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S (STypeIVec 3) gl_SHORT . unB3
 instance VertexInput  (B3 Int8) where
     type VertexFormat  (B3 Int8) = (VInt, VInt, VInt)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeInt gl_BYTE . unB3
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S (STypeIVec 3) gl_BYTE . unB3
 instance VertexInput  (B3 Word32) where
     type VertexFormat  (B3 Word32) = (VWord, VWord, VWord)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeUInt gl_UNSIGNED_INT . unB3
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S (STypeUVec 3) gl_UNSIGNED_INT . unB3
 instance VertexInput  (B3 Word16) where
     type VertexFormat  (B3 Word16) = (VWord, VWord, VWord)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeUInt gl_UNSIGNED_SHORT . unB3
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S (STypeUVec 3) gl_UNSIGNED_SHORT . unB3
 instance VertexInput  (B3 Word8) where
     type VertexFormat  (B3 Word8) = (VWord, VWord, VWord)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S STypeUInt gl_UNSIGNED_BYTE . unB3
+    toVertex = ToVertex $ Kleisli $ makeVertexI 3 vec3S (STypeUVec 3) gl_UNSIGNED_BYTE . unB3
 
 -- B4
 
 instance VertexInput (B4 Float) where
     type VertexFormat (B4 Float) = (VFloat, VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexF 4 vec4S STypeFloat gl_FLOAT . unB4
+    toVertex = ToVertex $ Kleisli $ makeVertexF 4 vec4S (STypeVec 4) gl_FLOAT . unB4
 instance VertexInput (Normalized (B4 Int32)) where
     type VertexFormat (Normalized (B4 Int32)) = (VFloat, VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat gl_INT . unB4 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S (STypeVec 4) gl_INT . unB4 . unBnorm
 instance VertexInput (Normalized (B4 Int16)) where
     type VertexFormat (Normalized (B4 Int16)) = (VFloat, VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat gl_SHORT . unB4 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S (STypeVec 4) gl_SHORT . unB4 . unBnorm
 instance VertexInput (Normalized (B4 Int8)) where
     type VertexFormat (Normalized (B4 Int8)) = (VFloat, VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat gl_BYTE . unB4 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S (STypeVec 4) gl_BYTE . unB4 . unBnorm
 instance VertexInput (Normalized (B4 Word32)) where
     type VertexFormat (Normalized (B4 Word32)) = (VFloat, VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat gl_UNSIGNED_INT . unB4 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S (STypeVec 4) gl_UNSIGNED_INT . unB4 . unBnorm
 instance VertexInput (Normalized (B4 Word16)) where
     type VertexFormat (Normalized (B4 Word16)) = (VFloat, VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat gl_UNSIGNED_SHORT . unB4 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S (STypeVec 4) gl_UNSIGNED_SHORT . unB4 . unBnorm
 instance VertexInput (Normalized (B4 Word8)) where
     type VertexFormat (Normalized (B4 Word8)) = (VFloat, VFloat, VFloat, VFloat)
-    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S STypeFloat gl_UNSIGNED_BYTE . unB4 . unBnorm
+    toVertex = ToVertex $ Kleisli $ makeVertexFnorm 4 vec4S (STypeVec 4) gl_UNSIGNED_BYTE . unB4 . unBnorm
 instance VertexInput  (B4 Int32) where
     type VertexFormat  (B4 Int32) = (VInt, VInt, VInt, VInt)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeInt gl_INT . unB4
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S (STypeIVec 4) gl_INT . unB4
 instance VertexInput  (B4 Int16) where
     type VertexFormat  (B4 Int16) = (VInt, VInt, VInt, VInt)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeInt gl_SHORT . unB4
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S (STypeIVec 4) gl_SHORT . unB4
 instance VertexInput  (B4 Int8) where
     type VertexFormat  (B4 Int8) = (VInt, VInt, VInt, VInt)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeInt gl_BYTE . unB4
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S (STypeIVec 4) gl_BYTE . unB4
 instance VertexInput  (B4 Word32) where
     type VertexFormat  (B4 Word32) = (VWord, VWord, VWord, VWord)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeUInt gl_UNSIGNED_INT . unB4
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S (STypeUVec 4) gl_UNSIGNED_INT . unB4
 instance VertexInput  (B4 Word16) where
     type VertexFormat  (B4 Word16) = (VWord, VWord, VWord, VWord)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeUInt gl_UNSIGNED_SHORT . unB4
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S (STypeUVec 4) gl_UNSIGNED_SHORT . unB4
 instance VertexInput  (B4 Word8) where
     type VertexFormat  (B4 Word8) = (VWord, VWord, VWord, VWord)
-    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S STypeUInt gl_UNSIGNED_BYTE . unB4
+    toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S (STypeUVec 4) gl_UNSIGNED_BYTE . unB4
 
                                              
 instance (VertexInput a, VertexInput b) => VertexInput (a,b) where
     type VertexFormat (a,b) = (VertexFormat a, VertexFormat b)
-    toVertex = proc (a,b) -> do a' <- toVertex -< a
-                                b' <- toVertex -< b
-                                returnA -< (a', b')
+    toVertex = proc ~(a,b) -> do a' <- toVertex -< a
+                                 b' <- toVertex -< b
+                                 returnA -< (a', b')
 
 instance (VertexInput a, VertexInput b, VertexInput c) => VertexInput (a,b,c) where
     type VertexFormat (a,b,c) = (VertexFormat a, VertexFormat b, VertexFormat c)
-    toVertex = proc (a,b,c) -> do a' <- toVertex -< a
-                                  b' <- toVertex -< b
-                                  c' <- toVertex -< c
-                                  returnA -< (a', b', c')
+    toVertex = proc ~(a,b,c) -> do a' <- toVertex -< a
+                                   b' <- toVertex -< b
+                                   c' <- toVertex -< c
+                                   returnA -< (a', b', c')
 
 instance (VertexInput a, VertexInput b, VertexInput c, VertexInput d) => VertexInput (a,b,c,d) where
     type VertexFormat (a,b,c,d) = (VertexFormat a, VertexFormat b, VertexFormat c, VertexFormat d)
-    toVertex = proc (a,b,c,d) -> do a' <- toVertex -< a
-                                    b' <- toVertex -< b
-                                    c' <- toVertex -< c
-                                    d' <- toVertex -< d
-                                    returnA -< (a', b', c', d')
+    toVertex = proc ~(a,b,c,d) -> do a' <- toVertex -< a
+                                     b' <- toVertex -< b
+                                     c' <- toVertex -< c
+                                     d' <- toVertex -< d
+                                     returnA -< (a', b', c', d')
 

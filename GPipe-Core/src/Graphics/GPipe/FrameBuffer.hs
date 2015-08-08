@@ -22,7 +22,16 @@ module Graphics.GPipe.FrameBuffer (
     getTexture2DImage, 
     getTexture2DArrayImage, 
     getTexture3DImage, 
-    getTextureCubeImage, 
+    getTextureCubeImage,
+    
+    clearColorImage,
+    clearDepthImage,
+    clearStencilImage,
+    clearDepthStencilImage,
+    clearContextColor,
+    clearContextDepth,
+    clearContextStencil, 
+    clearContextDepthStencil, 
         
     FragColor, 
     FragDepth,

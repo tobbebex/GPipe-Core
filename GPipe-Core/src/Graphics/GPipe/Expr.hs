@@ -1,16 +1,16 @@
 module Graphics.GPipe.Expr (
-    ShaderBase(),
-    ShaderType(..),
     S(),   
     V, F,
     VFloat, VInt, VWord, VBool,
     FFloat, FInt, FWord, FBool,
+
+    ShaderBase(),
+    ShaderType(..),
     
     ifThenElse,
     ifThenElse',
     ifThen,
     while,
-    Real'(..),
     dFdx,
     dFdy,
     fwidth,
@@ -23,7 +23,8 @@ module Graphics.GPipe.Expr (
     dot4,
     dot3,
     dot2,
-    cross    
+    cross,    
+    Real'(..)
 )
 where
 

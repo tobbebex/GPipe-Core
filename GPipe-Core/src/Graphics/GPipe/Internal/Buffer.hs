@@ -226,7 +226,7 @@ bufferWriteInternal b ptr (x:xs) = do bufWriter b ptr x
                                       bufferWriteInternal b (ptr `plusPtr` bufElementSize b) xs
 bufferWriteInternal _ ptr [] = return ptr
 
-writeBuffer :: MonadIO m => [HostFormat f] -> Int -> Buffer os f -> ContextT os f2 m ()
+writeBuffer :: MonadIO m => [HostFormat b] -> Int -> Buffer os b -> ContextT os f m ()
 writeBuffer elems offset buffer = 
     let maxElems = max 0 $ bufElementCount buffer - offset
         elemSize = bufElementSize buffer
@@ -245,7 +245,7 @@ readBuffer :: MonadIO m => Int -> Int -> Buffer os f -> (HostFormat f -> a -> m 
 readBuffer = undefined
 -}
 
-copyBuffer :: MonadIO m => Int -> Int -> Buffer os f -> Int -> Buffer os f -> ContextT os f2 m ()
+copyBuffer :: MonadIO m => Int -> Int -> Buffer os b -> Int -> Buffer os b -> ContextT os f m ()
 copyBuffer len from bFrom to bTo = liftContextIOAsync $ do 
                                                       bnamef <- readIORef $ bufName bFrom
                                                       bnamet <- readIORef $ bufName bTo

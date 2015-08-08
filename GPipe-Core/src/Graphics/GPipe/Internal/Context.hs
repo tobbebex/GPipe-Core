@@ -12,14 +12,16 @@ module Graphics.GPipe.Internal.Context
     liftContextIOAsync,
     addContextFinalizer,
     getContextFinalizerAdder,
-    swap,
-    frameBufferSize,
+    getRenderContextFinalizerAdder ,
+    swapContextBuffers,
     addVAOBufferFinalizer,
     addFBOTextureFinalizer,
     getContextData,
+    getRenderContextData,
     getVAO, setVAO,
     getFBO, setFBO,
-    VAOKey(..), FBOKey(..), FBOKeys(..)
+    VAOKey(..), FBOKey(..), FBOKeys(..),
+    Render(..), render, getContextBuffersSize
 )
 where
 
@@ -104,11 +106,23 @@ getContextFinalizerAdder = do h <- ContextT (asks fst)
 liftContextIOAsync :: MonadIO m => IO () -> ContextT os f m ()
 liftContextIOAsync m = ContextT (asks fst) >>= liftIO . flip contextDoAsync m
 
-swap :: MonadIO m => ContextT os f m ()
-swap = ContextT (asks fst) >>= (\c -> liftIO $ contextDoAsync c $ contextSwap c)
+swapContextBuffers :: MonadIO m => ContextT os f m ()
+swapContextBuffers = ContextT (asks fst) >>= (\c -> liftIO $ contextDoAsync c $ contextSwap c)
 
-frameBufferSize :: (MonadIO m) => ContextT os f m (Int, Int)
-frameBufferSize = ContextT (asks fst) >>= (\c -> liftIO $ contextDoSync c $ contextFrameBufferSize c)
+contextBuffersSize :: (MonadIO m) => ContextT os f m (Int, Int)
+contextBuffersSize = ContextT (asks fst) >>= (\c -> liftIO $ contextDoSync c $ contextFrameBufferSize c)
+
+newtype Render os f a = Render (ReaderT (ContextHandle, (ContextData, SharedContextDatas)) IO a) deriving (Monad, Applicative, Functor)
+
+render :: (MonadIO m, MonadException m) => Render os f () -> ContextT os f m ()
+render (Render m) = ContextT ask >>= (\c -> liftIO $ contextDoAsync (fst c) $ runReaderT m c)
+
+getContextBuffersSize :: Render os f (Int, Int)
+getContextBuffersSize = Render (asks fst >>= lift . contextFrameBufferSize)
+
+getRenderContextFinalizerAdder  :: Render os f (IORef a -> IO () -> IO ())
+getRenderContextFinalizerAdder = do h <- Render (asks fst)
+                                    return $ \k m -> void $ mkWeakIORef k (contextDoAsync h m)  
 
 data GPipeException = GPipeException String
      deriving (Show, Typeable)
@@ -170,6 +184,9 @@ addFBOTextureFinalizer isRB = addCacheFinalizer deleteVBOBuf
 
 getContextData :: MonadIO m => ContextT os f m ContextData
 getContextData = ContextT $ asks (fst . snd)
+
+getRenderContextData :: Render os f ContextData
+getRenderContextData = Render $ asks (fst . snd)
 
 getVAO :: ContextData -> [VAOKey] -> IO (Maybe (IORef CUInt))
 getVAO cd k = do (vaos, _) <- readMVar cd

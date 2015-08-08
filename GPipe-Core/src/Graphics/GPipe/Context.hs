@@ -1,12 +1,14 @@
 module Graphics.GPipe.Context (
-    ContextFactory,
-    ContextHandle(..),
     ContextT(),
-    GPipeException(..),
     runContextT,
     runSharedContextT,
-    swap,
-    frameBufferSize
+    Render(), 
+    render, 
+    getContextBuffersSize,    
+    swapContextBuffers,
+    GPipeException(..),
+    ContextFactory,
+    ContextHandle(..)
 )
 where
 

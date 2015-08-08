@@ -12,7 +12,6 @@ module Graphics.GPipe.Internal.Shader (
     tellDrawcall,
     askUniformAlignment,
     modifyRenderIO,
-    render,
     compileShader,
     mapShader,
     guard',
@@ -104,9 +103,5 @@ compileShader (Shader (ShaderM m)) = do
         xs <- mapM (\(_,(dcs, disc)) -> do 
                                 runF <- compile dcs s
                                 return (disc, runF)) adcs
-        return $ Render . f xs     
+        return $ Render . lift . f xs     
 
-newtype Render os f a = Render (IO a) deriving (Monad, Applicative, Functor)
-
-render :: (MonadIO m, MonadException m) => Render os f () -> ContextT os f m ()
-render (Render m) = liftContextIOAsync m

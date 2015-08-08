@@ -61,8 +61,6 @@ data BoundState = BoundState {
                         boundRasterizerN :: Int
                         }  
 
-data GPipeCompileException = GPipeCompileException String deriving (Typeable, Show)
-instance Exception GPipeCompileException 
 
 -- | May throw a GPipeCompileException 
 compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT os f m (s -> IO ())
@@ -161,10 +159,10 @@ compile dcs s = do
                                                                       void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
                                                                       setFBO cd fbokey fbo
                                                                       glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
-                                                                      let numColors = length $ fboColors fbokey
-                                                                      withArray [gl_COLOR_ATTACHMENT0..(gl_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $ glDrawBuffers (fromIntegral numColors)
                                                                       glEnable gl_FRAMEBUFFER_SRGB
                                                                       fboio
+                                                                      let numColors = length $ fboColors fbokey
+                                                                      withArray [gl_COLOR_ATTACHMENT0..(gl_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $ glDrawBuffers (fromIntegral numColors)
                                            -- Draw each Vertex Array --
                                            forM_ (map ($ inps) ((inputArrayToRenderIOs s ! primN) x)) $ \ ((keyio, vaoio), drawio) -> do
                                                 key <- keyio

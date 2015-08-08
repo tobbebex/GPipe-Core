@@ -1047,7 +1047,7 @@ offName _ = "Offset"
 
 ----------------------------------------------------------------------------------
 
-data Image f = Image TexName Int Int ((Int, Int)) (CUInt -> IO ()) -- the two Ints is last two in FBOKey
+data Image f = Image TexName Int Int (Int, Int) (CUInt -> IO ()) -- the two Ints is last two in FBOKey
 
 instance Eq (Image f) where
     (==) = imageEquals 

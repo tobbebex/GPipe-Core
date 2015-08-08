@@ -350,25 +350,39 @@ instance ColorSampleable DepthStencil where
 class ColorSampleable c => ColorRenderable c where
     isSrgb :: Format c -> Bool
     isSrgb _ = False
+    clearColor :: c -> Color c (ColorElement c) -> IO ()
+    clearColor = error "You cannot create your own instances of ColorRenderable"
 class ColorSampleable f => DepthRenderable f
 class TextureFormat f => StencilRenderable f
 
-instance ColorRenderable RFloat
-instance ColorRenderable RInt
-instance ColorRenderable RWord
-instance ColorRenderable RGFloat
-instance ColorRenderable RGInt
-instance ColorRenderable RGWord
+instance ColorRenderable RFloat where
+    clearColor _ r = withArray [realToFrac r, 0,0,0] (glClearBufferfv gl_COLOR 0)
+instance ColorRenderable RInt where
+    clearColor _ r = withArray [fromIntegral r, 0,0,0] (glClearBufferiv gl_COLOR 0)
+instance ColorRenderable RWord where
+    clearColor _ r = withArray [fromIntegral r, 0,0,0] (glClearBufferuiv gl_COLOR 0)
+instance ColorRenderable RGFloat where
+    clearColor _ (r, g) = withArray [realToFrac r, realToFrac g,0,0] (glClearBufferfv gl_COLOR 0)
+instance ColorRenderable RGInt where
+    clearColor _ (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glClearBufferiv gl_COLOR 0)
+instance ColorRenderable RGWord where
+    clearColor _ (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glClearBufferuiv gl_COLOR 0)
 instance ColorRenderable RGBFloat where
     isSrgb SRGB8 = True
     isSrgb _ = False
-instance ColorRenderable RGBInt
-instance ColorRenderable RGBWord
+    clearColor _ (r, g, b) = withArray [realToFrac r, realToFrac g, realToFrac b,0] (glClearBufferfv gl_COLOR 0)
+instance ColorRenderable RGBInt where
+    clearColor _ (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glClearBufferiv gl_COLOR 0)
+instance ColorRenderable RGBWord where
+    clearColor _ (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glClearBufferuiv gl_COLOR 0)
 instance ColorRenderable RGBAFloat where
     isSrgb SRGB8A8 = True
     isSrgb _ = False
-instance ColorRenderable RGBAInt
-instance ColorRenderable RGBAWord
+    clearColor _ (r, g, b, a) = withArray [realToFrac r, realToFrac g, realToFrac b, realToFrac a] (glClearBufferfv gl_COLOR 0)
+instance ColorRenderable RGBAInt where
+    clearColor _ (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glClearBufferiv gl_COLOR 0)
+instance ColorRenderable RGBAWord where
+    clearColor _ (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glClearBufferuiv gl_COLOR 0)
 
 instance DepthRenderable Depth
 instance DepthRenderable DepthStencil

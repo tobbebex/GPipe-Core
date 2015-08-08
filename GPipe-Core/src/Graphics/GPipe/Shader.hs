@@ -3,7 +3,6 @@ module Graphics.GPipe.Shader (
     CompiledShader,
     Render(),
     guard',
-    render,
     compileShader,
     mapShader,
     maybeShader,

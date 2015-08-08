@@ -107,7 +107,7 @@ liftContextIOAsync :: MonadIO m => IO () -> ContextT os f m ()
 liftContextIOAsync m = ContextT (asks fst) >>= liftIO . flip contextDoAsync m
 
 swapContextBuffers :: MonadIO m => ContextT os f m ()
-swapContextBuffers = ContextT (asks fst) >>= (\c -> liftIO $ contextDoAsync c $ contextSwap c)
+swapContextBuffers = ContextT (asks fst) >>= (\c -> liftIO $ contextDoSync c $ contextSwap c)
 
 contextBuffersSize :: (MonadIO m) => ContextT os f m (Int, Int)
 contextBuffersSize = ContextT (asks fst) >>= (\c -> liftIO $ contextDoSync c $ contextFrameBufferSize c)

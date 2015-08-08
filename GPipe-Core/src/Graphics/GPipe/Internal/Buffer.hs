@@ -124,32 +124,30 @@ toBufferBUnaligned = ToBuffer
                               return undefined
 
 toBufferB :: forall a. Storable a => ToBuffer a (B a)
-toBufferB = toBufferBUnaligned >>> alignWhen [(Align4, 4), (AlignUniform, 4)]                                
+toBufferB = toBufferBUnaligned -- Will always be 4 aligned, only 4 size types defined for B1                                
                               
-toBufferB2 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a) (B2 a)
+toBufferB2 :: forall a. Storable a => ToBuffer (a,a) (B2 a)
 toBufferB2 = proc (a, b) -> do
         (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 2 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform
         a' <- toBufferBUnaligned  -< a
         toBufferBUnaligned -< b
-        alignWhen [(Align4, 4), (AlignUniform, 4)] -< () 
-        returnA -< B2 a'
-toBufferB3 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a,a) (B3 a)
+        returnA -< B2 a' -- Will always be 4 aligned, only 4 size types defined for B2
+toBufferB3 :: forall a. Storable a => ToBuffer (a,a,a) (B3 a)
 toBufferB3 = proc (a, b, c) -> do
         (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 4 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform 
         a' <- toBufferBUnaligned -< a
         toBufferBUnaligned -< b
         toBufferBUnaligned -< c
-        alignWhen [(Align4, 4), (AlignUniform, 4)] -< () 
+        (if sizeOf (undefined :: a) < 4 then alignWhen [(Align4, 4), (AlignUniform, 4)] else id) -< () -- For types smaller than 4 we need to pad 
         returnA -< B3 a'
-toBufferB4 :: forall a. (BufferFormat (B a), a ~ HostFormat (B a), Storable a) => ToBuffer (a,a,a,a) (B4 a)
+toBufferB4 :: forall a. Storable a => ToBuffer (a,a,a,a) (B4 a)
 toBufferB4 = proc (a, b, c, d) -> do
         (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 4 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform 
         a' <- toBufferBUnaligned -< a
         toBufferBUnaligned -< b
         toBufferBUnaligned -< c
         toBufferBUnaligned -< d
-        alignWhen [(Align4, 4), (AlignUniform, 4)] -< () 
-        returnA -< B4 a'
+        returnA -< B4 a' -- Will always be 4 aligned
 
 instance BufferFormat a => BufferFormat (Uniform a) where
     type HostFormat (Uniform a) = HostFormat a
@@ -283,32 +281,22 @@ makeBuffer name elementCount uniformAlignment  = do
 
 type family BufferColor f where
     BufferColor (Normalized (B Int32)) = Float
-    BufferColor (Normalized (B Int16)) = Float
-    BufferColor (Normalized (B Int8)) = Float
     BufferColor (B Float) = Float
-
     BufferColor (B Int32) = Int
-    BufferColor (B Int16) = Int
-    BufferColor (B Int8) = Int
 
     BufferColor (B Word32) = Word
-    BufferColor (B Word16) = Word
-    BufferColor (B Word8) = Word
     BufferColor (BPacked Word16) = Word
     BufferColor (BPacked Word8) = Word
 
     BufferColor (Normalized (B2 Int32)) = (Float, Float)
     BufferColor (Normalized (B2 Int16)) = (Float, Float)
-    BufferColor (Normalized (B2 Int8)) = (Float, Float)
     BufferColor (B2 Float) = (Float, Float)
 
     BufferColor (B2 Int32) = (Int, Int)
     BufferColor (B2 Int16) = (Int, Int)
-    BufferColor (B2 Int8) = (Int, Int)
 
     BufferColor (B2 Word32) = (Word, Word)
     BufferColor (B2 Word16) = (Word, Word)
-    BufferColor (B2 Word8) = (Word, Word)
 
     BufferColor (Normalized (B3 Int32)) = (Float, Float, Float)
     BufferColor (Normalized (B3 Int16)) = (Float, Float, Float)
@@ -362,41 +350,13 @@ instance BufferFormat (B Int32) where
     peekPixel = peekPixel1 
     getGlPaddedFormat _ = gl_RED_INTEGER
 
-instance BufferFormat (B Int16) where
-    type HostFormat (B Int16) = Int16
-    toBuffer = toBufferB
-    getGlType _ = gl_SHORT
-    peekPixel = peekPixel1 
-    getGlPaddedFormat _ = gl_RG_INTEGER
-
-instance BufferFormat (B Int8) where
-    type HostFormat (B Int8) = Int8
-    toBuffer = toBufferB
-    getGlType _ = gl_BYTE
-    peekPixel = peekPixel1 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
-
 instance BufferFormat (B Word32) where
     type HostFormat (B Word32) = Word32
     toBuffer = toBufferB
     getGlType _ = gl_UNSIGNED_INT
     peekPixel = peekPixel1 
     getGlPaddedFormat _ = gl_RED_INTEGER
-
-instance BufferFormat (B Word16) where
-    type HostFormat (B Word16) = Word16
-    toBuffer = toBufferB
-    getGlType _ = gl_UNSIGNED_SHORT
-    peekPixel = peekPixel1 
-    getGlPaddedFormat _ = gl_RG_INTEGER
-
-instance BufferFormat (B Word8) where
-    type HostFormat (B Word8) = Word8
-    toBuffer = toBufferB
-    getGlType _ = gl_UNSIGNED_BYTE
-    peekPixel = peekPixel1 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
-    
+   
 instance BufferFormat (BPacked Word16) where
     type HostFormat (BPacked Word16) = Word16
     toBuffer = let ToBuffer a b _ = toBufferB :: ToBuffer Word16 (B Word16) in arr BPacked . ToBuffer a b AlignPackedIndices 
@@ -432,13 +392,6 @@ instance BufferFormat (B2 Int16) where
     peekPixel = peekPixel2 
     getGlPaddedFormat _ = gl_RG_INTEGER
 
-instance BufferFormat (B2 Int8) where
-    type HostFormat (B2 Int8) = (Int8, Int8)
-    toBuffer = toBufferB2
-    getGlType _ = gl_BYTE
-    peekPixel = peekPixel2 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
-
 instance BufferFormat (B2 Word32) where
     type HostFormat (B2 Word32) = (Word32, Word32)
     toBuffer = toBufferB2
@@ -452,13 +405,6 @@ instance BufferFormat (B2 Word16) where
     getGlType _ = gl_UNSIGNED_SHORT
     peekPixel = peekPixel2 
     getGlPaddedFormat _ = gl_RG_INTEGER
-
-instance BufferFormat (B2 Word8) where
-    type HostFormat (B2 Word8) = (Word8, Word8)
-    toBuffer = toBufferB2
-    getGlType _ = gl_UNSIGNED_BYTE
-    peekPixel = peekPixel2 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
 
 instance BufferFormat (B2 Float) where
     type HostFormat (B2 Float) = (Float, Float)

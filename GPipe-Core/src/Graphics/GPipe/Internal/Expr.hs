@@ -178,7 +178,7 @@ useSampler str name =
              do T.lift $ modify $ \ s -> s { shaderUsedSamplers = Map.insert name gDeclSampler $ shaderUsedSamplers s } 
                 return $ 's':show name
     where
-        gDeclSampler = do tellGlobal "sampler"
+        gDeclSampler = do tellGlobal "uniform sampler"
                           tellGlobal str
                           tellGlobal " s"
                           tellGlobalLn $ show name 

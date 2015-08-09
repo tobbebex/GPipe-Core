@@ -2,6 +2,7 @@ module Graphics.GPipe.PrimitiveArray (
     VertexArray(),
     Instances,
     newVertexArray,
+    vertexArrayLength,
     zipVertices,
     takeVertices,
     dropVertices,
@@ -10,6 +11,7 @@ module Graphics.GPipe.PrimitiveArray (
     IndexArray(),    
     IndexFormat,
     newIndexArray,
+    indexArrayLength,
     takeIndices,
     dropIndices,
     

@@ -173,12 +173,14 @@ useUniform decls blockI offset =
                 tellGlobal "} u"
                 tellGlobalLn blockStr
 
-useSampler :: String -> Int -> ExprM String
-useSampler str name = 
+useSampler :: String -> String -> Int -> ExprM String
+useSampler prefix str name = 
              do T.lift $ modify $ \ s -> s { shaderUsedSamplers = Map.insert name gDeclSampler $ shaderUsedSamplers s } 
                 return $ 's':show name
     where
-        gDeclSampler = do tellGlobal "uniform sampler"
+        gDeclSampler = do tellGlobal "uniform "
+                          tellGlobal prefix 
+                          tellGlobal "sampler"
                           tellGlobal str
                           tellGlobal " s"
                           tellGlobalLn $ show name 

@@ -16,7 +16,7 @@ data VertexArray t a = VertexArray  { vertexArrayLength :: Int, bArrBFunc:: BInp
 data Instances
 
 newVertexArray :: Buffer os a -> Render os f (VertexArray t a)
-newVertexArray buffer = Render $ return $ VertexArray (bufElementCount buffer) $ bufBElement buffer
+newVertexArray buffer = Render $ return $ VertexArray (bufferLength buffer) $ bufBElement buffer
 
 instance Functor (VertexArray t) where
     fmap f (VertexArray n g) = VertexArray n (f . g)
@@ -43,7 +43,7 @@ type family IndexFormat a where
     
 data IndexArray = IndexArray { iArrName :: IORef CUInt, indexArrayLength:: Int, offset:: Int, restart:: Maybe Int, indexType :: CUInt } 
 newIndexArray :: forall os f b a. (BufferFormat b, Integral a, IndexFormat b ~ a) => Buffer os b -> Maybe a -> Render os f IndexArray
-newIndexArray buf r = let a = undefined :: b in Render $ return $ IndexArray (bufName buf) (bufElementCount buf) 0 (fmap fromIntegral r) (getGlType a) 
+newIndexArray buf r = let a = undefined :: b in Render $ return $ IndexArray (bufName buf) (bufferLength buf) 0 (fmap fromIntegral r) (getGlType a) 
  
 takeIndices :: Int -> IndexArray -> IndexArray
 takeIndices n i = i { indexArrayLength = min n (indexArrayLength i) }

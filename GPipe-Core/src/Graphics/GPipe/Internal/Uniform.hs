@@ -32,8 +32,11 @@ toUniformBlock sf = Shader $ do
                        shaderGen :: (Int -> ExprM String) -> (UniformFormat b x, OffsetToSType) -- Int is name of uniform block
                        shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
                    doForUniform blockId $ \s bind -> let (ub, i) = sf s 
-                                                     in do bname <- readIORef $ bufName ub
-                                                           glBindBufferRange gl_UNIFORM_BUFFER (fromIntegral bind) bname (fromIntegral $ i * bufElementSize ub) (fromIntegral $ bufElementSize ub)
+                                                     in if i < 0 || i >= bufferLength ub 
+                                                            then error "toUniformBlock, uniform buffer offset out of bounds"
+                                                            else do
+                                                                bname <- readIORef $ bufName ub
+                                                                glBindBufferRange gl_UNIFORM_BUFFER (fromIntegral bind) bname (fromIntegral $ i * bufElementSize ub) (fromIntegral $ bufElementSize ub)
                    return u
     where
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform x b (UniformFormat b x)

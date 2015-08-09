@@ -4,6 +4,8 @@ module Graphics.GPipe.Expr (
     VFloat, VInt, VWord, VBool,
     FFloat, FInt, FWord, FBool,
 
+    Convert(..),
+    
     ShaderBase(),
     ShaderType(..),
     

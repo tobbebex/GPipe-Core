@@ -14,7 +14,7 @@ module Graphics.GPipe.Internal.Buffer
     newBuffer,
     writeBuffer,
     copyBuffer,
-    bufSize, bufName, bufElementSize, bufElementCount, bufBElement, bufferWriteInternal, makeBuffer, getUniformAlignment, UniformAlignment
+    bufSize, bufName, bufElementSize, bufferLength, bufBElement, bufferWriteInternal, makeBuffer, getUniformAlignment, UniformAlignment
 ) where
 
 import Graphics.GPipe.Internal.Context
@@ -53,7 +53,7 @@ class BufferFormat f where
 data Buffer os b = Buffer {
                     bufName :: BufferName,                   
                     bufElementSize :: Int,
-                    bufElementCount :: Int,
+                    bufferLength :: Int,
                     bufBElement :: BInput -> b,
                     bufWriter :: Ptr () -> HostFormat b -> IO ()
                     }
@@ -62,7 +62,7 @@ instance Eq (Buffer os b) where
     a == b = bufName a == bufName b
 
 bufSize :: forall os b. Buffer os b -> Int
-bufSize b = bufElementSize b * bufElementCount b
+bufSize b = bufElementSize b * bufferLength b
 
 type BufferName = IORef CUInt
 type Offset = Int
@@ -207,7 +207,8 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
 -- TODO: Add packed pixelformats with special packing writers                
 
 newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT os f m (Buffer os b)
-newBuffer elementCount = do
+newBuffer elementCount | elementCount < 0 = error "newBuffer, length out of bounds" 
+                       | otherwise = do
     (buffer, nameRef, name) <- liftContextIO $ do
                        name <- alloca (\ptr -> glGenBuffers 1 ptr >> peek ptr) 
                        nameRef <- newIORef name
@@ -227,8 +228,9 @@ bufferWriteInternal b ptr (x:xs) = do bufWriter b ptr x
 bufferWriteInternal _ ptr [] = return ptr
 
 writeBuffer :: MonadIO m => [HostFormat b] -> Int -> Buffer os b -> ContextT os f m ()
-writeBuffer elems offset buffer = 
-    let maxElems = max 0 $ bufElementCount buffer - offset
+writeBuffer elems offset buffer | offset < 0 || offset >= bufferLength buffer = error "writeBuffer, offset out of bounds"
+                                | otherwise = 
+    let maxElems = max 0 $ bufferLength buffer - offset
         elemSize = bufElementSize buffer
         off = fromIntegral $ offset * elemSize
         
@@ -241,7 +243,12 @@ writeBuffer elems offset buffer =
                           void $ glUnmapBuffer gl_COPY_WRITE_BUFFER 
 
 copyBuffer :: MonadIO m => Int -> Int -> Buffer os b -> Int -> Buffer os b -> ContextT os f m ()
-copyBuffer len from bFrom to bTo = liftContextIOAsync $ do 
+copyBuffer len from bFrom to bTo | from < 0 || from >= bufferLength bFrom = error "writeBuffer, source offset out of bounds"
+                                 | to < 0 || to >= bufferLength bTo = error "writeBuffer, destination offset out of bounds"
+                                 | len < 0 = error "writeBuffer, length out of bounds"
+                                 | len + from > bufferLength bFrom = error "writeBuffer, source buffer too small"
+                                 | len + to > bufferLength bTo = error "writeBuffer, destination buffer too small"
+                                 | otherwise = liftContextIOAsync $ do 
                                                       bnamef <- readIORef $ bufName bFrom
                                                       bnamet <- readIORef $ bufName bTo
                                                       glBindBuffer gl_COPY_READ_BUFFER bnamef

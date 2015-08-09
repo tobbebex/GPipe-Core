@@ -224,11 +224,13 @@ class TextureFormat f => ColorSampleable f where
     toColor :: f -> (x,x,x,x) -> Color f x
     fromColor :: f -> Color f x -> [x]
     setBorderColor :: f -> GLenum -> Color f (ColorElement f) -> IO ()
+    samplerPrefix :: f -> String
     typeStr = error "You cannot create your own instances of ColorSampleable"
     typeStr4 = error "You cannot create your own instances of ColorSampleable"
     toColor = error "You cannot create your own instances of ColorSampleable"
     fromColor = error "You cannot create your own instances of ColorSampleable"
     setBorderColor = error "You cannot create your own instances of ColorSampleable"
+    samplerPrefix _ = ""
 
 instance ColorSampleable RFloat where
     type Color RFloat a = a
@@ -246,6 +248,7 @@ instance ColorSampleable RInt where
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
     setBorderColor _ t r = withArray [fromIntegral r, 0,0,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
+    samplerPrefix _ = "i"
 instance ColorSampleable RWord where
     type Color RWord a = a
     type ColorElement RWord = Word
@@ -254,6 +257,7 @@ instance ColorSampleable RWord where
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
     setBorderColor _ t r = withArray [fromIntegral r, 0,0,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
+    samplerPrefix _ = "u"
 
 instance ColorSampleable RGFloat where
     type Color RGFloat a = (a,a)
@@ -271,6 +275,7 @@ instance ColorSampleable RGInt where
     toColor _ (r,g,_,_) = (r, g)
     fromColor _ (r, g) = [r,g]
     setBorderColor _ t (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
+    samplerPrefix _ = "i"
 instance ColorSampleable RGWord where
     type Color RGWord a = (a,a)
     type ColorElement RGWord = Word
@@ -279,6 +284,7 @@ instance ColorSampleable RGWord where
     toColor _ (r,g,_,_) = (r, g)
     fromColor _ (r, g) = [r,g]
     setBorderColor _ t (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
+    samplerPrefix _ = "u"
     
 instance ColorSampleable RGBFloat where
     type Color RGBFloat a = (a,a,a)
@@ -296,6 +302,7 @@ instance ColorSampleable RGBInt where
     toColor _ (r,g,b,_) = (r, g, b)
     fromColor _ (r, g, b) = [r,g,b]
     setBorderColor _ t (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
+    samplerPrefix _ = "i"
 instance ColorSampleable RGBWord where
     type Color RGBWord a = (a,a,a)
     type ColorElement RGBWord = Word
@@ -304,6 +311,7 @@ instance ColorSampleable RGBWord where
     toColor _ (r,g,b,_) = (r, g, b)
     fromColor _ (r, g, b) = [r,g,b]
     setBorderColor _ t (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
+    samplerPrefix _ = "u"
 
 instance ColorSampleable RGBAFloat where
     type Color RGBAFloat a = (a,a,a,a)
@@ -321,6 +329,7 @@ instance ColorSampleable RGBAInt where
     toColor _ = id
     fromColor _ (r, g, b, a) = [r,g,b,a]
     setBorderColor _ t (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
+    samplerPrefix _ = "i"
 instance ColorSampleable RGBAWord where
     type Color RGBAWord a = (a,a,a,a)
     type ColorElement RGBAWord = Word
@@ -329,6 +338,7 @@ instance ColorSampleable RGBAWord where
     toColor _ = id
     fromColor _ (r, g, b, a) = [r,g,b,a]
     setBorderColor _ t (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
+    samplerPrefix _ = "u"
 
 instance ColorSampleable Depth where
     type Color Depth a = a

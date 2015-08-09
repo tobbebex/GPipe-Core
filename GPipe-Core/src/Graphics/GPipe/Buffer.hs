@@ -8,6 +8,7 @@ module Graphics.GPipe.Buffer (
     toB22, toB21, toB12, toB11,
     Normalized(..), 
     newBuffer,
+    bufferLength,
     writeBuffer,
     copyBuffer,
     BufferColor

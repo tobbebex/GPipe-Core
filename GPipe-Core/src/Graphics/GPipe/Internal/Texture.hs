@@ -345,8 +345,8 @@ writeTextureCube t@(TextureCube texn _ ml) l s ((x,y),(w,h)) d _ | l < 0 || l >=
 writeTexture1DFromBuffer t@(Texture1D texn _ ml) l (x,w) b i | l < 0 || l >= ml = error "writeTexture1DFromBuffer, level out of bounds"
                                                              | x < 0 || x >= mx = error "writeTexture1DFromBuffer, x out of bounds"
                                                              | w < 0 || x+w > mx = error "writeTexture1DFromBuffer, w out of bounds"
-                                                             | i < 0 || i > bufElementCount b = error "writeTexture1DFromBuffer, i out of bounds"
-                                                             | bufElementCount b - i < w = error "writeTexture1DFromBuffer, buffer data too small"
+                                                             | i < 0 || i > bufferLength b = error "writeTexture1DFromBuffer, i out of bounds"
+                                                             | bufferLength b - i < w = error "writeTexture1DFromBuffer, buffer data too small"
                                                              | otherwise = liftContextIOAsync $ do 
                                                                                     useTexSync texn gl_TEXTURE_1D
                                                                                     bname <- readIORef $ bufName b
@@ -359,8 +359,8 @@ writeTexture1DArrayFromBuffer t@(Texture1DArray texn _ ml) l ((x,y),(w,h)) b i |
                                                                                | w < 0 || x+w > mx = error "writeTexture1DArrayFromBuffer, w out of bounds"
                                                                                | y < 0 || y >= my = error "writeTexture1DArrayFromBuffer, y out of bounds"
                                                                                | h < 0 || y+h > my = error "writeTexture1DArrayFromBuffer, h out of bounds"
-                                                                               | i < 0 || i > bufElementCount b = error "writeTexture1DArrayFromBuffer, i out of bounds"
-                                                                               | bufElementCount b - i < w*h = error "writeTexture1DArrayFromBuffer, buffer data too small"
+                                                                               | i < 0 || i > bufferLength b = error "writeTexture1DArrayFromBuffer, i out of bounds"
+                                                                               | bufferLength b - i < w*h = error "writeTexture1DArrayFromBuffer, buffer data too small"
                                                                                | otherwise = liftContextIOAsync $ do 
                                                                                     useTexSync texn gl_TEXTURE_1D_ARRAY
                                                                                     bname <- readIORef $ bufName b
@@ -373,8 +373,8 @@ writeTexture2DFromBuffer t@(Texture2D texn _ ml) l ((x,y),(w,h)) b i | l < 0 || 
                                                                      | w < 0 || x+w > mx = error "writeTexture2DFromBuffer, w out of bounds"
                                                                      | y < 0 || y >= my = error "writeTexture2DFromBuffer, y out of bounds"
                                                                      | h < 0 || y+h > my = error "writeTexture2DFromBuffer, h out of bounds"
-                                                                     | i < 0 || i > bufElementCount b = error "writeTexture2DFromBuffer, i out of bounds"
-                                                                     | bufElementCount b - i < w*h = error "writeTexture2DFromBuffer, buffer data too small"
+                                                                     | i < 0 || i > bufferLength b = error "writeTexture2DFromBuffer, i out of bounds"
+                                                                     | bufferLength b - i < w*h = error "writeTexture2DFromBuffer, buffer data too small"
                                                                      | otherwise = liftContextIOAsync $ do 
                                                                             useTexSync texn gl_TEXTURE_2D
                                                                             bname <- readIORef $ bufName b
@@ -389,8 +389,8 @@ writeTexture2DArrayFromBuffer t@(Texture2DArray texn _ ml) l ((x,y,z),(w,h,d)) b
                                                                                    | h < 0 || y+h > my = error "writeTexture2DArrayFromBuffer, h out of bounds"
                                                                                    | z < 0 || z >= mz = error "writeTexture2DArrayFromBuffer, z out of bounds"
                                                                                    | d < 0 || z+d > mz = error "writeTexture2DArrayFromBuffer, d out of bounds"
-                                                                                   | i < 0 || i > bufElementCount b = error "writeTexture2DArrayFromBuffer, i out of bounds"
-                                                                                   | bufElementCount b - i < w*h = error "writeTexture2DArrayFromBuffer, buffer data too small"
+                                                                                   | i < 0 || i > bufferLength b = error "writeTexture2DArrayFromBuffer, i out of bounds"
+                                                                                   | bufferLength b - i < w*h = error "writeTexture2DArrayFromBuffer, buffer data too small"
                                                                                    | otherwise = liftContextIOAsync $ do 
                                                                                         useTexSync texn gl_TEXTURE_2D_ARRAY
                                                                                         bname <- readIORef $ bufName b
@@ -405,8 +405,8 @@ writeTexture3DFromBuffer t@(Texture3D texn _ ml) l ((x,y,z),(w,h,d)) b i | l < 0
                                                                                    | h < 0 || y+h > my = error "writeTexture3DFromBuffer, h out of bounds"
                                                                                    | z < 0 || z >= mz = error "writeTexture3DFromBuffer, z out of bounds"
                                                                                    | d < 0 || z+d > mz = error "writeTexture3DFromBuffer, d out of bounds"
-                                                                                   | i < 0 || i > bufElementCount b = error "writeTexture3DFromBuffer, i out of bounds"
-                                                                                   | bufElementCount b - i < w*h = error "writeTexture3DFromBuffer, buffer data too small"
+                                                                                   | i < 0 || i > bufferLength b = error "writeTexture3DFromBuffer, i out of bounds"
+                                                                                   | bufferLength b - i < w*h = error "writeTexture3DFromBuffer, buffer data too small"
                                                                                    | otherwise = liftContextIOAsync $ do 
                                                                                         useTexSync texn gl_TEXTURE_3D
                                                                                         bname <- readIORef $ bufName b
@@ -419,8 +419,8 @@ writeTextureCubeFromBuffer t@(TextureCube texn _ ml) l s ((x,y),(w,h)) b i | l <
                                                                            | w < 0 || x+w > mxy = error "writeTextureCubeFromBuffer, w out of bounds"
                                                                            | y < 0 || y >= mxy = error "writeTextureCubeFromBuffer, y out of bounds"
                                                                            | h < 0 || y+h > mxy = error "writeTextureCubeFromBuffer, h out of bounds"
-                                                                           | i < 0 || i > bufElementCount b = error "writeTextureCubeFromBuffer, i out of bounds"
-                                                                           | bufElementCount b - i < w*h = error "writeTextureCubeFromBuffer, buffer data too small"
+                                                                           | i < 0 || i > bufferLength b = error "writeTextureCubeFromBuffer, i out of bounds"
+                                                                           | bufferLength b - i < w*h = error "writeTextureCubeFromBuffer, buffer data too small"
                                                                            | otherwise = liftContextIOAsync $ do 
                                                                                 useTexSync texn gl_TEXTURE_CUBE_MAP
                                                                                 bname <- readIORef $ bufName b
@@ -542,8 +542,8 @@ readTextureCube t@(TextureCube texn _ ml) l si ((x,y),(w,h)) f s _ | l < 0 || l 
 readTexture1DToBuffer t@(Texture1D texn _ ml) l (x,w) b i | l < 0 || l >= ml = error "readTexture1DToBuffer, level out of bounds"
                                                           | x < 0 || x >= mx = error "readTexture1DToBuffer, x out of bounds"
                                                           | w < 0 || x+w > mx = error "readTexture1DToBuffer, w out of bounds"
-                                                          | i < 0 || i > bufElementCount b = error "readTexture1DToBuffer, i out of bounds"
-                                                          | bufElementCount b - i < w = error "readTexture1DToBuffer, buffer data too small"
+                                                          | i < 0 || i > bufferLength b = error "readTexture1DToBuffer, i out of bounds"
+                                                          | bufferLength b - i < w = error "readTexture1DToBuffer, buffer data too small"
                                                           | otherwise = liftContextIOAsync $ do
                                                                              bname <- readIORef $ bufName b
                                                                              glBindBuffer gl_PIXEL_PACK_BUFFER bname
@@ -556,8 +556,8 @@ readTexture1DArrayToBuffer t@(Texture1DArray texn _ ml) l ((x,y),w) b i | l < 0 
                                                                         | x < 0 || x >= mx = error "readTexture1DArrayToBuffer, x out of bounds"
                                                                         | w < 0 || x+w > mx = error "readTexture1DArrayToBuffer, w out of bounds"
                                                                         | y < 0 || y >= my = error "readTexture1DArrayToBuffer, y out of bounds"
-                                                                        | i < 0 || i > bufElementCount b = error "readTexture1DArrayToBuffer, i out of bounds"
-                                                                        | bufElementCount b - i < w = error "readTexture1DArrayToBuffer, buffer data too small"
+                                                                        | i < 0 || i > bufferLength b = error "readTexture1DArrayToBuffer, i out of bounds"
+                                                                        | bufferLength b - i < w = error "readTexture1DArrayToBuffer, buffer data too small"
                                                                         | otherwise = liftContextIOAsync $ do
                                                                              bname <- readIORef $ bufName b
                                                                              glBindBuffer gl_PIXEL_PACK_BUFFER bname
@@ -571,8 +571,8 @@ readTexture2DToBuffer t@(Texture2D texn _ ml) l ((x,y),(w,h)) b i | l < 0 || l >
                                                                   | w < 0 || x+w > mx = error "readTexture2DToBuffer, w out of bounds"
                                                                   | y < 0 || y >= my = error "readTexture2DToBuffer, y out of bounds"
                                                                   | h < 0 || y+h > my = error "readTexture2DToBuffer, h out of bounds"
-                                                                  | i < 0 || i > bufElementCount b = error "readTexture2DToBuffer, i out of bounds"
-                                                                  | bufElementCount b - i < w*h = error "readTexture2DToBuffer, buffer data too small"
+                                                                  | i < 0 || i > bufferLength b = error "readTexture2DToBuffer, i out of bounds"
+                                                                  | bufferLength b - i < w*h = error "readTexture2DToBuffer, buffer data too small"
                                                                   | otherwise = liftContextIOAsync $ do
                                                                              bname <- readIORef $ bufName b
                                                                              glBindBuffer gl_PIXEL_PACK_BUFFER bname
@@ -587,8 +587,8 @@ readTexture2DArrayToBuffer t@(Texture2DArray texn _ ml) l ((x,y,z),(w,h)) b i | 
                                                                               | y < 0 || y >= my = error "readTexture2DArrayToBuffer, y out of bounds"
                                                                               | h < 0 || y+h > my = error "readTexture2DArrayToBuffer, h out of bounds"
                                                                               | z < 0 || z >= mz = error "readTexture2DArrayToBuffer, z out of bounds"
-                                                                              | i < 0 || i > bufElementCount b = error "readTexture2DArrayToBuffer, i out of bounds"
-                                                                              | bufElementCount b - i < w*h = error "readTexture2DArrayToBuffer, buffer data too small"
+                                                                              | i < 0 || i > bufferLength b = error "readTexture2DArrayToBuffer, i out of bounds"
+                                                                              | bufferLength b - i < w*h = error "readTexture2DArrayToBuffer, buffer data too small"
                                                                               | otherwise = liftContextIOAsync $ do
                                                                                      bname <- readIORef $ bufName b
                                                                                      glBindBuffer gl_PIXEL_PACK_BUFFER bname
@@ -603,8 +603,8 @@ readTexture3DToBuffer t@(Texture3D texn _ ml) l ((x,y,z),(w,h)) b i | l < 0 || l
                                                                     | y < 0 || y >= my = error "readTexture3DToBuffer, y out of bounds"
                                                                     | h < 0 || y+h > my = error "readTexture3DToBuffer, h out of bounds"
                                                                     | z < 0 || z >= mz = error "readTexture3DToBuffer, z out of bounds"
-                                                                    | i < 0 || i > bufElementCount b = error "readTexture3DToBuffer, i out of bounds"
-                                                                    | bufElementCount b - i < w*h = error "readTexture3DToBuffer, buffer data too small"
+                                                                    | i < 0 || i > bufferLength b = error "readTexture3DToBuffer, i out of bounds"
+                                                                    | bufferLength b - i < w*h = error "readTexture3DToBuffer, buffer data too small"
                                                                     | otherwise = liftContextIOAsync $ do
                                                                          bname <- readIORef $ bufName b
                                                                          glBindBuffer gl_PIXEL_PACK_BUFFER bname
@@ -618,8 +618,8 @@ readTextureCubeToBuffer t@(TextureCube texn _ ml) l s ((x,y),(w,h)) b i | l < 0 
                                                                         | w < 0 || x+w > mxy = error "readTextureCubeToBuffer, w out of bounds"
                                                                         | y < 0 || y >= mxy = error "readTextureCubeToBuffer, y out of bounds"
                                                                         | h < 0 || y+h > mxy = error "readTextureCubeToBuffer, h out of bounds"
-                                                                        | i < 0 || i > bufElementCount b = error "readTextureCubeToBuffer, i out of bounds"
-                                                                        | bufElementCount b - i < w*h = error "readTextureCubeToBuffer, buffer data too small"
+                                                                        | i < 0 || i > bufferLength b = error "readTextureCubeToBuffer, i out of bounds"
+                                                                        | bufferLength b - i < w*h = error "readTextureCubeToBuffer, buffer data too small"
                                                                         | otherwise = liftContextIOAsync $ do
                                                                              setGlPixelStoreRange x y 0 w h
                                                                              bname <- readIORef $ bufName b
@@ -701,7 +701,7 @@ newSampler1D sf = Shader $ do
                                                            setNoShadowMode gl_TEXTURE_1D                                       
                                                            setSamplerFilter gl_TEXTURE_1D filt
                                                            setEdgeMode gl_TEXTURE_1D (Just ex, Nothing, Nothing) (setBorderColor (undefined :: c) gl_TEXTURE_1D ec)
-                   return $ Sampler1D sampId False
+                   return $ Sampler1D sampId False (samplerPrefix (undefined :: c))
 newSampler1DArray sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture1DArray tn _ _, filt, (ex, ec)) = sf s 
@@ -709,7 +709,7 @@ newSampler1DArray sf = Shader $ do
                                                            setNoShadowMode gl_TEXTURE_1D_ARRAY                                       
                                                            setSamplerFilter gl_TEXTURE_1D_ARRAY filt
                                                            setEdgeMode gl_TEXTURE_1D_ARRAY (Just ex, Nothing, Nothing) (setBorderColor (undefined :: c) gl_TEXTURE_1D_ARRAY ec)
-                   return $ Sampler1DArray sampId False
+                   return $ Sampler1DArray sampId False (samplerPrefix (undefined :: c))
 newSampler2D sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture2D tn _ _, filt, ((ex, ey), ec)) = sf s 
@@ -717,7 +717,7 @@ newSampler2D sf = Shader $ do
                                                            setNoShadowMode gl_TEXTURE_2D                                      
                                                            setSamplerFilter gl_TEXTURE_2D filt
                                                            setEdgeMode gl_TEXTURE_2D (Just ex, Just ey, Nothing) (setBorderColor (undefined :: c) gl_TEXTURE_2D ec)
-                   return $ Sampler2D sampId False
+                   return $ Sampler2D sampId False (samplerPrefix (undefined :: c))
 newSampler2DArray sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture2DArray tn _ _, filt, ((ex, ey), ec)) = sf s 
@@ -725,7 +725,7 @@ newSampler2DArray sf = Shader $ do
                                                            setNoShadowMode gl_TEXTURE_2D_ARRAY                                       
                                                            setSamplerFilter gl_TEXTURE_2D_ARRAY filt
                                                            setEdgeMode gl_TEXTURE_2D_ARRAY (Just ex, Just ey, Nothing) (setBorderColor (undefined :: c) gl_TEXTURE_2D_ARRAY ec)
-                   return $ Sampler2DArray sampId False
+                   return $ Sampler2DArray sampId False (samplerPrefix (undefined :: c))
 newSampler3D sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture3D tn _ _, filt, ((ex, ey, ez), ec)) = sf s 
@@ -733,14 +733,14 @@ newSampler3D sf = Shader $ do
                                                            setNoShadowMode gl_TEXTURE_3D                                       
                                                            setSamplerFilter gl_TEXTURE_3D filt
                                                            setEdgeMode gl_TEXTURE_3D (Just ex, Just ey, Just ez) (setBorderColor (undefined :: c) gl_TEXTURE_3D ec)
-                   return $ Sampler3D sampId False
+                   return $ Sampler3D sampId False (samplerPrefix (undefined :: c))
 newSamplerCube sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (TextureCube tn _ _, filt) = sf s 
                                                     in  do useTex tn gl_TEXTURE_CUBE_MAP bind
                                                            setNoShadowMode gl_TEXTURE_CUBE_MAP                                       
                                                            setSamplerFilter gl_TEXTURE_CUBE_MAP filt
-                   return $ SamplerCube sampId False
+                   return $ SamplerCube sampId False (samplerPrefix (undefined :: c))
 
 
 newSampler1DShadow sf = Shader $ do 
@@ -750,7 +750,7 @@ newSampler1DShadow sf = Shader $ do
                                                            setShadowFunc gl_TEXTURE_1D cf                                     
                                                            setSamplerFilter gl_TEXTURE_1D filt
                                                            setEdgeMode gl_TEXTURE_1D (Just ex, Nothing, Nothing) (setBorderColor (undefined :: d) gl_TEXTURE_1D ec)
-                   return $ Sampler1D sampId True
+                   return $ Sampler1D sampId True ""
 newSampler1DArrayShadow sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture1DArray tn _ _, filt, (ex, ec), cf) = sf s 
@@ -758,7 +758,7 @@ newSampler1DArrayShadow sf = Shader $ do
                                                            setShadowFunc gl_TEXTURE_1D_ARRAY cf                                       
                                                            setSamplerFilter gl_TEXTURE_1D_ARRAY filt
                                                            setEdgeMode gl_TEXTURE_1D_ARRAY (Just ex, Nothing, Nothing) (setBorderColor (undefined :: d) gl_TEXTURE_1D_ARRAY ec)
-                   return $ Sampler1DArray sampId True
+                   return $ Sampler1DArray sampId True ""
 newSampler2DShadow sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture2D tn _ _, filt, ((ex, ey), ec), cf) = sf s 
@@ -766,7 +766,7 @@ newSampler2DShadow sf = Shader $ do
                                                            setShadowFunc gl_TEXTURE_2D cf                                      
                                                            setSamplerFilter gl_TEXTURE_2D filt
                                                            setEdgeMode gl_TEXTURE_2D (Just ex, Just ey, Nothing) (setBorderColor (undefined :: d) gl_TEXTURE_2D ec)
-                   return $ Sampler2D sampId True
+                   return $ Sampler2D sampId True ""
 newSampler2DArrayShadow sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture2DArray tn _ _, filt, ((ex, ey), ec), cf) = sf s 
@@ -774,14 +774,14 @@ newSampler2DArrayShadow sf = Shader $ do
                                                            setShadowFunc gl_TEXTURE_2D_ARRAY cf                                       
                                                            setSamplerFilter gl_TEXTURE_2D_ARRAY filt
                                                            setEdgeMode gl_TEXTURE_2D_ARRAY (Just ex, Just ey, Nothing) (setBorderColor (undefined :: d) gl_TEXTURE_2D_ARRAY ec)
-                   return $ Sampler2DArray sampId True
+                   return $ Sampler2DArray sampId True ""
 newSamplerCubeShadow sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (TextureCube tn _ _, filt, cf) = sf s 
                                                     in  do useTex tn gl_TEXTURE_CUBE_MAP bind
                                                            setShadowFunc gl_TEXTURE_CUBE_MAP cf                                       
                                                            setSamplerFilter gl_TEXTURE_CUBE_MAP filt
-                   return $ SamplerCube sampId True
+                   return $ SamplerCube sampId True ""
 
 setNoShadowMode :: GLenum -> IO ()
 setNoShadowMode t = glTexParameteri t gl_TEXTURE_COMPARE_MODE (fromIntegral gl_NONE)
@@ -830,12 +830,12 @@ doForSampler :: Int -> (s -> Binding -> IO()) -> ShaderM s ()
 doForSampler n io = modifyRenderIO (\s -> s { samplerNameToRenderIO = insert n io (samplerNameToRenderIO s) } )
 
 data Shadow
-data Sampler1D f = Sampler1D Int Bool
-data Sampler1DArray f = Sampler1DArray Int Bool
-data Sampler2D f = Sampler2D Int Bool
-data Sampler2DArray f = Sampler2DArray Int Bool
-data Sampler3D f = Sampler3D Int Bool
-data SamplerCube f = SamplerCube Int Bool
+data Sampler1D f = Sampler1D Int Bool String
+data Sampler1DArray f = Sampler1DArray Int Bool String
+data Sampler2D f = Sampler2D Int Bool String
+data Sampler2DArray f = Sampler2DArray Int Bool String
+data Sampler3D f = Sampler3D Int Bool String
+data SamplerCube f = SamplerCube Int Bool String
 
 data SampleLod vx x where
     SampleAuto :: SampleLod v F
@@ -881,18 +881,18 @@ sample2DShadow      :: forall x. Sampler2D Shadow     -> SampleLod2 x -> SampleP
 sample2DArrayShadow :: forall x. Sampler2DArray Shadow-> SampleLod2' x -> SampleOffset2 x -> ReferenceValue x -> (S x Float, S x Float, S x Float)-> S x Float
 sampleCubeShadow    :: forall x. SamplerCube Shadow   -> SampleLod3' x -> ReferenceValue x -> (S x Float, S x Float, S x Float) -> S x Float
 
-sample1D (Sampler1D sampId _) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "1D" sampId lod proj off coord v1toF v1toF civ1toF pv1toF
-sample1DArray (Sampler1DArray sampId _) lod off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "1DArray" sampId lod Nothing off coord v2toF v1toF civ1toF undefined
-sample2D (Sampler2D sampId _) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "2D" sampId lod proj off coord v2toF v2toF civ2toF pv2toF 
-sample2DArray (Sampler2DArray sampId _) lod off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "2DArray" sampId lod Nothing off coord v3toF v2toF civ2toF undefined
-sample3D (Sampler3D sampId _) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "3D" sampId lod proj off coord v3toF v3toF civ3toF pv3toF
-sampleCube (SamplerCube sampId _) lod coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "Cube" sampId lod Nothing Nothing coord v3toF v3toF undefined undefined
+sample1D (Sampler1D sampId _ prefix) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) prefix (typeStr4 (undefined :: c)) "1D" sampId lod proj off coord v1toF v1toF civ1toF pv1toF
+sample1DArray (Sampler1DArray sampId _ prefix) lod off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) prefix (typeStr4 (undefined :: c)) "1DArray" sampId lod Nothing off coord v2toF v1toF civ1toF undefined
+sample2D (Sampler2D sampId _ prefix) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) prefix (typeStr4 (undefined :: c)) "2D" sampId lod proj off coord v2toF v2toF civ2toF pv2toF 
+sample2DArray (Sampler2DArray sampId _ prefix) lod off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) prefix (typeStr4 (undefined :: c)) "2DArray" sampId lod Nothing off coord v3toF v2toF civ2toF undefined
+sample3D (Sampler3D sampId _ prefix) lod proj off coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) prefix (typeStr4 (undefined :: c)) "3D" sampId lod proj off coord v3toF v3toF civ3toF pv3toF
+sampleCube (SamplerCube sampId _ prefix) lod coord = toColor (undefined :: c) $ sample (undefined :: ColorElement c) prefix (typeStr4 (undefined :: c)) "Cube" sampId lod Nothing Nothing coord v3toF v3toF undefined undefined
 
-sample1DShadow (Sampler1D sampId _) lod proj off ref coord = sampleShadow "1D" sampId lod proj off (t1t3 coord ref) v3toF v1toF civ1toF pv3toF
-sample1DArrayShadow (Sampler1DArray sampId _) lod off ref coord = sampleShadow "1DArray" sampId lod Nothing off (t2t3 coord ref) v3toF v1toF civ1toF undefined
-sample2DShadow (Sampler2D sampId _) lod proj off ref coord = sampleShadow "2D" sampId lod proj off (t2t3 coord ref) v3toF v2toF civ2toF pv3toF
-sample2DArrayShadow (Sampler2DArray sampId _) lod off ref coord = sampleShadow "2DArray" sampId (fromLod' lod) Nothing off (t3t4 coord ref) v4toF v2toF civ2toF undefined
-sampleCubeShadow (SamplerCube sampId _) lod ref coord = sampleShadow "Cube" sampId (fromLod' lod) Nothing Nothing (t3t4 coord ref) v4toF v3toF undefined undefined
+sample1DShadow (Sampler1D sampId _ _) lod proj off ref coord = sampleShadow "1D" sampId lod proj off (t1t3 coord ref) v3toF v1toF civ1toF pv3toF
+sample1DArrayShadow (Sampler1DArray sampId _ _) lod off ref coord = sampleShadow "1DArray" sampId lod Nothing off (t2t3 coord ref) v3toF v1toF civ1toF undefined
+sample2DShadow (Sampler2D sampId _ _) lod proj off ref coord = sampleShadow "2D" sampId lod proj off (t2t3 coord ref) v3toF v2toF civ2toF pv3toF
+sample2DArrayShadow (Sampler2DArray sampId _ _) lod off ref coord = sampleShadow "2DArray" sampId (fromLod' lod) Nothing off (t3t4 coord ref) v4toF v2toF civ2toF undefined
+sampleCubeShadow (SamplerCube sampId _ _) lod ref coord = sampleShadow "Cube" sampId (fromLod' lod) Nothing Nothing (t3t4 coord ref) v4toF v3toF undefined undefined
 
 t1t3 :: t -> t -> (t, S x Float, t)
 t2t3 :: (t, t) -> t -> (t, t, t)
@@ -907,11 +907,11 @@ texelFetch2D        :: forall c x. ColorSampleable c =>  Sampler2D (Format c)   
 texelFetch2DArray   :: forall c x. ColorSampleable c =>  Sampler2DArray (Format c)     -> SampleOffset2 x -> S x Level -> (S x Int, S x Int, S x Int) -> ColorSample x c
 texelFetch3D        :: forall c x. ColorSampleable c =>  Sampler3D (Format c)          -> SampleOffset3 x -> S x Level -> (S x Int, S x Int, S x Int) -> ColorSample x c
 
-texelFetch1D (Sampler1D sampId _) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "1D" sampId lod off coord iv1toF civ1toF
-texelFetch1DArray (Sampler1DArray sampId _) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "1DArray" sampId lod off coord iv2toF civ1toF
-texelFetch2D (Sampler2D sampId _) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "2D" sampId lod off coord iv2toF civ2toF
-texelFetch2DArray (Sampler2DArray sampId _) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "2DArray" sampId lod off coord iv3toF civ2toF
-texelFetch3D (Sampler3D sampId _) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) (typeStr4 (undefined :: c)) "3D" sampId lod off coord iv3toF civ3toF
+texelFetch1D (Sampler1D sampId _ prefix) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) prefix (typeStr4 (undefined :: c)) "1D" sampId lod off coord iv1toF civ1toF
+texelFetch1DArray (Sampler1DArray sampId _ prefix) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) prefix (typeStr4 (undefined :: c)) "1DArray" sampId lod off coord iv2toF civ1toF
+texelFetch2D (Sampler2D sampId _ prefix) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) prefix (typeStr4 (undefined :: c)) "2D" sampId lod off coord iv2toF civ2toF
+texelFetch2DArray (Sampler2DArray sampId _ prefix) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) prefix (typeStr4 (undefined :: c)) "2DArray" sampId lod off coord iv3toF civ2toF
+texelFetch3D (Sampler3D sampId _ prefix) off lod coord = toColor (undefined :: c) $ fetch (undefined :: ColorElement c) prefix (typeStr4 (undefined :: c)) "3D" sampId lod off coord iv3toF civ3toF
 
 sampler1DSize      :: Sampler1D f -> S x Level -> S x Int
 sampler1DArraySize :: Sampler1DArray f -> S x Level -> (S x Int, S x Int)
@@ -920,34 +920,34 @@ sampler2DArraySize :: Sampler2DArray f -> S x Level -> (S x Int, S x Int, S x In
 sampler3DSize      :: Sampler3D f -> S x Level -> (S x Int, S x Int, S x Int)
 samplerCubeSize    :: SamplerCube f -> S x Level -> S x Int
 
-sampler1DSize (Sampler1D sampId shadow) = scalarS STypeInt . getTextureSize sampId (addShadowPrefix shadow "1D")
-sampler1DArraySize (Sampler1DArray sampId shadow) = vec2S (STypeIVec 2) . getTextureSize sampId (addShadowPrefix shadow "1DArray")
-sampler2DSize (Sampler2D sampId shadow) = vec2S (STypeIVec 2) . getTextureSize sampId (addShadowPrefix shadow "2D")
-sampler2DArraySize (Sampler2DArray sampId shadow) = vec3S (STypeIVec 3) . getTextureSize sampId (addShadowPrefix shadow "2DArray")
-sampler3DSize (Sampler3D sampId shadow) = vec3S (STypeIVec 3) . getTextureSize sampId (addShadowPrefix shadow "3D")
-samplerCubeSize (SamplerCube sampId shadow) = fst . vec2S (STypeIVec 2) . getTextureSize sampId (addShadowPrefix shadow "Cube")    
+sampler1DSize (Sampler1D sampId shadow prefix) = scalarS STypeInt . getTextureSize prefix sampId (addShadowPrefix shadow "1D")
+sampler1DArraySize (Sampler1DArray sampId shadow prefix) = vec2S (STypeIVec 2) . getTextureSize prefix sampId (addShadowPrefix shadow "1DArray")
+sampler2DSize (Sampler2D sampId shadow prefix) = vec2S (STypeIVec 2) . getTextureSize prefix sampId (addShadowPrefix shadow "2D")
+sampler2DArraySize (Sampler2DArray sampId shadow prefix) = vec3S (STypeIVec 3) . getTextureSize prefix sampId (addShadowPrefix shadow "2DArray")
+sampler3DSize (Sampler3D sampId shadow prefix) = vec3S (STypeIVec 3) . getTextureSize prefix sampId (addShadowPrefix shadow "3D")
+samplerCubeSize (SamplerCube sampId shadow prefix) = fst . vec2S (STypeIVec 2) . getTextureSize prefix sampId (addShadowPrefix shadow "Cube")    
 
 addShadowPrefix :: Bool -> String -> String
 addShadowPrefix shadow = if shadow then (++ "Shadow") else id 
 
-getTextureSize :: Int -> String -> S c Int -> ExprM String
-getTextureSize sampId sName l = do s <- useSampler sName sampId
-                                   l' <- unS l
-                                   return $ "textureSize(" ++ s ++ ',' : l' ++ ")"
+getTextureSize :: String -> Int -> String -> S c Int -> ExprM String
+getTextureSize prefix sampId sName l = do s <- useSampler prefix sName sampId  
+                                          l' <- unS l
+                                          return $ "textureSize(" ++ s ++ ',' : l' ++ ")"
 
-sample :: e -> String -> String -> Int -> SampleLod lcoord x -> SampleProj x -> Maybe off -> coord -> (coord -> ExprM String) -> (lcoord -> ExprM String) -> (off -> String) -> (coord -> S x Float -> ExprM String) -> (S x e, S x e, S x e, S x e)  
-sample _ sDynType sName sampId lod proj off coord vToS lvToS ivToS pvToS =
-    vec4S (STypeDyn sDynType) $ do s <- useSampler sName sampId
+sample :: e -> String -> String -> String -> Int -> SampleLod lcoord x -> SampleProj x -> Maybe off -> coord -> (coord -> ExprM String) -> (lcoord -> ExprM String) -> (off -> String) -> (coord -> S x Float -> ExprM String) -> (S x e, S x e, S x e, S x e)  
+sample _ prefix sDynType sName sampId lod proj off coord vToS lvToS ivToS pvToS =
+    vec4S (STypeDyn sDynType) $ do s <- useSampler prefix sName sampId
                                    sampleFunc s proj lod off coord vToS lvToS ivToS pvToS 
 
 sampleShadow :: String -> Int -> SampleLod lcoord x -> SampleProj x -> Maybe off -> coord -> (coord -> ExprM String) -> (lcoord -> ExprM String) -> (off -> String) -> (coord -> S x Float -> ExprM String) -> S x Float  
 sampleShadow sName sampId lod proj off coord vToS lvToS civToS pvToS =
-    scalarS STypeFloat $ do s <- useSampler (sName ++ "Shadow") sampId
+    scalarS STypeFloat $ do s <- useSampler "" (sName ++ "Shadow") sampId
                             sampleFunc s proj lod off coord vToS lvToS civToS pvToS 
 
-fetch :: e -> String -> String -> Int -> S x Int -> Maybe off -> coord -> (coord -> ExprM String) -> (off -> String) -> (S x e, S x e, S x e, S x e)  
-fetch _ sDynType sName sampId lod off coord ivToS civToS =
-    vec4S (STypeDyn sDynType) $ do s <- useSampler sName sampId
+fetch :: e -> String -> String -> String -> Int -> S x Int -> Maybe off -> coord -> (coord -> ExprM String) -> (off -> String) -> (S x e, S x e, S x e, S x e)  
+fetch _ prefix sDynType sName sampId lod off coord ivToS civToS =
+    vec4S (STypeDyn sDynType) $ do s <- useSampler prefix sName sampId
                                    fetchFunc s off coord lod ivToS civToS
 
 v1toF :: S c Float -> ExprM String

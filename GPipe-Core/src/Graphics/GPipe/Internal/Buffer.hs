@@ -215,7 +215,7 @@ newBuffer elementCount = do
                        let buffer = makeBuffer nameRef elementCount uniAl
                        bname <- readIORef $ bufName buffer
                        glBindBuffer gl_COPY_WRITE_BUFFER (fromIntegral bname )  
-                       glBufferData gl_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr gl_DYNAMIC_DRAW
+                       glBufferData gl_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr gl_STREAM_DRAW
                        return (buffer, nameRef, name)
     addContextFinalizer nameRef $ with name (glDeleteBuffers 1)
     addVAOBufferFinalizer nameRef

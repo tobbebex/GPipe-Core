@@ -1,7 +1,6 @@
 module Graphics.GPipe.Shader (
     Shader(),
     CompiledShader,
-    Render(),
     guard',
     compileShader,
     mapShader,

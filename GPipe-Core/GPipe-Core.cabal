@@ -16,6 +16,7 @@ library
                    OpenGLRaw >= 2.5.0.0 && < 2.6
   ghc-options:      -Wall
   exposed-modules:  
+                    Graphics.GPipe,
                     Graphics.GPipe.Buffer,
                     Graphics.GPipe.Context,
                     Graphics.GPipe.Expr,

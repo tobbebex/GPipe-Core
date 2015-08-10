@@ -26,8 +26,11 @@ module Graphics.GPipe.Expr (
     dot3,
     dot2,
     cross,    
-    Real'(..)
+    Real'(..),
+    
+    module Data.Boolean
 )
 where
 
+import Data.Boolean
 import Graphics.GPipe.Internal.Expr

@@ -51,8 +51,6 @@ module Graphics.GPipe.Texture (
     readTexture3DToBuffer,
     readTextureCubeToBuffer,
     
-    Proxy(..),
-
     MaxLevels, Level,
     Size1, Size2, Size3,
     StartPos1, StartPos2, StartPos3, 

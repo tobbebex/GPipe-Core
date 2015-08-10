@@ -293,50 +293,50 @@ makeBuffer name elementCount uniformAlignment  = do
         writer ptr x = void $ runStateT (runKleisli b x) (ptr,pads)
     Buffer name elementSize elementCount elementF writer
 
-type family BufferColor f where
-    BufferColor (Normalized (B Int32)) = Float
-    BufferColor (B Float) = Float
-    BufferColor (B Int32) = Int
+type family BufferColor c h where
+    BufferColor Float Int32 = Normalized (B Int32)
+    BufferColor Float Float = B Float
+    BufferColor Int Int32   = B Int32
 
-    BufferColor (B Word32) = Word
-    BufferColor (BPacked Word16) = Word
-    BufferColor (BPacked Word8) = Word
+    BufferColor Word Word32 = B Word32
+    BufferColor Word Word16 = BPacked Word16
+    BufferColor Word Word8  = BPacked Word8
 
-    BufferColor (Normalized (B2 Int32)) = (Float, Float)
-    BufferColor (Normalized (B2 Int16)) = (Float, Float)
-    BufferColor (B2 Float) = (Float, Float)
+    BufferColor (Float, Float) (Int32, Int32) = Normalized (B2 Int32) 
+    BufferColor (Float, Float) (Int16, Int16) = Normalized (B2 Int16) 
+    BufferColor (Float, Float) (Float, Float) = B2 Float
 
-    BufferColor (B2 Int32) = (Int, Int)
-    BufferColor (B2 Int16) = (Int, Int)
+    BufferColor (Int, Int) (Int32, Int32) = B2 Int32
+    BufferColor (Int, Int) (Int16, Int16) = B2 Int16
 
-    BufferColor (B2 Word32) = (Word, Word)
-    BufferColor (B2 Word16) = (Word, Word)
+    BufferColor (Word, Word) (Word32, Word32) = B2 Word32
+    BufferColor (Word, Word) (Word16, Word16) = B2 Word16
 
-    BufferColor (Normalized (B3 Int32)) = (Float, Float, Float)
-    BufferColor (Normalized (B3 Int16)) = (Float, Float, Float)
-    BufferColor (Normalized (B3 Int8)) = (Float, Float, Float)
-    BufferColor (B3 Float) = (Float, Float, Float)
+    BufferColor (Float, Float, Float) (Int32, Int32, Int32) = Normalized (B3 Int32) 
+    BufferColor (Float, Float, Float) (Int16, Int16, Int16) = Normalized (B3 Int16)
+    BufferColor (Float, Float, Float) (Int8, Int8, Int8)    = Normalized (B3 Int8)
+    BufferColor (Float, Float, Float) (Float, Float, Float) = B3 Float
 
-    BufferColor (B3 Int32) = (Int, Int, Int)
-    BufferColor (B3 Int16) = (Int, Int, Int)
-    BufferColor (B3 Int8) = (Int, Int, Int)
+    BufferColor (Int, Int, Int) (Int32, Int32, Int32) = B3 Int32
+    BufferColor (Int, Int, Int) (Int16, Int16, Int16) = B3 Int16
+    BufferColor (Int, Int, Int) (Int8, Int8, Int8)    = B3 Int8
 
-    BufferColor (B3 Word32) = (Word, Word, Word)
-    BufferColor (B3 Word16) = (Word, Word, Word)
-    BufferColor (B3 Word8) = (Word, Word, Word)
+    BufferColor (Word, Word, Word) (Word32, Word32, Word32) = B3 Word32
+    BufferColor (Word, Word, Word) (Word16, Word16, Word16) = B3 Word16
+    BufferColor (Word, Word, Word) (Word8, Word8, Word8)    = B3 Word8
 
-    BufferColor (Normalized (B4 Int32)) = (Float, Float, Float, Float)
-    BufferColor (Normalized (B4 Int16)) = (Float, Float, Float, Float)
-    BufferColor (Normalized (B4 Int8)) = (Float, Float, Float, Float)
-    BufferColor (B4 Float) = (Float, Float, Float, Float)
+    BufferColor (Float, Float, Float, Float) (Int32, Int32, Int32, Int32) = Normalized (B4 Int32)
+    BufferColor (Float, Float, Float, Float) (Int16, Int16, Int16, Int16) = Normalized (B4 Int16)
+    BufferColor (Float, Float, Float, Float) (Int8, Int8, Int8, Int8)     = Normalized (B4 Int8)
+    BufferColor (Float, Float, Float, Float) (Float, Float, Float, Float) = B4 Float
 
-    BufferColor (B4 Int32) = (Int, Int, Int, Int)
-    BufferColor (B4 Int16) = (Int, Int, Int, Int)
-    BufferColor (B4 Int8) = (Int, Int, Int, Int)
+    BufferColor (Int, Int, Int, Int) (Int32, Int32, Int32, Int32) = B4 Int32
+    BufferColor (Int, Int, Int, Int) (Int16, Int16, Int16, Int16) = B4 Int16
+    BufferColor (Int, Int, Int, Int) (Int8, Int8, Int8, Int8)     = B4 Int8
 
-    BufferColor (B4 Word32) = (Word, Word, Word, Word)
-    BufferColor (B4 Word16) = (Word, Word, Word, Word)
-    BufferColor (B4 Word8) = (Word, Word, Word, Word)
+    BufferColor (Word, Word, Word, Word) (Word32, Word32, Word32, Word32) = B4 Word32
+    BufferColor (Word, Word, Word, Word) (Word16, Word16, Word16, Word16) = B4 Word16
+    BufferColor (Word, Word, Word, Word) (Word8, Word8, Word8, Word8)     = B4 Word8
 
 peekPixel1 :: Storable a => t -> Ptr x -> IO a
 peekPixel1 _ = peek . castPtr 

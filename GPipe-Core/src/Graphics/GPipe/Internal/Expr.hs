@@ -1,5 +1,4 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE EmptyDataDecls, NoMonomorphismRestriction,
+{-# LANGUAGE GADTs, EmptyDataDecls, NoMonomorphismRestriction,
   TypeFamilies, ScopedTypeVariables, FlexibleInstances, RankNTypes,
   MultiParamTypeClasses, FlexibleContexts, OverloadedStrings #-}
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE PatternGuards, DeriveDataTypeable #-}
+{-# LANGUAGE PatternGuards #-}
 module Graphics.GPipe.Internal.Compiler where
 
 import Graphics.GPipe.Internal.Context
@@ -19,8 +19,7 @@ import Foreign.C.String
 import Foreign.Marshal.Array
 import Foreign.Ptr (nullPtr)
 import Data.Either
-import Control.Exception (throwIO, Exception)
-import Data.Dynamic (Typeable)
+import Control.Exception (throwIO)
 import Data.IORef
 
 data Drawcall s = Drawcall {

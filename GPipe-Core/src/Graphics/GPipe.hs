@@ -1,3 +1,21 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  Graphics.GPipe
+-- Copyright   :  Tobias Bexelius
+-- License     :  MIT
+--
+-- Maintainer  :  Tobias Bexelius
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- |
+-- GPipe models the entire OpenGl 3.3 core profile graphics pipeline in a functional typesafe way. It supports typesafe mutable buffers and textures, 
+-- customized VBO specification including instancing and multiple attribute buffers, DSL to write typesafe shader code in haskell, FBOs with multiple render targets, 
+-- integral texture types, and more!
+--
+-- This is a convenience module, combining GPipes all other modules.
+-----------------------------------------------------------------------------
+
 module Graphics.GPipe (
     module Graphics.GPipe.Context,
     module Graphics.GPipe.Format,

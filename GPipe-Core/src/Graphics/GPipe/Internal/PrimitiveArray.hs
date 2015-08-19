@@ -9,7 +9,8 @@ import Data.IORef
 
 import Data.Word
 
-import           Graphics.Rendering.OpenGL.Raw.Core33
+import           Graphics.GL.Core33
+import           Graphics.GL.Types
 
 data VertexArray t a = VertexArray  { vertexArrayLength :: Int, bArrBFunc:: BInput -> a }
 
@@ -41,7 +42,7 @@ type family IndexFormat a where
     IndexFormat (BPacked Word16) = Word16 
     IndexFormat (BPacked Word8) = Word8 
     
-data IndexArray = IndexArray { iArrName :: IORef CUInt, indexArrayLength:: Int, offset:: Int, restart:: Maybe Int, indexType :: CUInt } 
+data IndexArray = IndexArray { iArrName :: IORef GLuint, indexArrayLength:: Int, offset:: Int, restart:: Maybe Int, indexType :: GLuint } 
 newIndexArray :: forall os f b a. (BufferFormat b, Integral a, IndexFormat b ~ a) => Buffer os b -> Maybe a -> Render os f IndexArray
 newIndexArray buf r = let a = undefined :: b in Render $ return $ IndexArray (bufName buf) (bufferLength buf) 0 (fmap fromIntegral r) (getGlType a) 
  
@@ -52,7 +53,7 @@ dropIndices :: Int -> IndexArray -> IndexArray
 dropIndices n i = i { indexArrayLength = max (l - n) 0, offset = offset i + n } where l = indexArrayLength i
  
 class PrimitiveTopology p where
-    toGLtopology :: p -> CUInt
+    toGLtopology :: p -> GLuint
     toGLtopology = error "You cannot create your own instances of IndexFormat"
     --data Geometry p :: * -> *
     --makeGeometry :: [a] -> Geometry p a  
@@ -64,19 +65,19 @@ data Points = PointList
 --data LinesWithAdjacency = LinesWithAdjacencyList | LinesWithAdjacencyStrip   
 
 instance PrimitiveTopology Triangles where
-    toGLtopology TriangleList = gl_TRIANGLES
-    toGLtopology TriangleStrip = gl_TRIANGLE_STRIP
-    toGLtopology TriangleFan = gl_TRIANGLE_FAN
+    toGLtopology TriangleList = GL_TRIANGLES
+    toGLtopology TriangleStrip = GL_TRIANGLE_STRIP
+    toGLtopology TriangleFan = GL_TRIANGLE_FAN
     --data Geometry Triangles a = Triangle a a a
    
 instance PrimitiveTopology Lines where
-    toGLtopology LineList = gl_LINES
-    toGLtopology LineStrip = gl_LINE_STRIP
-    toGLtopology LineLoop = gl_LINE_LOOP
+    toGLtopology LineList = GL_LINES
+    toGLtopology LineStrip = GL_LINE_STRIP
+    toGLtopology LineLoop = GL_LINE_LOOP
     --data Geometry Lines a = Line a a
 
 instance PrimitiveTopology Points where
-    toGLtopology PointList = gl_POINTS
+    toGLtopology PointList = GL_POINTS
     --data Geometry Points a = Point a
 
 {-

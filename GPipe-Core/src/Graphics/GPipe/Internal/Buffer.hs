@@ -19,7 +19,8 @@ module Graphics.GPipe.Internal.Buffer
 
 import Graphics.GPipe.Internal.Context
 
-import Graphics.Rendering.OpenGL.Raw.Core33
+import Graphics.GL.Core33
+import Graphics.GL.Types
 import Foreign.Marshal.Utils
 import Foreign.Marshal.Alloc
 
@@ -64,7 +65,7 @@ instance Eq (Buffer os b) where
 bufSize :: forall os b. Buffer os b -> Int
 bufSize b = bufElementSize b * bufferLength b
 
-type BufferName = IORef CUInt
+type BufferName = IORef GLuint
 type Offset = Int
 type Stride = Int
 
@@ -97,7 +98,7 @@ instance Arrow ToBuffer where
     arr f = ToBuffer (arr f) (arr f) AlignUnknown
     first (ToBuffer a b m) = ToBuffer (first a) (first b) m
     
-data B a = B { bName :: IORef CUInt, bOffset :: Int, bStride :: Int, bSkipElems :: Int, bInstanceDiv :: Int}
+data B a = B { bName :: IORef GLuint, bOffset :: Int, bStride :: Int, bSkipElems :: Int, bInstanceDiv :: Int}
 
           
 newtype B2 a = B2 { unB2 :: B a } -- Internal
@@ -181,10 +182,10 @@ instance BufferFormat a => BufferFormat (Normalized a) where
     toBuffer = arr Normalized . toBuffer                                   
     getGlType (Normalized a) = getGlType a
     getGlPaddedFormat (Normalized a) = case getGlPaddedFormat a of
-                                            x | x == gl_RGBA_INTEGER -> gl_RGBA
-                                              | x == gl_RGB_INTEGER -> gl_RGB
-                                              | x == gl_RG_INTEGER -> gl_RG
-                                              | x == gl_RED_INTEGER -> gl_RED
+                                            x | x == GL_RGBA_INTEGER -> GL_RGBA
+                                              | x == GL_RGB_INTEGER -> GL_RGB
+                                              | x == GL_RG_INTEGER -> GL_RG
+                                              | x == GL_RED_INTEGER -> GL_RED
                                               | otherwise -> x
    
 instance (BufferFormat a, BufferFormat b) => BufferFormat (a, b) where
@@ -215,8 +216,8 @@ newBuffer elementCount | elementCount < 0 = error "newBuffer, length out of boun
                        uniAl <- getUniformAlignment
                        let buffer = makeBuffer nameRef elementCount uniAl
                        bname <- readIORef $ bufName buffer
-                       glBindBuffer gl_COPY_WRITE_BUFFER (fromIntegral bname )  
-                       glBufferData gl_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr gl_STREAM_DRAW
+                       glBindBuffer GL_COPY_WRITE_BUFFER bname  
+                       glBufferData GL_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr GL_STREAM_DRAW
                        return (buffer, nameRef, name)
     addContextFinalizer nameRef $ with name (glDeleteBuffers 1)
     addVAOBufferFinalizer nameRef
@@ -236,11 +237,11 @@ writeBuffer elems offset buffer | offset < 0 || offset >= bufferLength buffer = 
         
     in liftContextIOAsync $ do 
                           bname <- readIORef $ bufName buffer
-                          glBindBuffer gl_COPY_WRITE_BUFFER bname
-                          ptr <- glMapBufferRange gl_COPY_WRITE_BUFFER off (fromIntegral $ maxElems * elemSize) (gl_MAP_WRITE_BIT + gl_MAP_FLUSH_EXPLICIT_BIT)
+                          glBindBuffer GL_COPY_WRITE_BUFFER bname
+                          ptr <- glMapBufferRange GL_COPY_WRITE_BUFFER off (fromIntegral $maxElems * elemSize) (GL_MAP_WRITE_BIT + GL_MAP_FLUSH_EXPLICIT_BIT)
                           end <- bufferWriteInternal buffer ptr (take maxElems elems)
-                          glFlushMappedBufferRange gl_COPY_WRITE_BUFFER off (fromIntegral $ end `minusPtr` ptr) 
-                          void $ glUnmapBuffer gl_COPY_WRITE_BUFFER 
+                          glFlushMappedBufferRange GL_COPY_WRITE_BUFFER off (fromIntegral $ end `minusPtr` ptr) 
+                          void $ glUnmapBuffer GL_COPY_WRITE_BUFFER 
 
 copyBuffer :: MonadIO m => Int -> Int -> Buffer os b -> Int -> Buffer os b -> ContextT os f m ()
 copyBuffer len from bFrom to bTo | from < 0 || from >= bufferLength bFrom = error "writeBuffer, source offset out of bounds"
@@ -251,10 +252,10 @@ copyBuffer len from bFrom to bTo | from < 0 || from >= bufferLength bFrom = erro
                                  | otherwise = liftContextIOAsync $ do 
                                                       bnamef <- readIORef $ bufName bFrom
                                                       bnamet <- readIORef $ bufName bTo
-                                                      glBindBuffer gl_COPY_READ_BUFFER bnamef
-                                                      glBindBuffer gl_COPY_WRITE_BUFFER bnamet
+                                                      glBindBuffer GL_COPY_READ_BUFFER bnamef
+                                                      glBindBuffer GL_COPY_WRITE_BUFFER bnamet
                                                       let elemSize = bufElementSize bFrom -- same as for bTo
-                                                      glCopyBufferSubData gl_COPY_READ_BUFFER gl_COPY_WRITE_BUFFER (fromIntegral $ from * elemSize) (fromIntegral $ to * elemSize) (fromIntegral $ len * elemSize)   
+                                                      glCopyBufferSubData GL_COPY_READ_BUFFER GL_COPY_WRITE_BUFFER (fromIntegral $ from * elemSize) (fromIntegral $ to * elemSize) (fromIntegral $ len * elemSize)   
 
 ----------------------------------------------
 
@@ -281,7 +282,7 @@ setWriterAlignM a = do (ptr, pad:pads) <- get
 
 
 getUniformAlignment :: IO Int
-getUniformAlignment = fromIntegral <$> alloca (\ ptr -> glGetIntegerv gl_UNIFORM_BUFFER_OFFSET_ALIGNMENT ptr >> peek ptr)
+getUniformAlignment = fromIntegral <$> alloca (\ ptr -> glGetIntegerv GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT ptr >> peek ptr)
             
 makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignment -> Buffer os b
 makeBuffer name elementCount uniformAlignment  = do
@@ -360,170 +361,170 @@ peekPixel4 _ ptr = do x <- peek (castPtr ptr)
 instance BufferFormat (B Int32) where
     type HostFormat (B Int32) = Int32
     toBuffer = toBufferB
-    getGlType _ = gl_INT
+    getGlType _ = GL_INT
     peekPixel = peekPixel1 
-    getGlPaddedFormat _ = gl_RED_INTEGER
+    getGlPaddedFormat _ = GL_RED_INTEGER
 
 instance BufferFormat (B Word32) where
     type HostFormat (B Word32) = Word32
     toBuffer = toBufferB
-    getGlType _ = gl_UNSIGNED_INT
+    getGlType _ = GL_UNSIGNED_INT
     peekPixel = peekPixel1 
-    getGlPaddedFormat _ = gl_RED_INTEGER
+    getGlPaddedFormat _ = GL_RED_INTEGER
    
 instance BufferFormat (BPacked Word16) where
     type HostFormat (BPacked Word16) = Word16
     toBuffer = let ToBuffer a b _ = toBufferB :: ToBuffer Word16 (B Word16) in arr BPacked . ToBuffer a b AlignPackedIndices 
-    getGlType _ = gl_UNSIGNED_SHORT
+    getGlType _ = GL_UNSIGNED_SHORT
     peekPixel = peekPixel1 
-    getGlPaddedFormat _ = gl_RED_INTEGER
+    getGlPaddedFormat _ = GL_RED_INTEGER
 
 instance BufferFormat (BPacked Word8) where
     type HostFormat (BPacked Word8) = Word8
     toBuffer = let ToBuffer a b _ = toBufferB :: ToBuffer Word8 (B Word8) in arr BPacked . ToBuffer a b AlignPackedIndices 
-    getGlType _ = gl_UNSIGNED_BYTE
+    getGlType _ = GL_UNSIGNED_BYTE
     peekPixel = peekPixel1 
-    getGlPaddedFormat _ = gl_RED_INTEGER      
+    getGlPaddedFormat _ = GL_RED_INTEGER      
 
 instance BufferFormat (B Float) where
     type HostFormat (B Float) = Float
     toBuffer = toBufferB
-    getGlType _ = gl_FLOAT
+    getGlType _ = GL_FLOAT
     peekPixel = peekPixel1 
-    getGlPaddedFormat _ = gl_RED
+    getGlPaddedFormat _ = GL_RED
 
 instance BufferFormat (B2 Int32) where
     type HostFormat (B2 Int32) = (Int32, Int32)
     toBuffer = toBufferB2
-    getGlType _ = gl_INT
+    getGlType _ = GL_INT
     peekPixel = peekPixel2 
-    getGlPaddedFormat _ = gl_RG_INTEGER
+    getGlPaddedFormat _ = GL_RG_INTEGER
 
 instance BufferFormat (B2 Int16) where
     type HostFormat (B2 Int16) = (Int16, Int16)
     toBuffer = toBufferB2
-    getGlType _ = gl_SHORT
+    getGlType _ = GL_SHORT
     peekPixel = peekPixel2 
-    getGlPaddedFormat _ = gl_RG_INTEGER
+    getGlPaddedFormat _ = GL_RG_INTEGER
 
 instance BufferFormat (B2 Word32) where
     type HostFormat (B2 Word32) = (Word32, Word32)
     toBuffer = toBufferB2
-    getGlType _ = gl_UNSIGNED_INT
+    getGlType _ = GL_UNSIGNED_INT
     peekPixel = peekPixel2 
-    getGlPaddedFormat _ = gl_RG_INTEGER
+    getGlPaddedFormat _ = GL_RG_INTEGER
 
 instance BufferFormat (B2 Word16) where
     type HostFormat (B2 Word16) = (Word16, Word16)
     toBuffer = toBufferB2
-    getGlType _ = gl_UNSIGNED_SHORT
+    getGlType _ = GL_UNSIGNED_SHORT
     peekPixel = peekPixel2 
-    getGlPaddedFormat _ = gl_RG_INTEGER
+    getGlPaddedFormat _ = GL_RG_INTEGER
 
 instance BufferFormat (B2 Float) where
     type HostFormat (B2 Float) = (Float, Float)
     toBuffer = toBufferB2
-    getGlType _ = gl_FLOAT
+    getGlType _ = GL_FLOAT
     peekPixel = peekPixel2 
-    getGlPaddedFormat _ = gl_RG
+    getGlPaddedFormat _ = GL_RG
 
 instance BufferFormat (B3 Int32) where
     type HostFormat (B3 Int32) = (Int32, Int32, Int32)
     toBuffer = toBufferB3
-    getGlType _ = gl_INT
+    getGlType _ = GL_INT
     peekPixel = peekPixel3 
-    getGlPaddedFormat _ = gl_RGB_INTEGER
+    getGlPaddedFormat _ = GL_RGB_INTEGER
 
 instance BufferFormat (B3 Int16) where
     type HostFormat (B3 Int16) = (Int16, Int16, Int16)
     toBuffer = toBufferB3
-    getGlType _ = gl_SHORT
+    getGlType _ = GL_SHORT
     peekPixel = peekPixel3 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
+    getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B3 Int8) where
     type HostFormat (B3 Int8) = (Int8, Int8, Int8)
     toBuffer = toBufferB3
-    getGlType _ = gl_BYTE
+    getGlType _ = GL_BYTE
     peekPixel = peekPixel3 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
+    getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B3 Word32) where
     type HostFormat (B3 Word32) = (Word32, Word32, Word32)
     toBuffer = toBufferB3
-    getGlType _ = gl_UNSIGNED_INT
+    getGlType _ = GL_UNSIGNED_INT
     peekPixel = peekPixel3 
-    getGlPaddedFormat _ = gl_RGB_INTEGER
+    getGlPaddedFormat _ = GL_RGB_INTEGER
 
 instance BufferFormat (B3 Word16) where
     type HostFormat (B3 Word16) = (Word16, Word16, Word16)
     toBuffer = toBufferB3
-    getGlType _ = gl_UNSIGNED_SHORT
+    getGlType _ = GL_UNSIGNED_SHORT
     peekPixel = peekPixel3 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
+    getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B3 Word8) where
     type HostFormat (B3 Word8) = (Word8, Word8, Word8)
     toBuffer = toBufferB3
-    getGlType _ = gl_UNSIGNED_BYTE
+    getGlType _ = GL_UNSIGNED_BYTE
     peekPixel = peekPixel3 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
+    getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B3 Float) where
     type HostFormat (B3 Float) = (Float, Float, Float)
     toBuffer = toBufferB3
-    getGlType _ = gl_FLOAT
+    getGlType _ = GL_FLOAT
     peekPixel = peekPixel3 
-    getGlPaddedFormat _ = gl_RGB
+    getGlPaddedFormat _ = GL_RGB
 
 instance BufferFormat (B4 Int32) where
     type HostFormat (B4 Int32) = (Int32, Int32, Int32, Int32)
     toBuffer = toBufferB4
-    getGlType _ = gl_INT
+    getGlType _ = GL_INT
     peekPixel = peekPixel4 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
+    getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Int16) where
     type HostFormat (B4 Int16) = (Int16, Int16, Int16, Int16)
     toBuffer = toBufferB4
-    getGlType _ = gl_SHORT
+    getGlType _ = GL_SHORT
     peekPixel = peekPixel4 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
+    getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Int8) where
     type HostFormat (B4 Int8) = (Int8, Int8, Int8, Int8)
     toBuffer = toBufferB4
-    getGlType _ = gl_BYTE
+    getGlType _ = GL_BYTE
     peekPixel = peekPixel4 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
+    getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Word32) where
     type HostFormat (B4 Word32) = (Word32, Word32, Word32, Word32)
     toBuffer = toBufferB4
-    getGlType _ = gl_UNSIGNED_INT
+    getGlType _ = GL_UNSIGNED_INT
     peekPixel = peekPixel4 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
+    getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Word16) where
     type HostFormat (B4 Word16) = (Word16, Word16, Word16, Word16)
     toBuffer = toBufferB4
-    getGlType _ = gl_UNSIGNED_SHORT
+    getGlType _ = GL_UNSIGNED_SHORT
     peekPixel = peekPixel4 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
+    getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Word8) where
     type HostFormat (B4 Word8) = (Word8, Word8, Word8, Word8)
     toBuffer = toBufferB4
-    getGlType _ = gl_UNSIGNED_BYTE
+    getGlType _ = GL_UNSIGNED_BYTE
     peekPixel = peekPixel4 
-    getGlPaddedFormat _ = gl_RGBA_INTEGER
+    getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Float) where
     type HostFormat (B4 Float) = (Float, Float, Float, Float)
     toBuffer = toBufferB4
-    getGlType _ = gl_FLOAT
+    getGlType _ = GL_FLOAT
     peekPixel = peekPixel4 
-    getGlPaddedFormat _ = gl_RGBA
+    getGlPaddedFormat _ = GL_RGBA
     
 
     

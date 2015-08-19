@@ -15,7 +15,7 @@ import qualified Data.IntMap as Map
 import Data.IntMap.Lazy (insert)
 import Data.Word
 
-import Graphics.Rendering.OpenGL.Raw.Core33
+import Graphics.GL.Core33
 import Data.IORef
 import Data.Int
 
@@ -36,7 +36,7 @@ toUniformBlock sf = Shader $ do
                                                             then error "toUniformBlock, uniform buffer offset out of bounds"
                                                             else do
                                                                 bname <- readIORef $ bufName ub
-                                                                glBindBufferRange gl_UNIFORM_BUFFER (fromIntegral bind) bname (fromIntegral $ i * bufElementSize ub) (fromIntegral $ bufElementSize ub)
+                                                                glBindBufferRange GL_UNIFORM_BUFFER (fromIntegral bind) bname (fromIntegral $ i * bufElementSize ub) (fromIntegral $ bufElementSize ub)
                    return u
     where
             ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform x b (UniformFormat b x)

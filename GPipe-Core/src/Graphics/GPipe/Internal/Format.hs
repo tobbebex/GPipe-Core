@@ -8,8 +8,10 @@
 module Graphics.GPipe.Internal.Format where
 
 import Data.Word
-import Graphics.Rendering.OpenGL.Raw.Core33
+import Graphics.GL.Core33
+import Graphics.GL.Types
 import Foreign.Marshal.Array (withArray)
+import Data.Int (Int32)
 
 data RFloat 
 data RInt
@@ -104,117 +106,117 @@ data Format a where
     Depth32FStencil8 :: Format DepthStencil
 
 getGlInternalFormat :: Format f -> GLenum
-getGlInternalFormat R8 = gl_R8 
-getGlInternalFormat R8S = gl_R8_SNORM
-getGlInternalFormat R16 = gl_R16
-getGlInternalFormat R16S = gl_R16_SNORM
-getGlInternalFormat R16F = gl_R16F
-getGlInternalFormat R32F = gl_R32F
-getGlInternalFormat R8I = gl_R8I 
-getGlInternalFormat R16I = gl_R16I
-getGlInternalFormat R32I = gl_R32I
-getGlInternalFormat R8UI = gl_R8UI 
-getGlInternalFormat R16UI = gl_R16UI
-getGlInternalFormat R32UI = gl_R32UI
-getGlInternalFormat RG8 = gl_RG8 
-getGlInternalFormat RG8S = gl_RG8_SNORM
-getGlInternalFormat RG16 = gl_RG16
-getGlInternalFormat RG16S = gl_RG16_SNORM
-getGlInternalFormat RG16F = gl_RG16F
-getGlInternalFormat RG32F = gl_RG32F
-getGlInternalFormat RG8I = gl_RG8I 
-getGlInternalFormat RG16I = gl_RG16I
-getGlInternalFormat RG32I = gl_RG32I
-getGlInternalFormat RG8UI = gl_RG8UI
-getGlInternalFormat RG16UI = gl_RG16UI    
-getGlInternalFormat RG32UI = gl_RG32UI
-getGlInternalFormat R3G3B2 = gl_R3_G3_B2
-getGlInternalFormat RGB4 = gl_RGB4
-getGlInternalFormat RGB5 = gl_RGB5
-getGlInternalFormat RGB8 = gl_RGB8
-getGlInternalFormat RGB8S = gl_RGB8_SNORM
-getGlInternalFormat RGB10 = gl_RGB10
-getGlInternalFormat RGB12 = gl_RGB12
-getGlInternalFormat RGB16 = gl_RGB16
-getGlInternalFormat RGB16S = gl_RGB16_SNORM
-getGlInternalFormat RGB16F = gl_RGB16F
-getGlInternalFormat RGB32F = gl_RGB32F
-getGlInternalFormat R11FG11FB10F = gl_R11F_G11F_B10F
-getGlInternalFormat RGB9E5 = gl_RGB9_E5
-getGlInternalFormat SRGB8 = gl_SRGB8
-getGlInternalFormat RGB8I = gl_RGB8I
-getGlInternalFormat RGB16I = gl_RGB16I
-getGlInternalFormat RGB32I = gl_RGB32I
-getGlInternalFormat RGB8UI = gl_RGB8UI
-getGlInternalFormat RGB16UI = gl_RGB16UI
-getGlInternalFormat RGB32UI = gl_RGB32UI
-getGlInternalFormat RGBA2 = gl_RGBA2 
-getGlInternalFormat RGBA4 = gl_RGBA4 
-getGlInternalFormat RGB5A1 = gl_RGB5_A1 
-getGlInternalFormat RGBA8 = gl_RGBA8 
-getGlInternalFormat RGBA8S = gl_RGBA8_SNORM 
-getGlInternalFormat RGB10A2 = gl_RGB10_A2 
-getGlInternalFormat RGBA12 = gl_RGBA12 
-getGlInternalFormat RGBA16 = gl_RGBA16 
-getGlInternalFormat RGBA16S = gl_RGBA16_SNORM 
-getGlInternalFormat RGBA16F = gl_RGBA16F 
-getGlInternalFormat RGBA32F = gl_RGBA32F 
-getGlInternalFormat SRGB8A8 = gl_SRGB8_ALPHA8 
-getGlInternalFormat RGBA8I = gl_RGBA8I 
-getGlInternalFormat RGBA16I = gl_RGBA16I 
-getGlInternalFormat RGBA32I = gl_RGBA32I
-getGlInternalFormat RGBA8UI = gl_RGBA8UI 
-getGlInternalFormat RGBA16UI = gl_RGBA16UI 
-getGlInternalFormat RGBA32UI = gl_RGBA32UI
-getGlInternalFormat Depth16 = gl_DEPTH_COMPONENT16
-getGlInternalFormat Depth24 = gl_DEPTH_COMPONENT24
-getGlInternalFormat Depth32 = gl_DEPTH_COMPONENT32
-getGlInternalFormat Depth32F = gl_DEPTH_COMPONENT32F
-getGlInternalFormat Stencil1 = gl_STENCIL_INDEX1
-getGlInternalFormat Stencil4 = gl_STENCIL_INDEX4
-getGlInternalFormat Stencil8 = gl_STENCIL_INDEX8
-getGlInternalFormat Stencil16 = gl_STENCIL_INDEX16
-getGlInternalFormat Depth24Stencil8 = gl_DEPTH24_STENCIL8
-getGlInternalFormat Depth32FStencil8 = gl_DEPTH32F_STENCIL8
+getGlInternalFormat R8 = GL_R8 
+getGlInternalFormat R8S = GL_R8_SNORM
+getGlInternalFormat R16 = GL_R16
+getGlInternalFormat R16S = GL_R16_SNORM
+getGlInternalFormat R16F = GL_R16F
+getGlInternalFormat R32F = GL_R32F
+getGlInternalFormat R8I = GL_R8I 
+getGlInternalFormat R16I = GL_R16I
+getGlInternalFormat R32I = GL_R32I
+getGlInternalFormat R8UI = GL_R8UI 
+getGlInternalFormat R16UI = GL_R16UI
+getGlInternalFormat R32UI = GL_R32UI
+getGlInternalFormat RG8 = GL_RG8 
+getGlInternalFormat RG8S = GL_RG8_SNORM
+getGlInternalFormat RG16 = GL_RG16
+getGlInternalFormat RG16S = GL_RG16_SNORM
+getGlInternalFormat RG16F = GL_RG16F
+getGlInternalFormat RG32F = GL_RG32F
+getGlInternalFormat RG8I = GL_RG8I 
+getGlInternalFormat RG16I = GL_RG16I
+getGlInternalFormat RG32I = GL_RG32I
+getGlInternalFormat RG8UI = GL_RG8UI
+getGlInternalFormat RG16UI = GL_RG16UI    
+getGlInternalFormat RG32UI = GL_RG32UI
+getGlInternalFormat R3G3B2 = GL_R3_G3_B2
+getGlInternalFormat RGB4 = GL_RGB4
+getGlInternalFormat RGB5 = GL_RGB5
+getGlInternalFormat RGB8 = GL_RGB8
+getGlInternalFormat RGB8S = GL_RGB8_SNORM
+getGlInternalFormat RGB10 = GL_RGB10
+getGlInternalFormat RGB12 = GL_RGB12
+getGlInternalFormat RGB16 = GL_RGB16
+getGlInternalFormat RGB16S = GL_RGB16_SNORM
+getGlInternalFormat RGB16F = GL_RGB16F
+getGlInternalFormat RGB32F = GL_RGB32F
+getGlInternalFormat R11FG11FB10F = GL_R11F_G11F_B10F
+getGlInternalFormat RGB9E5 = GL_RGB9_E5
+getGlInternalFormat SRGB8 = GL_SRGB8
+getGlInternalFormat RGB8I = GL_RGB8I
+getGlInternalFormat RGB16I = GL_RGB16I
+getGlInternalFormat RGB32I = GL_RGB32I
+getGlInternalFormat RGB8UI = GL_RGB8UI
+getGlInternalFormat RGB16UI = GL_RGB16UI
+getGlInternalFormat RGB32UI = GL_RGB32UI
+getGlInternalFormat RGBA2 = GL_RGBA2 
+getGlInternalFormat RGBA4 = GL_RGBA4 
+getGlInternalFormat RGB5A1 = GL_RGB5_A1 
+getGlInternalFormat RGBA8 = GL_RGBA8 
+getGlInternalFormat RGBA8S = GL_RGBA8_SNORM 
+getGlInternalFormat RGB10A2 = GL_RGB10_A2 
+getGlInternalFormat RGBA12 = GL_RGBA12 
+getGlInternalFormat RGBA16 = GL_RGBA16 
+getGlInternalFormat RGBA16S = GL_RGBA16_SNORM 
+getGlInternalFormat RGBA16F = GL_RGBA16F 
+getGlInternalFormat RGBA32F = GL_RGBA32F 
+getGlInternalFormat SRGB8A8 = GL_SRGB8_ALPHA8 
+getGlInternalFormat RGBA8I = GL_RGBA8I 
+getGlInternalFormat RGBA16I = GL_RGBA16I 
+getGlInternalFormat RGBA32I = GL_RGBA32I
+getGlInternalFormat RGBA8UI = GL_RGBA8UI 
+getGlInternalFormat RGBA16UI = GL_RGBA16UI 
+getGlInternalFormat RGBA32UI = GL_RGBA32UI
+getGlInternalFormat Depth16 = GL_DEPTH_COMPONENT16
+getGlInternalFormat Depth24 = GL_DEPTH_COMPONENT24
+getGlInternalFormat Depth32 = GL_DEPTH_COMPONENT32
+getGlInternalFormat Depth32F = GL_DEPTH_COMPONENT32F
+getGlInternalFormat Stencil1 = GL_STENCIL_INDEX1
+getGlInternalFormat Stencil4 = GL_STENCIL_INDEX4
+getGlInternalFormat Stencil8 = GL_STENCIL_INDEX8
+getGlInternalFormat Stencil16 = GL_STENCIL_INDEX16
+getGlInternalFormat Depth24Stencil8 = GL_DEPTH24_STENCIL8
+getGlInternalFormat Depth32FStencil8 = GL_DEPTH32F_STENCIL8
 
 class TextureFormat f where
     getGlFormat  :: f -> GLenum
     getGlFormat = error "You cannot create your own instances of TextureFormat"
 
 instance TextureFormat RFloat where
-    getGlFormat _ = gl_RED
+    getGlFormat _ = GL_RED
 instance TextureFormat RInt where
-    getGlFormat _ = gl_RED_INTEGER
+    getGlFormat _ = GL_RED_INTEGER
 instance TextureFormat RWord where
-    getGlFormat _ = gl_RED_INTEGER
+    getGlFormat _ = GL_RED_INTEGER
 
 instance TextureFormat RGFloat where
-    getGlFormat _ = gl_RG
+    getGlFormat _ = GL_RG
 instance TextureFormat RGInt where
-    getGlFormat _ = gl_RG_INTEGER
+    getGlFormat _ = GL_RG_INTEGER
 instance TextureFormat RGWord where
-    getGlFormat _ = gl_RG_INTEGER
+    getGlFormat _ = GL_RG_INTEGER
 
 instance TextureFormat RGBFloat where
-    getGlFormat _ = gl_RGB
+    getGlFormat _ = GL_RGB
 instance TextureFormat RGBInt where
-    getGlFormat _ = gl_RGB_INTEGER
+    getGlFormat _ = GL_RGB_INTEGER
 instance TextureFormat RGBWord where
-    getGlFormat _ = gl_RGB_INTEGER
+    getGlFormat _ = GL_RGB_INTEGER
 
 instance TextureFormat RGBAFloat where
-    getGlFormat _ = gl_RGBA
+    getGlFormat _ = GL_RGBA
 instance TextureFormat RGBAInt where
-    getGlFormat _ = gl_RGBA_INTEGER
+    getGlFormat _ = GL_RGBA_INTEGER
 instance TextureFormat RGBAWord where
-    getGlFormat _ = gl_RGBA_INTEGER
+    getGlFormat _ = GL_RGBA_INTEGER
 
 instance TextureFormat Depth where
-    getGlFormat _ = gl_DEPTH_COMPONENT
+    getGlFormat _ = GL_DEPTH_COMPONENT
 instance TextureFormat Stencil where
-    getGlFormat _ = gl_STENCIL_INDEX
+    getGlFormat _ = GL_STENCIL_INDEX
 instance TextureFormat DepthStencil where
-    getGlFormat _ = gl_DEPTH_STENCIL
+    getGlFormat _ = GL_DEPTH_STENCIL
 
 class TextureFormat f => ColorSampleable f where
     type Color f a
@@ -239,7 +241,7 @@ instance ColorSampleable RFloat where
     typeStr4 _ = "vec4"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
-    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)      
+    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)      
 instance ColorSampleable RInt where
     type Color RInt a = a
     type ColorElement RInt = Int
@@ -247,7 +249,7 @@ instance ColorSampleable RInt where
     typeStr4 _ = "ivec4"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
-    setBorderColor _ t r = withArray [fromIntegral r, 0,0,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
+    setBorderColor _ t r = withArray [fromIntegral r, 0,0,0] (glTexParameterIiv t GL_TEXTURE_BORDER_COLOR)
     samplerPrefix _ = "i"
 instance ColorSampleable RWord where
     type Color RWord a = a
@@ -256,7 +258,7 @@ instance ColorSampleable RWord where
     typeStr4 _ = "uvec4"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
-    setBorderColor _ t r = withArray [fromIntegral r, 0,0,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
+    setBorderColor _ t r = withArray [fromIntegral r, 0,0,0] (glTexParameterIuiv t GL_TEXTURE_BORDER_COLOR)
     samplerPrefix _ = "u"
 
 instance ColorSampleable RGFloat where
@@ -266,7 +268,7 @@ instance ColorSampleable RGFloat where
     typeStr4 _ = "vec4"
     toColor _ (r,g,_,_) = (r, g)
     fromColor _ (r, g) = [r,g]
-    setBorderColor _ t (r, g) = withArray [realToFrac r, realToFrac g,0,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)
+    setBorderColor _ t (r, g) = withArray [realToFrac r, realToFrac g,0,0] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)
 instance ColorSampleable RGInt where
     type Color RGInt a = (a,a)
     type ColorElement RGInt = Int
@@ -274,7 +276,7 @@ instance ColorSampleable RGInt where
     typeStr4 _ = "ivec4"
     toColor _ (r,g,_,_) = (r, g)
     fromColor _ (r, g) = [r,g]
-    setBorderColor _ t (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
+    setBorderColor _ t (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glTexParameterIiv t GL_TEXTURE_BORDER_COLOR)
     samplerPrefix _ = "i"
 instance ColorSampleable RGWord where
     type Color RGWord a = (a,a)
@@ -283,7 +285,7 @@ instance ColorSampleable RGWord where
     typeStr4 _ = "uvec4"
     toColor _ (r,g,_,_) = (r, g)
     fromColor _ (r, g) = [r,g]
-    setBorderColor _ t (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
+    setBorderColor _ t (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glTexParameterIuiv t GL_TEXTURE_BORDER_COLOR)
     samplerPrefix _ = "u"
     
 instance ColorSampleable RGBFloat where
@@ -293,7 +295,7 @@ instance ColorSampleable RGBFloat where
     typeStr4 _ = "vec4"
     toColor _ (r,g,b,_) = (r, g, b)
     fromColor _ (r, g, b) = [r,g,b]
-    setBorderColor _ t (r, g, b) = withArray [realToFrac r, realToFrac g, realToFrac b,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)
+    setBorderColor _ t (r, g, b) = withArray [realToFrac r, realToFrac g, realToFrac b,0] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)
 instance ColorSampleable RGBInt where
     type Color RGBInt a = (a,a,a)
     type ColorElement RGBInt = Int
@@ -301,7 +303,7 @@ instance ColorSampleable RGBInt where
     typeStr4 _ = "ivec4"
     toColor _ (r,g,b,_) = (r, g, b)
     fromColor _ (r, g, b) = [r,g,b]
-    setBorderColor _ t (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
+    setBorderColor _ t (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glTexParameterIiv t GL_TEXTURE_BORDER_COLOR)
     samplerPrefix _ = "i"
 instance ColorSampleable RGBWord where
     type Color RGBWord a = (a,a,a)
@@ -310,7 +312,7 @@ instance ColorSampleable RGBWord where
     typeStr4 _ = "uvec4"
     toColor _ (r,g,b,_) = (r, g, b)
     fromColor _ (r, g, b) = [r,g,b]
-    setBorderColor _ t (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
+    setBorderColor _ t (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glTexParameterIuiv t GL_TEXTURE_BORDER_COLOR)
     samplerPrefix _ = "u"
 
 instance ColorSampleable RGBAFloat where
@@ -320,7 +322,7 @@ instance ColorSampleable RGBAFloat where
     typeStr4 _ = "vec4"
     toColor _ = id
     fromColor _ (r, g, b, a) = [r,g,b,a]
-    setBorderColor _ t (r, g, b, a) = withArray [realToFrac r, realToFrac g, realToFrac b, realToFrac a] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)
+    setBorderColor _ t (r, g, b, a) = withArray [realToFrac r, realToFrac g, realToFrac b, realToFrac a] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)
 instance ColorSampleable RGBAInt where
     type Color RGBAInt a = (a,a,a,a)
     type ColorElement RGBAInt = Int
@@ -328,7 +330,7 @@ instance ColorSampleable RGBAInt where
     typeStr4 _ = "ivec4"
     toColor _ = id
     fromColor _ (r, g, b, a) = [r,g,b,a]
-    setBorderColor _ t (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glTexParameterIiv t gl_TEXTURE_BORDER_COLOR)
+    setBorderColor _ t (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glTexParameterIiv t GL_TEXTURE_BORDER_COLOR)
     samplerPrefix _ = "i"
 instance ColorSampleable RGBAWord where
     type Color RGBAWord a = (a,a,a,a)
@@ -337,7 +339,7 @@ instance ColorSampleable RGBAWord where
     typeStr4 _ = "uvec4"
     toColor _ = id
     fromColor _ (r, g, b, a) = [r,g,b,a]
-    setBorderColor _ t (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glTexParameterIuiv t gl_TEXTURE_BORDER_COLOR)
+    setBorderColor _ t (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glTexParameterIuiv t GL_TEXTURE_BORDER_COLOR)
     samplerPrefix _ = "u"
 
 instance ColorSampleable Depth where
@@ -347,7 +349,7 @@ instance ColorSampleable Depth where
     typeStr4 _ = "vec4"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
-    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)      
+    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)      
 instance ColorSampleable DepthStencil where
     type Color DepthStencil a = a
     type ColorElement DepthStencil = Float
@@ -355,7 +357,7 @@ instance ColorSampleable DepthStencil where
     typeStr4 _ = "vec4"
     toColor _ (r,_,_,_) = r
     fromColor _ r = [r]
-    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t gl_TEXTURE_BORDER_COLOR)      
+    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)      
 
 class ColorSampleable c => ColorRenderable c where
     isSrgb :: Format c -> Bool
@@ -366,33 +368,33 @@ class ColorSampleable f => DepthRenderable f
 class TextureFormat f => StencilRenderable f
 
 instance ColorRenderable RFloat where
-    clearColor _ r = withArray [realToFrac r, 0,0,0] (glClearBufferfv gl_COLOR 0)
+    clearColor _ r = withArray [realToFrac r, 0,0,0] (glClearBufferfv GL_COLOR 0)
 instance ColorRenderable RInt where
-    clearColor _ r = withArray [fromIntegral r, 0,0,0] (glClearBufferiv gl_COLOR 0)
+    clearColor _ r = withArray [fromIntegral r, 0,0,0] (glClearBufferiv GL_COLOR 0)
 instance ColorRenderable RWord where
-    clearColor _ r = withArray [fromIntegral r, 0,0,0] (glClearBufferuiv gl_COLOR 0)
+    clearColor _ r = withArray [fromIntegral r, 0,0,0] (glClearBufferuiv GL_COLOR 0)
 instance ColorRenderable RGFloat where
-    clearColor _ (r, g) = withArray [realToFrac r, realToFrac g,0,0] (glClearBufferfv gl_COLOR 0)
+    clearColor _ (r, g) = withArray [realToFrac r, realToFrac g,0,0] (glClearBufferfv GL_COLOR 0)
 instance ColorRenderable RGInt where
-    clearColor _ (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glClearBufferiv gl_COLOR 0)
+    clearColor _ (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glClearBufferiv GL_COLOR 0)
 instance ColorRenderable RGWord where
-    clearColor _ (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glClearBufferuiv gl_COLOR 0)
+    clearColor _ (r, g) = withArray [fromIntegral r, fromIntegral g,0,0] (glClearBufferuiv GL_COLOR 0)
 instance ColorRenderable RGBFloat where
     isSrgb SRGB8 = True
     isSrgb _ = False
-    clearColor _ (r, g, b) = withArray [realToFrac r, realToFrac g, realToFrac b,0] (glClearBufferfv gl_COLOR 0)
+    clearColor _ (r, g, b) = withArray [realToFrac r, realToFrac g, realToFrac b,0] (glClearBufferfv GL_COLOR 0)
 instance ColorRenderable RGBInt where
-    clearColor _ (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glClearBufferiv gl_COLOR 0)
+    clearColor _ (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glClearBufferiv GL_COLOR 0)
 instance ColorRenderable RGBWord where
-    clearColor _ (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glClearBufferuiv gl_COLOR 0)
+    clearColor _ (r, g, b) = withArray [fromIntegral r, fromIntegral g, fromIntegral b,0] (glClearBufferuiv GL_COLOR 0)
 instance ColorRenderable RGBAFloat where
     isSrgb SRGB8A8 = True
     isSrgb _ = False
-    clearColor _ (r, g, b, a) = withArray [realToFrac r, realToFrac g, realToFrac b, realToFrac a] (glClearBufferfv gl_COLOR 0)
+    clearColor _ (r, g, b, a) = withArray [realToFrac r, realToFrac g, realToFrac b, realToFrac a] (glClearBufferfv GL_COLOR 0)
 instance ColorRenderable RGBAInt where
-    clearColor _ (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glClearBufferiv gl_COLOR 0)
+    clearColor _ (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glClearBufferiv GL_COLOR 0)
 instance ColorRenderable RGBAWord where
-    clearColor _ (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glClearBufferuiv gl_COLOR 0)
+    clearColor _ (r, g, b, a) = withArray [fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a] (glClearBufferuiv GL_COLOR 0)
 
 instance DepthRenderable Depth
 instance DepthRenderable DepthStencil

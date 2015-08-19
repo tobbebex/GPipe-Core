@@ -4,7 +4,7 @@
 
 module Graphics.GPipe.Internal.Expr where
 
-import Prelude hiding ((.), id)
+import Prelude hiding ((.), id, (<*))
 import Data.Word
 import Control.Category
 import Control.Monad (void, when)

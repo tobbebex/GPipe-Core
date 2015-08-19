@@ -11,7 +11,7 @@ import Control.Monad
 import Control.Monad.Trans.State.Lazy (evalStateT, get, put)
 import Control.Monad.Trans.Class (lift)
 
-import Graphics.Rendering.OpenGL.Raw.Core33
+import Graphics.GL.Core33
 import Foreign.Marshal.Utils
 import Foreign.Marshal.Alloc (alloca)
 import Foreign.Storable (peek)
@@ -55,7 +55,7 @@ mapRenderIOState :: (s -> s') -> RenderIOState s' -> RenderIOState s -> RenderIO
 mapRenderIOState f (RenderIOState a b c d) (RenderIOState i j k l) = let g x = x . f in RenderIOState (Map.union i $ Map.map g a) (Map.union j $ Map.map g b) (Map.union k $ Map.map g c) (Map.union l $ Map.map g d)
 
 data BoundState = BoundState { 
-                        boundUniforms :: Map.IntMap Int,  
+                        boundUniforms :: Map.IntMap Int, 
                         boundSamplers :: Map.IntMap Int,
                         boundRasterizerN :: Int
                         }  
@@ -66,8 +66,8 @@ compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> Render
 compile dcs s = do
     drawcalls <- liftIO $ sequence dcs -- IO only for SNMap
     (maxUnis, maxSamplers) <- liftContextIO $ do 
-                       maxUnis <- alloca (\ptr -> glGetIntegerv gl_MAX_COMBINED_UNIFORM_BLOCKS ptr >> peek ptr)
-                       maxSamplers <- alloca (\ptr -> glGetIntegerv gl_MAX_COMBINED_TEXTURE_IMAGE_UNITS ptr >> peek ptr)
+                       maxUnis <- alloca (\ptr -> glGetIntegerv GL_MAX_COMBINED_UNIFORM_BLOCKS ptr >> peek ptr)
+                       maxSamplers <- alloca (\ptr -> glGetIntegerv GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS ptr >> peek ptr)
                        return (fromIntegral maxUnis, fromIntegral maxSamplers)
     let unisPerDc = map usedUniforms drawcalls
     let sampsPerDc = map usedSamplers drawcalls
@@ -100,9 +100,9 @@ compile dcs s = do
            put $ BoundState uniState' sampState' rastN
            
            lift $ do ePname <- liftContextIO $ do
-                              vShader <- glCreateShader gl_VERTEX_SHADER
+                              vShader <- glCreateShader GL_VERTEX_SHADER
                               mErrV <- compileShader vShader vsource
-                              fShader <- glCreateShader gl_FRAGMENT_SHADER                             
+                              fShader <- glCreateShader GL_FRAGMENT_SHADER                             
                               mErrF <- compileShader fShader fsource
                               if isNothing mErrV && isNothing mErrV 
                                 then do pName <- glCreateProgram
@@ -146,22 +146,22 @@ compile dcs s = do
                                            let (mfbokeyio, blendio) = fboSetup x
                                            blendio
                                            case mfbokeyio of
-                                                Nothing -> glBindFramebuffer gl_DRAW_FRAMEBUFFER 0
+                                                Nothing -> glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
                                                 Just (fbokeyio, fboio) -> do
                                                    fbokey <- fbokeyio
                                                    mfbo <- getFBO cd fbokey
                                                    case mfbo of
                                                         Just fbo -> do fbo' <- readIORef fbo
-                                                                       glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
+                                                                       glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
                                                         Nothing -> do fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
                                                                       fbo <- newIORef fbo'
                                                                       void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
                                                                       setFBO cd fbokey fbo
-                                                                      glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
-                                                                      glEnable gl_FRAMEBUFFER_SRGB
+                                                                      glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
+                                                                      glEnable GL_FRAMEBUFFER_SRGB
                                                                       fboio
                                                                       let numColors = length $ fboColors fbokey
-                                                                      withArray [gl_COLOR_ATTACHMENT0..(gl_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $ glDrawBuffers (fromIntegral numColors)
+                                                                      withArray [GL_COLOR_ATTACHMENT0 .. (GL_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $ glDrawBuffers (fromIntegral numColors)
                                            -- Draw each Vertex Array --
                                            forM_ (map ($ inps) ((inputArrayToRenderIOs s ! primN) x)) $ \ ((keyio, vaoio), drawio) -> do
                                                 key <- keyio
@@ -184,19 +184,19 @@ compile dcs s = do
                                         with (fromIntegral len) $ \ plen ->
                                             glShaderSource name 1 pptr plen
         glCompileShader name
-        compStatus <- alloca $ \ ptr -> glGetShaderiv name gl_COMPILE_STATUS ptr >> peek ptr
-        if fromIntegral compStatus /= gl_FALSE
+        compStatus <- alloca $ \ ptr -> glGetShaderiv name GL_COMPILE_STATUS ptr >> peek ptr
+        if compStatus /= GL_FALSE
             then return Nothing
-            else do logLen <- alloca $ \ ptr -> glGetShaderiv name gl_INFO_LOG_LENGTH ptr >> peek ptr
+            else do logLen <- alloca $ \ ptr -> glGetShaderiv name GL_INFO_LOG_LENGTH ptr >> peek ptr
                     let logLen' = fromIntegral logLen
                     liftM Just $ allocaArray logLen' $ \ ptr -> do
                                     glGetShaderInfoLog name logLen nullPtr ptr
                                     peekCString ptr 
     linkProgram name = do glLinkProgram name
-                          linkStatus <- alloca $ \ ptr -> glGetProgramiv name gl_LINK_STATUS ptr >> peek ptr
-                          if fromIntegral linkStatus /= gl_FALSE
+                          linkStatus <- alloca $ \ ptr -> glGetProgramiv name GL_LINK_STATUS ptr >> peek ptr
+                          if linkStatus /= GL_FALSE
                             then return Nothing
-                            else do logLen <- alloca $ \ ptr -> glGetProgramiv name gl_INFO_LOG_LENGTH ptr >> peek ptr
+                            else do logLen <- alloca $ \ ptr -> glGetProgramiv name GL_INFO_LOG_LENGTH ptr >> peek ptr
                                     let logLen' = fromIntegral logLen
                                     liftM Just $ allocaArray logLen' $ \ ptr -> do
                                                     glGetProgramInfoLog name logLen nullPtr ptr

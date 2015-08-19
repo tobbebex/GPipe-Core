@@ -13,7 +13,7 @@ import Data.Monoid (Monoid)
 import Data.Boolean
 import Data.IntMap.Lazy (insert)
 
-import Graphics.Rendering.OpenGL.Raw.Core33
+import Graphics.GL.Core33
 
 type VPos = (VFloat, VFloat, VFloat, VFloat)
 
@@ -55,9 +55,9 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
                                                                                    glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 
                                                                                    glDepthRange (realToFrac dmin) (realToFrac dmax)
 
-        setGlCullFace Front = glEnable gl_CULL_FACE >> glCullFace gl_BACK -- Back is culled when front is rasterized
-        setGlCullFace Back = glEnable gl_CULL_FACE >> glCullFace gl_FRONT
-        setGlCullFace _ = glDisable gl_CULL_FACE
+        setGlCullFace Front = glEnable GL_CULL_FACE >> glCullFace GL_BACK -- Back is culled when front is rasterized
+        setGlCullFace Back = glEnable GL_CULL_FACE >> glCullFace GL_FRONT
+        setGlCullFace _ = glDisable GL_CULL_FACE
 
 data ViewPort = ViewPort { viewPortLowerLeft :: (Int,Int), viewPortSize :: (Int,Int) }
 data DepthRange = DepthRange { minDepth :: Float, maxDepth :: Float }

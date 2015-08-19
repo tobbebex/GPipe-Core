@@ -33,7 +33,8 @@ import Control.Monad.Trans.Class
 import Control.Applicative (Applicative)
 import Data.Typeable (Typeable)
 import qualified Data.Map.Strict as Map 
-import Graphics.Rendering.OpenGL.Raw.Core33
+import Graphics.GL.Core33
+import Graphics.GL.Types
 import Control.Concurrent.MVar
 import Data.IORef
 import Control.Monad
@@ -88,10 +89,10 @@ runSharedContextT f (ContextT m) =
                         runReaderT (i >> m) rs
 
 initGlState :: MonadIO m => ContextT os f m ()
-initGlState = liftContextIOAsync $ do glEnable gl_FRAMEBUFFER_SRGB
-                                      glEnable gl_SCISSOR_TEST
-                                      glPixelStorei gl_PACK_ALIGNMENT 1
-                                      glPixelStorei gl_UNPACK_ALIGNMENT 1
+initGlState = liftContextIOAsync $ do glEnable GL_FRAMEBUFFER_SRGB
+                                      glEnable GL_SCISSOR_TEST
+                                      glPixelStorei GL_PACK_ALIGNMENT 1
+                                      glPixelStorei GL_UNPACK_ALIGNMENT 1
 
 liftContextIO :: MonadIO m => IO a -> ContextT os f m a
 liftContextIO m = ContextT (asks fst) >>= liftIO . flip contextDoSync m
@@ -137,11 +138,11 @@ instance Exception GPipeException
 
 type SharedContextDatas = MVar [ContextData]
 type ContextData = MVar (VAOCache, FBOCache)
-data VAOKey = VAOKey { vaoBname :: !CUInt, vaoCombBufferOffset :: !Int, vaoComponents :: !CInt, vaoNorm :: !Bool, vaoDiv :: !Int } deriving (Eq, Ord)
-data FBOKey = FBOKey { fboTname :: !CUInt, fboTlayerOrNegIfRendBuff :: !Int, fboTlevel :: !Int } deriving (Eq, Ord)
+data VAOKey = VAOKey { vaoBname :: !GLuint, vaoCombBufferOffset :: !Int, vaoComponents :: !GLint, vaoNorm :: !Bool, vaoDiv :: !Int } deriving (Eq, Ord)
+data FBOKey = FBOKey { fboTname :: !GLuint, fboTlayerOrNegIfRendBuff :: !Int, fboTlevel :: !Int } deriving (Eq, Ord)
 data FBOKeys = FBOKeys { fboColors :: [FBOKey], fboDepth :: Maybe FBOKey, fboStencil :: Maybe FBOKey } deriving (Eq, Ord)  
-type VAOCache = Map.Map [VAOKey] (IORef CUInt)
-type FBOCache = Map.Map FBOKeys (IORef CUInt)
+type VAOCache = Map.Map [VAOKey] (IORef GLuint)
+type FBOCache = Map.Map FBOKeys (IORef GLuint)
 
 getFBOKeys :: FBOKeys -> [FBOKey]
 getFBOKeys (FBOKeys xs d s) = xs ++ maybeToList d ++ maybeToList s
@@ -157,18 +158,18 @@ addContextData r = do cd <- newMVar (Map.empty, Map.empty)
 removeContextData :: SharedContextDatas -> ContextData -> IO ()
 removeContextData r cd = modifyMVar_ r $ return . delete cd
 
-addCacheFinalizer :: MonadIO m => (CUInt -> (VAOCache, FBOCache) -> (VAOCache, FBOCache)) -> IORef CUInt -> ContextT os f m ()
+addCacheFinalizer :: MonadIO m => (GLuint -> (VAOCache, FBOCache) -> (VAOCache, FBOCache)) -> IORef GLuint -> ContextT os f m ()
 addCacheFinalizer f r =  ContextT $ do cds <- asks (snd . snd)
                                        liftIO $ do n <- readIORef r
                                                    void $ mkWeakIORef r $ do cs' <- readMVar cds 
                                                                              mapM_ (`modifyMVar_` (return . f n)) cs'
 
-addVAOBufferFinalizer :: MonadIO m => IORef CUInt -> ContextT os f m ()
+addVAOBufferFinalizer :: MonadIO m => IORef GLuint -> ContextT os f m ()
 addVAOBufferFinalizer = addCacheFinalizer deleteVAOBuf  
     where deleteVAOBuf n (vao, fbo) = (Map.filterWithKey (\k _ -> all ((/=n) . vaoBname) k) vao, fbo)
 
     
-addFBOTextureFinalizer :: MonadIO m => Bool -> IORef CUInt -> ContextT os f m ()
+addFBOTextureFinalizer :: MonadIO m => Bool -> IORef GLuint -> ContextT os f m ()
 addFBOTextureFinalizer isRB = addCacheFinalizer deleteVBOBuf    
     where deleteVBOBuf n (vao, fbo) = (vao, Map.filterWithKey
                                           (\ k _ ->
@@ -185,16 +186,16 @@ getContextData = ContextT $ asks (fst . snd)
 getRenderContextData :: Render os f ContextData
 getRenderContextData = Render $ asks (fst . snd)
 
-getVAO :: ContextData -> [VAOKey] -> IO (Maybe (IORef CUInt))
+getVAO :: ContextData -> [VAOKey] -> IO (Maybe (IORef GLuint))
 getVAO cd k = do (vaos, _) <- readMVar cd
                  return (Map.lookup k vaos)    
 
-setVAO :: ContextData -> [VAOKey] -> IORef CUInt -> IO ()
+setVAO :: ContextData -> [VAOKey] -> IORef GLuint -> IO ()
 setVAO cd k v = modifyMVar_ cd $ \ (vaos, fbos) -> return (Map.insert k v vaos, fbos)  
 
-getFBO :: ContextData -> FBOKeys -> IO (Maybe (IORef CUInt))
+getFBO :: ContextData -> FBOKeys -> IO (Maybe (IORef GLuint))
 getFBO cd k = do (_, fbos) <- readMVar cd
                  return (Map.lookup k fbos)
 
-setFBO :: ContextData -> FBOKeys -> IORef CUInt -> IO ()
+setFBO :: ContextData -> FBOKeys -> IORef GLuint -> IO ()
 setFBO cd k v = modifyMVar_ cd $ \(vaos, fbos) -> return (vaos, Map.insert k v fbos)  

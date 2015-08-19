@@ -20,7 +20,8 @@ import           Graphics.GPipe.Internal.Texture
 
 import           Data.Word                               (Word)
 import           Foreign.Marshal.Utils
-import           Graphics.Rendering.OpenGL.Raw.Core33
+import Graphics.GL.Core33
+import Graphics.GL.Types
 import Data.IORef
 import Foreign.Marshal.Alloc
 import Foreign.Storable (peek)
@@ -43,9 +44,9 @@ drawColor c sf = DrawColors $ do n <- get
                                  put $ n+1
                                  lift $ tell [\ix -> make3  (setColor cf ix c) $ \s -> let (i, mask, o) = sf s
                                                                                            n' = fromIntegral n
-                                                                                           useblend = if o then glEnablei gl_BLEND n' else glDisablei gl_BLEND n'
+                                                                                           useblend = if o then glEnablei GL_BLEND n' else glDisablei GL_BLEND n'
                                                                                        in (getImageFBOKey i,
-                                                                                           getImageBinding i (gl_COLOR_ATTACHMENT0 + n'),
+                                                                                           getImageBinding i (GL_COLOR_ATTACHMENT0 + n'),
                                                                                             do
                                                                                              useblend
                                                                                              setGlColorMask cf n' mask)
@@ -67,21 +68,21 @@ draw fs sf m = Shader $ tellDrawcalls fs $ \c -> let (sh,g,ioc) = runDrawColors 
     where f ioc s = let (fbokeyio, fboio, io) = ioc s
                         b = sf s
                     in (Just (makeFBOKeys fbokeyio (return Nothing) (return Nothing), fboio)
-                       , io >> glDisable gl_DEPTH_TEST >> glDisable gl_STENCIL_TEST >> setGlBlend b)
+                       , io >> glDisable GL_DEPTH_TEST >> glDisable GL_STENCIL_TEST >> setGlBlend b)
 
 drawDepth fs sf m = Shader $ tellDrawcalls fs $ \(c,d) -> let (sh,g,ioc) = runDrawColors (m c) in (sh >> setDepth d, g, f ioc)
     where f ioc s = let (fbokeyio, fboio, io) = ioc s
                         (b, di, o) = sf s
                     in (Just (makeFBOKeys fbokeyio (Just <$> getImageFBOKey di) (return Nothing)
-                             , fboio >> getImageBinding di gl_DEPTH_ATTACHMENT)
-                       , io >> glDisable gl_STENCIL_TEST >> setGlBlend b >> setGlDepthOptions o)
+                             , fboio >> getImageBinding di GL_DEPTH_ATTACHMENT)
+                       , io >> glDisable GL_STENCIL_TEST >> setGlBlend b >> setGlDepthOptions o)
 
 drawStencil fs sf m = Shader $ tellDrawcalls fs $ \c -> let (sh,g,ioc) = runDrawColors (m c) in (sh, g, f ioc )
     where f ioc s = let (fbokeyio, fboio, io) = ioc s
                         (b, si, o) = sf s
                     in (Just (makeFBOKeys fbokeyio (return Nothing) (Just <$> getImageFBOKey si)
-                             , fboio >> getImageBinding si gl_STENCIL_ATTACHMENT)
-                       , io >> glDisable gl_DEPTH_TEST >> setGlBlend b >> setGlStencilOptions o OpZero OpZero)
+                             , fboio >> getImageBinding si GL_STENCIL_ATTACHMENT)
+                       , io >> glDisable GL_DEPTH_TEST >> setGlBlend b >> setGlStencilOptions o OpZero OpZero)
 
 drawDepthStencil fs sf m = Shader $ tellDrawcalls fs $ \(c,d) -> let (sh,g,ioc) = runDrawColors (m c) in (sh >> setDepth d, g, f ioc )
     where f ioc s = let (fbokeyio, fboio, io) = ioc s
@@ -89,8 +90,8 @@ drawDepthStencil fs sf m = Shader $ tellDrawcalls fs $ \(c,d) -> let (sh,g,ioc) 
                     in (Just (makeFBOKeys fbokeyio (Just <$> getImageFBOKey di) (Just <$> getImageFBOKey si)
                              , fboio >> getCombinedBinding di si)
                        , io >> setGlBlend b >> setGlDepthStencilOptions o)
-          getCombinedBinding di si | imageEquals di si = getImageBinding di gl_DEPTH_STENCIL_ATTACHMENT
-                                   | otherwise = getImageBinding di gl_DEPTH_ATTACHMENT >> getImageBinding si gl_STENCIL_ATTACHMENT
+          getCombinedBinding di si | imageEquals di si = getImageBinding di GL_DEPTH_STENCIL_ATTACHMENT
+                                   | otherwise = getImageBinding di GL_DEPTH_ATTACHMENT >> getImageBinding si GL_STENCIL_ATTACHMENT
 
 
 drawContextColor :: forall os s c ds. ContextColorFormat c => FragmentStream (FragColor c) -> (s -> ContextColorOption c) -> Shader os (ContextFormat c ds) s ()
@@ -102,21 +103,21 @@ drawContextDepthStencil :: forall os s c ds. (DepthRenderable ds, StencilRendera
 drawContextColorDepthStencil :: forall os s c ds. (ContextColorFormat c, DepthRenderable ds, StencilRenderable ds) => FragmentStream (FragColor c, FragDepth) -> (s -> (ContextColorOption c, DepthStencilOption)) -> Shader os (ContextFormat c ds) s ()
 
 drawContextColor fs sf = Shader $ tellDrawcalls fs $ \ a -> make3 (setColor cf 0 a) io
-                            where io s = (Nothing, glDisable gl_DEPTH_TEST >> glDisable gl_STENCIL_TEST >> setGlContextColorOptions cf (sf s))
+                            where io s = (Nothing, glDisable GL_DEPTH_TEST >> glDisable GL_STENCIL_TEST >> setGlContextColorOptions cf (sf s))
                                   cf = undefined :: c
 
 drawContextDepth fs sf = Shader $ tellDrawcalls fs $ \ a-> (setDepth a, return(), io)
-                            where io s = (Nothing, glDisable gl_STENCIL_TEST >> setGlDepthOptions (sf s))
+                            where io s = (Nothing, glDisable GL_STENCIL_TEST >> setGlDepthOptions (sf s))
 
 drawContextColorDepth fs sf = Shader $ tellDrawcalls fs $ \(c,d) -> let (s, g) = setColor cf 0 c in (s >> setDepth d, g, io)
-                                where io s = let (cop, dop) = sf s in (Nothing, glDisable gl_STENCIL_TEST >> setGlContextColorOptions cf cop >> setGlDepthOptions dop)
+                                where io s = let (cop, dop) = sf s in (Nothing, glDisable GL_STENCIL_TEST >> setGlContextColorOptions cf cop >> setGlDepthOptions dop)
                                       cf = undefined :: c
 
 drawContextStencil fs sf = Shader $ tellDrawcalls fs $ const (return (), return (), io)
-                                where io s = (Nothing, glDisable gl_DEPTH_TEST >> setGlStencilOptions (sf s) OpZero OpZero)
+                                where io s = (Nothing, glDisable GL_DEPTH_TEST >> setGlStencilOptions (sf s) OpZero OpZero)
 
 drawContextColorStencil fs sf = Shader $ tellDrawcalls fs $ \ a -> make3 (setColor cf 0 a) io
-                                    where io s = let (cop, dop) = sf s in (Nothing, glDisable gl_DEPTH_TEST >> setGlContextColorOptions cf cop >> setGlStencilOptions dop OpZero OpZero)
+                                    where io s = let (cop, dop) = sf s in (Nothing, glDisable GL_DEPTH_TEST >> setGlContextColorOptions cf cop >> setGlStencilOptions dop OpZero OpZero)
                                           cf = undefined :: c
 
 drawContextDepthStencil fs sf = Shader $ tellDrawcalls fs $ \ a-> (setDepth a, return(), io)
@@ -180,9 +181,9 @@ setGlContextColorOptions c (ContextColorOption blend mask) = do
         setGlColorMask c 0 mask
         setGlBlend blend
         case blend of
-            NoBlending -> glDisable gl_BLEND
-            LogicOp _ -> glDisable gl_BLEND
-            _ -> glEnable gl_BLEND
+            NoBlending -> glDisable GL_BLEND
+            LogicOp _ -> glDisable GL_BLEND
+            _ -> glEnable GL_BLEND
 
 setGlBlend :: Blending -> IO ()
 setGlBlend NoBlending = return ()
@@ -190,23 +191,23 @@ setGlBlend (BlendRgbAlpha (e, ea) (BlendingFactors sf df, BlendingFactors sfa df
                             glBlendEquationSeparate (getGlBlendEquation e) (getGlBlendEquation ea)
                             glBlendFuncSeparate (getGlBlendFunc sf) (getGlBlendFunc df) (getGlBlendFunc sfa) (getGlBlendFunc dfa)
                             glBlendColor (realToFrac r) (realToFrac g) (realToFrac b) (realToFrac a)
-setGlBlend (LogicOp op) = glEnable gl_COLOR_LOGIC_OP >> glLogicOp (getGlLogicOp op)
+setGlBlend (LogicOp op) = glEnable GL_COLOR_LOGIC_OP >> glLogicOp (getGlLogicOp op)
 
 
 setGlDepthOptions :: DepthOption -> IO ()
-setGlDepthOptions (DepthOption df dm) = do glEnable gl_DEPTH_TEST
+setGlDepthOptions (DepthOption df dm) = do glEnable GL_DEPTH_TEST
                                            glDepthFunc (getGlCompFunc df)
                                            glDepthMask $ fromBool dm
 
 setGlStencilOptions :: FrontBack StencilOption -> StencilOp -> StencilOp -> IO ()
 setGlStencilOptions (FrontBack (StencilOption ft fr ff fp frm fwm) (StencilOption bt br bf bp brm bwm)) fdf bdf = do
-    glEnable gl_STENCIL_TEST
-    glStencilFuncSeparate gl_FRONT (getGlCompFunc ft) (fromIntegral fr) (fromIntegral frm)
-    glStencilOpSeparate gl_FRONT (getGlStencilOp ff) (getGlStencilOp fdf) (getGlStencilOp fp)
-    glStencilMaskSeparate gl_FRONT (fromIntegral fwm)
-    glStencilFuncSeparate gl_BACK (getGlCompFunc bt) (fromIntegral br) (fromIntegral brm)
-    glStencilOpSeparate gl_BACK (getGlStencilOp bf) (getGlStencilOp bdf) (getGlStencilOp bp)
-    glStencilMaskSeparate gl_BACK (fromIntegral bwm)
+    glEnable GL_STENCIL_TEST
+    glStencilFuncSeparate GL_FRONT (getGlCompFunc ft) (fromIntegral fr) (fromIntegral frm)
+    glStencilOpSeparate GL_FRONT (getGlStencilOp ff) (getGlStencilOp fdf) (getGlStencilOp fp)
+    glStencilMaskSeparate GL_FRONT (fromIntegral fwm)
+    glStencilFuncSeparate GL_BACK (getGlCompFunc bt) (fromIntegral br) (fromIntegral brm)
+    glStencilOpSeparate GL_BACK (getGlStencilOp bf) (getGlStencilOp bdf) (getGlStencilOp bp)
+    glStencilMaskSeparate GL_BACK (fromIntegral bwm)
 
 setGlDepthStencilOptions :: DepthStencilOption -> IO ()
 setGlDepthStencilOptions (DepthStencilOption sop dop (FrontBack fdf bdf)) = do
@@ -314,20 +315,20 @@ clearColorImage i c = do cd <- getRenderContextData
                          mfbo <- Render $ lift $ getFBO cd fbokey
                          case mfbo of
                                 Just fbo -> Render $ lift $ do fbo' <- readIORef fbo
-                                                               glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
+                                                               glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
                                 Nothing -> do fAdd <- getRenderContextFinalizerAdder
                                               Render $ lift $ do 
                                                   fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
                                                   fbo <- newIORef fbo'
                                                   void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
                                                   setFBO cd fbokey fbo
-                                                  glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
-                                                  glEnable gl_FRAMEBUFFER_SRGB
-                                                  getImageBinding i gl_COLOR_ATTACHMENT0
-                                                  withArray [gl_COLOR_ATTACHMENT0] $ glDrawBuffers 1
-                         Render $ lift $ do glDisable gl_SCISSOR_TEST
+                                                  glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
+                                                  glEnable GL_FRAMEBUFFER_SRGB
+                                                  getImageBinding i GL_COLOR_ATTACHMENT0
+                                                  withArray [GL_COLOR_ATTACHMENT0] $ glDrawBuffers 1
+                         Render $ lift $ do glDisable GL_SCISSOR_TEST
                                             clearColor (undefined :: c) c
-                                            glEnable gl_SCISSOR_TEST
+                                            glEnable GL_SCISSOR_TEST
 
 clearDepthImage :: DepthRenderable d => Image d -> Float -> Render os f ()
 clearDepthImage i d = do cd <- getRenderContextData
@@ -336,20 +337,20 @@ clearDepthImage i d = do cd <- getRenderContextData
                          mfbo <- Render $ lift $ getFBO cd fbokey
                          case mfbo of
                                 Just fbo -> Render $ lift $ do fbo' <- readIORef fbo
-                                                               glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
+                                                               glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
                                 Nothing -> do fAdd <- getRenderContextFinalizerAdder
                                               Render $ lift $ do 
                                                   fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
                                                   fbo <- newIORef fbo'
                                                   void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
                                                   setFBO cd fbokey fbo
-                                                  glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
-                                                  glEnable gl_FRAMEBUFFER_SRGB
-                                                  getImageBinding i gl_DEPTH_ATTACHMENT
+                                                  glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
+                                                  glEnable GL_FRAMEBUFFER_SRGB
+                                                  getImageBinding i GL_DEPTH_ATTACHMENT
                                                   glDrawBuffers 0 nullPtr
-                         Render $ lift $ do glDisable gl_SCISSOR_TEST
-                                            with (realToFrac d) $ glClearBufferfv gl_DEPTH 0
-                                            glEnable gl_SCISSOR_TEST
+                         Render $ lift $ do glDisable GL_SCISSOR_TEST
+                                            with (realToFrac d) $ glClearBufferfv GL_DEPTH 0
+                                            glEnable GL_SCISSOR_TEST
 
 clearStencilImage :: StencilRenderable s => Image s -> Int -> Render os f ()
 clearStencilImage i s = do cd <- getRenderContextData
@@ -358,20 +359,20 @@ clearStencilImage i s = do cd <- getRenderContextData
                            mfbo <- Render $ lift $ getFBO cd fbokey
                            case mfbo of
                                 Just fbo -> Render $ lift $ do fbo' <- readIORef fbo
-                                                               glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
+                                                               glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
                                 Nothing -> do fAdd <- getRenderContextFinalizerAdder
                                               Render $ lift $ do 
                                                   fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
                                                   fbo <- newIORef fbo'
                                                   void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
                                                   setFBO cd fbokey fbo
-                                                  glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
-                                                  glEnable gl_FRAMEBUFFER_SRGB
-                                                  getImageBinding i gl_STENCIL_ATTACHMENT
+                                                  glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
+                                                  glEnable GL_FRAMEBUFFER_SRGB
+                                                  getImageBinding i GL_STENCIL_ATTACHMENT
                                                   glDrawBuffers 0 nullPtr
-                           Render $ lift $ do glDisable gl_SCISSOR_TEST 
-                                              with (fromIntegral s) $ glClearBufferiv gl_STENCIL 0
-                                              glEnable gl_SCISSOR_TEST
+                           Render $ lift $ do glDisable GL_SCISSOR_TEST 
+                                              with (fromIntegral s) $ glClearBufferiv GL_STENCIL 0
+                                              glEnable GL_SCISSOR_TEST
 
 clearDepthStencilImage :: Image DepthStencil -> Float -> Int -> Render os f ()
 clearDepthStencilImage i d s = do
@@ -381,98 +382,98 @@ clearDepthStencilImage i d s = do
                            mfbo <- Render $ lift $ getFBO cd fbokey
                            case mfbo of
                                 Just fbo -> Render $ lift $ do fbo' <- readIORef fbo
-                                                               glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
+                                                               glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
                                 Nothing -> do fAdd <- getRenderContextFinalizerAdder
                                               Render $ lift $ do 
                                                   fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
                                                   fbo <- newIORef fbo'
                                                   void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
                                                   setFBO cd fbokey fbo
-                                                  glBindFramebuffer gl_DRAW_FRAMEBUFFER fbo'
-                                                  glEnable gl_FRAMEBUFFER_SRGB
-                                                  getImageBinding i gl_DEPTH_STENCIL_ATTACHMENT
+                                                  glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
+                                                  glEnable GL_FRAMEBUFFER_SRGB
+                                                  getImageBinding i GL_DEPTH_STENCIL_ATTACHMENT
                                                   glDrawBuffers 0 nullPtr
-                           Render $ lift $ do glDisable gl_SCISSOR_TEST 
-                                              glClearBufferfi gl_DEPTH_STENCIL 0 (realToFrac d) (fromIntegral s)
-                                              glEnable gl_SCISSOR_TEST 
+                           Render $ lift $ do glDisable GL_SCISSOR_TEST 
+                                              glClearBufferfi GL_DEPTH_STENCIL 0 (realToFrac d) (fromIntegral s)
+                                              glEnable GL_SCISSOR_TEST 
 
 clearContextColor :: forall os c ds. ContextColorFormat c => Color c Float -> Render os (ContextFormat c ds) ()
-clearContextColor c = Render $ lift $ do glBindFramebuffer gl_DRAW_FRAMEBUFFER 0
-                                         glDisable gl_SCISSOR_TEST 
-                                         withArray (map realToFrac (fromColor (undefined :: c) c ++ replicate 3 0 :: [Float])) $ glClearBufferfv gl_COLOR 0
-                                         glEnable gl_SCISSOR_TEST 
+clearContextColor c = Render $ lift $ do glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
+                                         glDisable GL_SCISSOR_TEST 
+                                         withArray (map realToFrac (fromColor (undefined :: c) c ++ replicate 3 0 :: [Float])) $ glClearBufferfv GL_COLOR 0
+                                         glEnable GL_SCISSOR_TEST 
 
 clearContextDepth :: DepthRenderable ds => Float -> Render os (ContextFormat c ds) ()
-clearContextDepth d = Render $ lift $ do glBindFramebuffer gl_DRAW_FRAMEBUFFER 0
-                                         glDisable gl_SCISSOR_TEST 
-                                         with (realToFrac d) $ glClearBufferfv gl_DEPTH 0
-                                         glEnable gl_SCISSOR_TEST 
+clearContextDepth d = Render $ lift $ do glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
+                                         glDisable GL_SCISSOR_TEST 
+                                         with (realToFrac d) $ glClearBufferfv GL_DEPTH 0
+                                         glEnable GL_SCISSOR_TEST 
 
 clearContextStencil :: StencilRenderable ds => Int -> Render os (ContextFormat c ds) ()
-clearContextStencil s = Render $ lift $ do glBindFramebuffer gl_DRAW_FRAMEBUFFER 0
-                                           glDisable gl_SCISSOR_TEST 
-                                           with (fromIntegral s) $ glClearBufferiv gl_STENCIL 0
-                                           glEnable gl_SCISSOR_TEST
+clearContextStencil s = Render $ lift $ do glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
+                                           glDisable GL_SCISSOR_TEST 
+                                           with (fromIntegral s) $ glClearBufferiv GL_STENCIL 0
+                                           glEnable GL_SCISSOR_TEST
 
 clearContextDepthStencil :: Float -> Int -> Render os (ContextFormat c DepthStencil) ()
-clearContextDepthStencil d s = Render $ lift $ do glBindFramebuffer gl_DRAW_FRAMEBUFFER 0
-                                                  glDisable gl_SCISSOR_TEST 
-                                                  glClearBufferfi gl_DEPTH_STENCIL 0 (realToFrac d) (fromIntegral s)
-                                                  glEnable gl_SCISSOR_TEST
+clearContextDepthStencil d s = Render $ lift $ do glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
+                                                  glDisable GL_SCISSOR_TEST 
+                                                  glClearBufferfi GL_DEPTH_STENCIL 0 (realToFrac d) (fromIntegral s)
+                                                  glEnable GL_SCISSOR_TEST
 
 ---------------
 
 
 getGlBlendEquation :: BlendEquation -> GLenum
-getGlBlendEquation FuncAdd = gl_FUNC_ADD
-getGlBlendEquation FuncSubtract = gl_FUNC_SUBTRACT
-getGlBlendEquation FuncReverseSubtract = gl_FUNC_REVERSE_SUBTRACT
-getGlBlendEquation Min = gl_MIN
-getGlBlendEquation Max = gl_MAX
+getGlBlendEquation FuncAdd = GL_FUNC_ADD
+getGlBlendEquation FuncSubtract = GL_FUNC_SUBTRACT
+getGlBlendEquation FuncReverseSubtract = GL_FUNC_REVERSE_SUBTRACT
+getGlBlendEquation Min = GL_MIN
+getGlBlendEquation Max = GL_MAX
 
 getGlBlendFunc :: BlendingFactor -> GLenum
-getGlBlendFunc Zero = gl_ZERO
-getGlBlendFunc One = gl_ONE
-getGlBlendFunc SrcColor = gl_SRC_COLOR
-getGlBlendFunc OneMinusSrcColor = gl_ONE_MINUS_SRC_COLOR
-getGlBlendFunc DstColor = gl_DST_COLOR
-getGlBlendFunc OneMinusDstColor = gl_ONE_MINUS_DST_COLOR
-getGlBlendFunc SrcAlpha = gl_SRC_ALPHA
-getGlBlendFunc OneMinusSrcAlpha = gl_ONE_MINUS_SRC_ALPHA
-getGlBlendFunc DstAlpha = gl_DST_ALPHA
-getGlBlendFunc OneMinusDstAlpha = gl_ONE_MINUS_DST_ALPHA
-getGlBlendFunc ConstantColor = gl_CONSTANT_COLOR
-getGlBlendFunc OneMinusConstantColor = gl_ONE_MINUS_CONSTANT_COLOR
-getGlBlendFunc ConstantAlpha = gl_CONSTANT_ALPHA
-getGlBlendFunc OneMinusConstantAlpha = gl_ONE_MINUS_CONSTANT_ALPHA
-getGlBlendFunc SrcAlphaSaturate = gl_SRC_ALPHA_SATURATE
+getGlBlendFunc Zero = GL_ZERO
+getGlBlendFunc One = GL_ONE
+getGlBlendFunc SrcColor = GL_SRC_COLOR
+getGlBlendFunc OneMinusSrcColor = GL_ONE_MINUS_SRC_COLOR
+getGlBlendFunc DstColor = GL_DST_COLOR
+getGlBlendFunc OneMinusDstColor = GL_ONE_MINUS_DST_COLOR
+getGlBlendFunc SrcAlpha = GL_SRC_ALPHA
+getGlBlendFunc OneMinusSrcAlpha = GL_ONE_MINUS_SRC_ALPHA
+getGlBlendFunc DstAlpha = GL_DST_ALPHA
+getGlBlendFunc OneMinusDstAlpha = GL_ONE_MINUS_DST_ALPHA
+getGlBlendFunc ConstantColor = GL_CONSTANT_COLOR
+getGlBlendFunc OneMinusConstantColor = GL_ONE_MINUS_CONSTANT_COLOR
+getGlBlendFunc ConstantAlpha = GL_CONSTANT_ALPHA
+getGlBlendFunc OneMinusConstantAlpha = GL_ONE_MINUS_CONSTANT_ALPHA
+getGlBlendFunc SrcAlphaSaturate = GL_SRC_ALPHA_SATURATE
 
 getGlLogicOp :: LogicOp -> GLenum
-getGlLogicOp Clear = gl_CLEAR
-getGlLogicOp And = gl_AND
-getGlLogicOp AndReverse = gl_AND_REVERSE
-getGlLogicOp Copy = gl_COPY
-getGlLogicOp AndInverted = gl_AND_INVERTED
-getGlLogicOp Noop = gl_NOOP
-getGlLogicOp Xor = gl_XOR
-getGlLogicOp Or = gl_OR
-getGlLogicOp Nor = gl_NOR
-getGlLogicOp Equiv = gl_EQUIV
-getGlLogicOp Invert = gl_INVERT
-getGlLogicOp OrReverse = gl_OR_REVERSE
-getGlLogicOp CopyInverted = gl_COPY_INVERTED
-getGlLogicOp OrInverted = gl_OR_INVERTED
-getGlLogicOp Nand = gl_NAND
-getGlLogicOp Set = gl_SET
+getGlLogicOp Clear = GL_CLEAR
+getGlLogicOp And = GL_AND
+getGlLogicOp AndReverse = GL_AND_REVERSE
+getGlLogicOp Copy = GL_COPY
+getGlLogicOp AndInverted = GL_AND_INVERTED
+getGlLogicOp Noop = GL_NOOP
+getGlLogicOp Xor = GL_XOR
+getGlLogicOp Or = GL_OR
+getGlLogicOp Nor = GL_NOR
+getGlLogicOp Equiv = GL_EQUIV
+getGlLogicOp Invert = GL_INVERT
+getGlLogicOp OrReverse = GL_OR_REVERSE
+getGlLogicOp CopyInverted = GL_COPY_INVERTED
+getGlLogicOp OrInverted = GL_OR_INVERTED
+getGlLogicOp Nand = GL_NAND
+getGlLogicOp Set = GL_SET
 
 getGlStencilOp :: StencilOp -> GLenum
-getGlStencilOp OpZero = gl_ZERO
-getGlStencilOp OpKeep = gl_KEEP
-getGlStencilOp OpReplace = gl_REPLACE
-getGlStencilOp OpIncr = gl_INCR
-getGlStencilOp OpIncrWrap = gl_INCR_WRAP
-getGlStencilOp OpDecr = gl_DECR
-getGlStencilOp OpDecrWrap = gl_DECR_WRAP
-getGlStencilOp OpInvert = gl_INVERT
+getGlStencilOp OpZero = GL_ZERO
+getGlStencilOp OpKeep = GL_KEEP
+getGlStencilOp OpReplace = GL_REPLACE
+getGlStencilOp OpIncr = GL_INCR
+getGlStencilOp OpIncrWrap = GL_INCR_WRAP
+getGlStencilOp OpDecr = GL_DECR
+getGlStencilOp OpDecrWrap = GL_DECR_WRAP
+getGlStencilOp OpInvert = GL_INVERT
 
    --------------------

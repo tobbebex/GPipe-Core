@@ -1,6 +1,4 @@
 flags: {}
 packages:
 - '.'
-extra-deps:
-- OpenGLRaw-2.5.1.0
-resolver: lts-2.22
+resolver: lts-3.1

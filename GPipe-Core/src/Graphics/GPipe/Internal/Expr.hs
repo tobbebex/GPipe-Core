@@ -18,6 +18,12 @@ import qualified Data.IntMap as Map
 import Data.Boolean
 import Data.List (intercalate)
 import Control.Applicative ((<$>))
+import Linear.V4
+import Linear.V3
+import Linear.V2
+import Linear.V1
+import Linear.V0
+import Linear.Metric
 
 type NextTempVar = Int
 type NextGlobal = Int
@@ -74,39 +80,39 @@ newtype S x a = S { unS :: ExprM String }
 scalarS :: SType -> ExprM RValue -> S c a
 scalarS typ = S . tellAssignment typ 
 
-vec2S :: SType -> ExprM RValue -> (S c a, S c a)
-vec2S typ s = let (x,y,_z,_w) = vec4S typ s
-              in (x,y)
-vec3S :: SType -> ExprM RValue -> (S c a, S c a, S c a)
-vec3S typ s = let (x,y,z,_w) = vec4S typ s
-              in (x,y,z)
-vec4S :: SType -> ExprM RValue -> (S c a, S c a, S c a, S c a)
+vec2S :: SType -> ExprM RValue -> V2 (S c a)
+vec2S typ s = let V4 x y _z _w = vec4S typ s
+              in V2 x y
+vec3S :: SType -> ExprM RValue -> V3 (S c a)
+vec3S typ s = let V4 x y z _w = vec4S typ s
+              in V3 x y z
+vec4S :: SType -> ExprM RValue -> V4 (S c a)
 vec4S typ s = let m = tellAssignment typ s
                   f p = S $ fmap (++ p) m
-              in (f ".x", f ".y", f".z", f ".w")
+              in V4 (f ".x") (f ".y") (f ".z") (f ".w")
 
 scalarS' :: RValue -> S c a
 scalarS' = S . return
  
-vec2S' :: RValue -> (S c a, S c a)
-vec2S' s = let (x,y,_z,_w) = vec4S' s
-           in (x,y)
-vec3S' :: RValue -> (S c a, S c a, S c a)
-vec3S' s = let (x,y,z,_w) = vec4S' s
-           in (x,y,z)
-vec4S' :: RValue -> (S c a, S c a, S c a, S c a)
+vec2S' :: RValue -> V2 (S c a)
+vec2S' s = let V4 x y _z _w = vec4S' s
+           in V2 x y
+vec3S' :: RValue -> V3 (S c a)
+vec3S' s = let V4 x y z _w = vec4S' s
+           in V3 x y z
+vec4S' :: RValue -> V4 (S c a)
 vec4S' s = let f p = S $ return (s ++ p)
-           in (f ".x", f ".y", f".z", f ".w")
+           in V4 (f ".x") (f ".y") (f".z") (f ".w")
 
-vec2S'' :: S c a -> (S c a, S c a)
-vec2S'' s = let (x,y,_z,_w) = vec4S'' s
-            in (x,y)
-vec3S'' :: S c a -> (S c a, S c a, S c a)
-vec3S'' s = let (x,y,z,_w) = vec4S'' s
-            in (x,y,z)
-vec4S'' :: S c a -> (S c a, S c a, S c a, S c a)
+vec2S'' :: S c a -> V2 (S c a)
+vec2S'' s = let V4 x y _z _w = vec4S'' s
+            in V2 x y
+vec3S'' :: S c a -> V3 (S c a)
+vec3S'' s = let V4 x y z _w = vec4S'' s
+            in V3 x y z
+vec4S'' :: S c a -> V4 (S c a)
 vec4S'' s = let f p = S $ fmap (++ p) (unS s)
-            in (f ".x", f ".y", f".z", f ".w")
+            in V4 (f ".x") (f ".y") (f".z") (f ".w")
 
            
 data V
@@ -122,14 +128,6 @@ type FFloat = S F Float
 type FInt = S F Int
 type FWord = S F Word
 type FBool = S F Bool
-
---getNextGlobal :: Monad m => StateT Int m Int
---getNextGlobal = do
---    s <- get
---    put $ s + 1 
---    return s
-
--- TODO: Add func to generate shader decl header
 
 useVInput :: SType -> Int -> ExprM String
 useVInput stype i = 
@@ -189,9 +187,6 @@ getNext = do
     s <- get
     put $ s + 1
     return s
-
---getTempVar :: ExprM Int
---getTempVar = lift $ lift $ lift $ lift getNext
        
 type RValue = String
 
@@ -306,6 +301,27 @@ instance ShaderType () x where
     toBase _ () = ShaderBaseUnit
     fromBase _ ShaderBaseUnit = ()
 
+instance ShaderType a x => ShaderType (V0 a) x where
+    type ShaderBaseType (V0 a) = ()
+    toBase _ V0 = ShaderBaseUnit
+    fromBase _ ShaderBaseUnit = V0
+instance ShaderType a x => ShaderType (V1 a) x where
+    type ShaderBaseType (V1 a) = ShaderBaseType a
+    toBase x ~(V1 a) = toBase x a
+    fromBase x a = V1 (fromBase x a)
+instance ShaderType a x => ShaderType (V2 a) x where
+    type ShaderBaseType (V2 a) = (ShaderBaseType a, ShaderBaseType a)
+    toBase x ~(V2 a b) = ShaderBaseProd (toBase x a) (toBase x b)
+    fromBase x (ShaderBaseProd a b) = V2 (fromBase x a) (fromBase x b)
+instance ShaderType a x => ShaderType (V3 a) x where
+    type ShaderBaseType (V3 a) = (ShaderBaseType a, (ShaderBaseType a, ShaderBaseType a))
+    toBase x ~(V3 a b c) = ShaderBaseProd (toBase x a) (ShaderBaseProd (toBase x b) (toBase x c))
+    fromBase x (ShaderBaseProd a (ShaderBaseProd b c)) = V3 (fromBase x a) (fromBase x b) (fromBase x c)
+instance ShaderType a x => ShaderType (V4 a) x where
+    type ShaderBaseType (V4 a) = (ShaderBaseType a, (ShaderBaseType a, (ShaderBaseType a, ShaderBaseType a)))
+    toBase x ~(V4 a b c d) = ShaderBaseProd (toBase x a) (ShaderBaseProd (toBase x b) (ShaderBaseProd (toBase x c) (toBase x d)))
+    fromBase x (ShaderBaseProd a (ShaderBaseProd b (ShaderBaseProd c d))) = V4 (fromBase x a) (fromBase x b) (fromBase x c) (fromBase x d)
+
 instance (ShaderType a x, ShaderType b x) => ShaderType (a,b) x where
     type ShaderBaseType (a,b) = (ShaderBaseType a, ShaderBaseType b)
     toBase x ~(a,b) = ShaderBaseProd (toBase x a) (toBase x b)
@@ -314,6 +330,10 @@ instance (ShaderType a x, ShaderType b x, ShaderType c x) => ShaderType (a,b,c) 
     type ShaderBaseType (a,b,c) = (ShaderBaseType a, (ShaderBaseType b, ShaderBaseType c))
     toBase x ~(a,b,c) = ShaderBaseProd (toBase x a) (ShaderBaseProd (toBase x b) (toBase x c))
     fromBase x (ShaderBaseProd a (ShaderBaseProd b c)) = (fromBase x a, fromBase x b, fromBase x c)
+instance (ShaderType a x, ShaderType b x, ShaderType c x, ShaderType d x) => ShaderType (a,b,c,d) x where
+    type ShaderBaseType (a,b,c,d) = (ShaderBaseType a, (ShaderBaseType b, (ShaderBaseType c, ShaderBaseType d)))
+    toBase x ~(a,b,c,d) = ShaderBaseProd (toBase x a) (ShaderBaseProd (toBase x b) (ShaderBaseProd (toBase x c) (toBase x d)))
+    fromBase x (ShaderBaseProd a (ShaderBaseProd b (ShaderBaseProd c d))) = (fromBase x a, fromBase x b, fromBase x c, fromBase x d)
     
 ifThenElse' :: forall a x. (ShaderType a x) => S x Bool -> a -> a -> a
 ifThenElse' b t e = ifThenElse b (const t) (const e) ()
@@ -444,8 +464,6 @@ fun1u = fun1 STypeUInt
 preopu :: String -> S c x -> S c Word
 preopu = preop STypeUInt
 
--- TODO: Implement all numeric classes for float int and word
-
 instance Num (S a Float) where
     (+) = binf "+"
     (-) = binf "-"
@@ -477,6 +495,23 @@ instance Fractional (S a Float) where
   (/)          = binf "/"
   fromRational = S . return . show . (`asTypeOf` (undefined :: Float)) . fromRational
 
+class Integral' a where
+    div' :: a -> a -> a
+    mod' :: a -> a -> a
+
+instance Integral' Int where
+    div' = div
+    mod' = mod
+instance Integral' Word where
+    div' = div
+    mod' = mod
+instance Integral' (S a Int) where
+    div' = bini "/"
+    mod' = bini "%" 
+instance Integral' (S a Word) where
+    div' = binu "/"
+    mod' = binu "%" 
+
 instance Floating (S a Float) where
   pi    = S $ return $ show (pi :: Float)
   sqrt  = fun1f "sqrt"
@@ -504,9 +539,31 @@ instance Boolean (S a Bool) where
 
 type instance BooleanOf (S a x) = S a Bool
 
+type instance BooleanOf (V0 a) = BooleanOf a
+type instance BooleanOf (V1 a) = BooleanOf a
+type instance BooleanOf (V2 a) = BooleanOf a
+type instance BooleanOf (V3 a) = BooleanOf a
+type instance BooleanOf (V4 a) = BooleanOf a
+
 instance Eq x => EqB (S a x) where
   (==*) = bin STypeBool "=="
   (/=*) = bin STypeBool "!="
+
+instance EqB a => EqB (V0 a) where
+  V0 ==* V0 = true
+  V0 /=* V0 = false
+instance EqB a => EqB (V1 a) where
+  V1 a ==* V1 x = a ==* x
+  V1 a /=* V1 x = a /=* x
+instance EqB a => EqB (V2 a) where
+  V2 a b ==* V2 x y = a ==* x &&* b ==* y
+  V2 a b /=* V2 x y = a /=* x ||* b /=* y
+instance EqB a => EqB (V3 a) where
+  V3 a b c ==* V3 x y z = a ==* x &&* b ==* y &&* c ==* z
+  V3 a b c /=* V3 x y z = a /=* x ||* b /=* y ||* c /=* z
+instance EqB a => EqB (V4 a) where
+  V4 a b c d ==* V4 x y z w = a ==* x &&* b ==* y &&* c ==* z &&* d ==* w
+  V4 a b c d /=* V4 x y z w = a /=* x ||* b /=* y ||* c /=* z ||* d /=* w
 
 instance Ord x => OrdB (S a x) where
   (<*) = bin STypeBool "<"
@@ -519,6 +576,17 @@ instance IfB (S a x) where
                                                                   t' <- t
                                                                   e' <- e
                                                                   return $ '(' : c' ++ '?' : t' ++ ':' : e' ++")"
+
+instance IfB a => IfB (V0 a) where
+        ifB q _ _ = V0 
+instance IfB a => IfB (V1 a) where
+        ifB q (V1 a) (V1 x) = V1 (ifB q a x) 
+instance IfB a => IfB (V2 a) where
+        ifB q (V2 a b) (V2 x y) = V2 (ifB q a x) (ifB q b y) 
+instance IfB a => IfB (V3 a) where
+        ifB q (V3 a b c) (V3 x y z) = V3 (ifB q a x) (ifB q b y) (ifB q c z) 
+instance IfB a => IfB (V4 a) where
+        ifB q (V4 a b c d) (V4 x y z w) = V4 (ifB q a x) (ifB q b y) (ifB q c z) (ifB q d w) 
                                        
 -- | This class provides the GPU functions either not found in Prelude's numerical classes, or that has wrong types.
 --   Instances are also provided for normal 'Float's and 'Double's.
@@ -530,7 +598,7 @@ class (IfB a, OrdB a, Floating a) => Real' a where
   floor' :: a -> a
   ceiling' :: a -> a
   fract' :: a -> a
-  mod' :: a -> a -> a
+  mod'' :: a -> a -> a
   clamp :: a -> a -> a -> a
   saturate :: a -> a
   mix :: a -> a -> a-> a
@@ -547,7 +615,7 @@ class (IfB a, OrdB a, Floating a) => Real' a where
   smoothstep a b x = let t = saturate ((x-a) / (b-a))
                      in t*t*(3-2*t)
   fract' x = x - floor' x
-  mod' x y = x - y* floor' (x/y)
+  mod'' x y = x - y* floor' (x/y)
   floor' x = -ceiling' (-x)
   ceiling' x = -floor' (-x)
   
@@ -575,7 +643,7 @@ instance Real' (S x Float) where
   floor' = fun1f "floor"
   ceiling' = fun1f "ceil"
   fract' = fun1f "fract"
-  mod' = fun2f "mod"
+  mod'' = fun2f "mod"
   clamp = fun3f "clamp"
   mix = fun3f "mix"
   step = fun2f "step"
@@ -648,41 +716,52 @@ dFdy = fun1f "dFdy"
 fwidth = fun1f "fwidth"
 
 ---------------------------------
-fromVec4 :: (S x Float, S x Float, S x Float, S x Float) -> S x (Float,Float,Float,Float)
-fromVec4 (x,y,z,w) = S $ do params <- mapM unS [x,y,z,w]
-                            return $ "vec4(" ++ intercalate "," params ++ ")"  
-fromVec3 :: (S x Float, S x Float, S x Float) -> S x (Float,Float,Float)
-fromVec3 (x,y,z) = S $ do params <- mapM unS [x,y,z]
-                          return $ "vec3(" ++ intercalate "," params ++ ")"  
-fromVec2 :: (S x Float, S x Float) -> S x (Float,Float)
-fromVec2 (x,y) = S $ do params <- mapM unS [x,y]
-                        return $ "vec2(" ++ intercalate "," params ++ ")"  
-                              
-length4 :: (S x Float, S x Float, S x Float, S x Float) -> S x Float
-length4 = fun1f "length" . fromVec4
-length3 :: (S x Float, S x Float, S x Float) -> S x Float
-length3 = fun1f "length" . fromVec3
-length2 :: (S x Float, S x Float) -> S x Float
-length2 = fun1f "length" . fromVec2
-
-normalize4 :: (S x Float, S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float, S x Float)
-normalize4 = vec4S'' . fun1 (STypeVec 4) "normalize" . fromVec4
-normalize3 :: (S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float)
-normalize3 = vec3S'' . fun1 (STypeVec 3) "normalize" . fromVec3
-normalize2 :: (S x Float, S x Float) -> (S x Float, S x Float)
-normalize2 = vec2S'' . fun1 (STypeVec 2) "normalize" . fromVec2
-
-dot4 :: (S x Float, S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float, S x Float) -> S x Float
-dot4 a b = fun2f "dot" (fromVec4 a) (fromVec4 b)
-dot3 :: (S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float) -> S x Float
-dot3 a b = fun2f "dot" (fromVec3 a) (fromVec3 b)
-dot2 :: (S x Float, S x Float) -> (S x Float, S x Float) -> S x Float
-dot2 a b = fun2f "dot" (fromVec2 a) (fromVec2 b)
-
-cross :: (S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float) -> (S x Float, S x Float, S x Float)
-cross a b = vec3S'' $ fun2 (STypeVec 3) "cross" (fromVec3 a) (fromVec3 b)
+fromVec4 :: V4 (S x Float) -> S x (V4 Float)
+fromVec4 (V4 x y z w) = S $ do params <- mapM unS [x,y,z,w]
+                               return $ "vec4(" ++ intercalate "," params ++ ")"  
+fromVec3 :: V3 (S x Float) -> S x (V3 Float)
+fromVec3 (V3 x y z) = S $ do params <- mapM unS [x,y,z]
+                             return $ "vec3(" ++ intercalate "," params ++ ")"  
+fromVec2 :: V2 (S x Float) -> S x (V2 Float)
+fromVec2 (V2 x y) = S $ do params <- mapM unS [x,y]
+                           return $ "vec2(" ++ intercalate "," params ++ ")"  
 
 ---------------------------------
+                              
+{-# RULES "norm/length4" norm = length4 #-}
+{-# RULES "norm/length3" norm = length3 #-}
+{-# RULES "norm/length2" norm = length2 #-}
+length4 :: V4 (S x Float) -> S x Float
+length4 = fun1f "length" . fromVec4
+length3 :: V3 (S x Float) -> S x Float
+length3 = fun1f "length" . fromVec3
+length2 :: V2 (S x Float) -> S x Float
+length2 = fun1f "length" . fromVec2
+
+{-# RULES "signorm/normalize4" signorm = normalize4 #-}
+{-# RULES "signorm/normalize3" signorm = normalize3 #-}
+{-# RULES "signorm/normalize2" signorm = normalize2 #-}
+normalize4 :: V4 (S x Float) -> V4 (S x Float) 
+normalize4 = vec4S'' . fun1 (STypeVec 4) "normalize" . fromVec4
+normalize3 :: V3 (S x Float) -> V3 (S x Float) 
+normalize3 = vec3S'' . fun1 (STypeVec 3) "normalize" . fromVec3
+normalize2 :: V2 (S x Float) -> V2 (S x Float)
+normalize2 = vec2S'' . fun1 (STypeVec 2) "normalize" . fromVec2
+
+{-# RULES "dot/dot4" dot = dot4 #-}
+{-# RULES "dot/dot3" dot = dot3 #-}
+{-# RULES "dot/dot2" dot = dot2 #-}
+dot4 :: V4 (S x Float) -> V4 (S x Float) -> S x Float
+dot4 a b = fun2f "dot" (fromVec4 a) (fromVec4 b)
+dot3 :: V3 (S x Float) -> V3 (S x Float) -> S x Float
+dot3 a b = fun2f "dot" (fromVec3 a) (fromVec3 b)
+dot2 :: V2 (S x Float) -> V2 (S x Float) -> S x Float
+dot2 a b = fun2f "dot" (fromVec2 a) (fromVec2 b)
+
+{-# RULES "cross/S" cross = crossS #-}
+crossS :: V3 (S x Float) -> V3 (S x Float) -> V3 (S x Float)
+crossS a b = vec3S'' $ fun2 (STypeVec 3) "cross" (fromVec3 a) (fromVec3 b)
+
 
 {-# RULES "minB/S" minB = minS #-}
 {-# RULES "maxB/S" maxB = maxS #-}

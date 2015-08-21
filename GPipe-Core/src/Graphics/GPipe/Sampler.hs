@@ -11,7 +11,6 @@ module Graphics.GPipe.Sampler (
     EdgeMode3,
     BorderColor,
     Anisotropy,
-    noAnisotropy,
     MinFilter,
     MagFilter,
     LodFilter,

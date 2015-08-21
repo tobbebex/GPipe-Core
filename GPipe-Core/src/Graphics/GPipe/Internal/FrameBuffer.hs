@@ -27,6 +27,7 @@ import Foreign.Marshal.Alloc
 import Foreign.Storable (peek)
 import Foreign.Marshal.Array (withArray)
 import Foreign.Ptr (nullPtr)
+import Linear.V4
 
 newtype DrawColors os s a = DrawColors (StateT Int (Writer [Int -> (ExprM (), GlobDeclM (), s -> (IO FBOKey, IO (), IO ()))]) a) deriving (Functor, Applicative, Monad)
 
@@ -187,7 +188,7 @@ setGlContextColorOptions c (ContextColorOption blend mask) = do
 
 setGlBlend :: Blending -> IO ()
 setGlBlend NoBlending = return ()
-setGlBlend (BlendRgbAlpha (e, ea) (BlendingFactors sf df, BlendingFactors sfa dfa) (r, g, b, a)) = do
+setGlBlend (BlendRgbAlpha (e, ea) (BlendingFactors sf df, BlendingFactors sfa dfa) (V4 r g b a)) = do
                             glBlendEquationSeparate (getGlBlendEquation e) (getGlBlendEquation ea)
                             glBlendFuncSeparate (getGlBlendFunc sf) (getGlBlendFunc df) (getGlBlendFunc sfa) (getGlBlendFunc dfa)
                             glBlendColor (realToFrac r) (realToFrac g) (realToFrac b) (realToFrac a)
@@ -249,7 +250,7 @@ data Blending =
     | BlendRgbAlpha (BlendEquation, BlendEquation) (BlendingFactors, BlendingFactors) ConstantColor
     | LogicOp LogicOp
 
-type ConstantColor = (Float, Float, Float, Float)
+type ConstantColor = V4 Float
 
 data BlendingFactors = BlendingFactors { blendFactorSrc :: BlendingFactor, blendFactorDst :: BlendingFactor }
 

@@ -12,10 +12,15 @@ import Control.Monad.Trans.State.Lazy
 import Data.Monoid (Monoid)
 import Data.Boolean
 import Data.IntMap.Lazy (insert)
+import Linear.V4
+import Linear.V3
+import Linear.V2
+import Linear.V1
+import Linear.V0
 
 import Graphics.GL.Core33
 
-type VPos = (VFloat, VFloat, VFloat, VFloat)
+type VPos = V4 VFloat
 
 data Side = Front | Back | FrontAndBack
 type ExprPos = ExprM ()
@@ -44,7 +49,7 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
     where        
         ToFragment (Kleisli m) = toFragment :: ToFragment a (FragmentFormat a)
         f n ((p, x),s) = (evalState (m x) 0, FragmentStreamData n (makePos p) s true)
-        makePos (S x, S y, S z, S w) = do
+        makePos (V4 (S x) (S y) (S z) (S w)) = do
                                        x' <- x
                                        y' <- y
                                        z' <- z
@@ -67,9 +72,9 @@ filterFragments f (FragmentStream xs) = FragmentStream $ map g xs
     where g (a,FragmentStreamData x y z w) = (a,FragmentStreamData x y z (w &&* f a))  
 
 data RasterizedInfo = RasterizedInfo {
-        rasterizedFragCoord :: (FFloat, FFloat, FFloat, FFloat),
+        rasterizedFragCoord :: V4 FFloat,
         rasterizedFrontFacing :: FBool,
-        rasterizedPointCoord :: (FFloat, FFloat)
+        rasterizedPointCoord :: V2 FFloat
     }       
 
 withRasterizedInfo :: FragmentStream a -> FragmentStream (a, RasterizedInfo)
@@ -116,6 +121,36 @@ instance FragmentInput VBool where
         toFragment = proc b -> do i <- toFragment -< ifB b 1 0 :: VInt
                                   returnA -< i ==* 1
         
+instance (FragmentInput a) => FragmentInput (V0 a) where
+    type FragmentFormat (V0 a) = V0 (FragmentFormat a)
+    toFragment = arr (const V0)
+
+instance (FragmentInput a) => FragmentInput (V1 a) where
+    type FragmentFormat (V1 a) = V1 (FragmentFormat a)
+    toFragment = proc ~(V1 a) -> do a' <- toFragment -< a
+                                    returnA -< V1 a'
+
+instance (FragmentInput a) => FragmentInput (V2 a) where
+    type FragmentFormat (V2 a) = V2 (FragmentFormat a)
+    toFragment = proc ~(V2 a b) -> do a' <- toFragment -< a
+                                      b' <- toFragment -< b
+                                      returnA -< V2 a' b'
+
+instance (FragmentInput a) => FragmentInput (V3 a) where
+    type FragmentFormat (V3 a) = V3 (FragmentFormat a)
+    toFragment = proc ~(V3 a b c) -> do a' <- toFragment -< a
+                                        b' <- toFragment -< b
+                                        c' <- toFragment -< c
+                                        returnA -< V3 a' b' c'
+
+instance (FragmentInput a) => FragmentInput (V4 a) where
+    type FragmentFormat (V4 a) = V4 (FragmentFormat a)
+    toFragment = proc ~(V4 a b c d) -> do a' <- toFragment -< a
+                                          b' <- toFragment -< b
+                                          c' <- toFragment -< c
+                                          d' <- toFragment -< d
+                                          returnA -< V4 a' b' c' d'
+                                           
 instance (FragmentInput a, FragmentInput b) => FragmentInput (a,b) where
     type FragmentFormat (a,b) = (FragmentFormat a, FragmentFormat b)
     toFragment = proc ~(a,b) -> do a' <- toFragment -< a

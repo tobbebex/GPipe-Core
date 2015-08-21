@@ -96,7 +96,7 @@ type CompiledShader os f s = s -> Render os f ()
 
 compileShader :: (MonadIO m, MonadException m) => Shader os f x () -> ContextT os f m (CompiledShader os f x)
 compileShader (Shader (ShaderM m)) = do
-        uniAl <- liftContextIO $ getUniformAlignment
+        uniAl <- liftContextIO getUniformAlignment
         let (adcs, ShaderState _ s) = runState (runListT (runWriterT (runReaderT m uniAl))) newShaderState
             f ((disc, runF):ys) e = if getAll (disc e) then runF e else f ys e
             f  [] _               = return ()

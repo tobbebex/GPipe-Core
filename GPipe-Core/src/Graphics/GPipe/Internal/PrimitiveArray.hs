@@ -4,7 +4,6 @@ module Graphics.GPipe.Internal.PrimitiveArray where
 import Graphics.GPipe.Internal.Buffer
 import Graphics.GPipe.Internal.Shader
 import Data.Monoid
-import Foreign.C.Types
 import Data.IORef
 
 import Data.Word

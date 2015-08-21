@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE Arrows, TypeFamilies, ScopedTypeVariables,
   FlexibleContexts, FlexibleInstances , TypeSynonymInstances #-}
 
@@ -36,10 +37,14 @@ import Data.Word
 import Data.Int
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
-import Foreign.C.Types
 import Data.IORef
 import Control.Applicative ((<$>))
 import Control.Monad.Trans.Writer.Lazy
+import Linear.V4
+import Linear.V3
+import Linear.V2
+import Linear.V1
+import Linear.V0
 
 class BufferFormat f where
     type HostFormat f
@@ -139,22 +144,22 @@ toBufferBUnaligned = ToBuffer
 toBufferB :: forall a. Storable a => ToBuffer a (B a)
 toBufferB = toBufferBUnaligned -- Will always be 4 aligned, only 4 size types defined for B1                                
                               
-toBufferB2 :: forall a. Storable a => ToBuffer (a,a) (B2 a)
-toBufferB2 = proc ~(a, b) -> do
+toBufferB2 :: forall a. Storable a => ToBuffer (V2 a) (B2 a)
+toBufferB2 = proc ~(V2 a b) -> do
         (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 2 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform
         a' <- toBufferBUnaligned  -< a
         toBufferBUnaligned -< b
         returnA -< B2 a' -- Will always be 4 aligned, only 4 size types defined for B2
-toBufferB3 :: forall a. Storable a => ToBuffer (a,a,a) (B3 a)
-toBufferB3 = proc ~(a, b, c) -> do
+toBufferB3 :: forall a. Storable a => ToBuffer (V3 a) (B3 a)
+toBufferB3 = proc ~(V3 a b c) -> do
         (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 4 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform 
         a' <- toBufferBUnaligned -< a
         toBufferBUnaligned -< b
         toBufferBUnaligned -< c
         (if sizeOf (undefined :: a) < 4 then alignWhen [(Align4, 4), (AlignUniform, 4)] else id) -< () -- For types smaller than 4 we need to pad 
         returnA -< B3 a'
-toBufferB4 :: forall a. Storable a => ToBuffer (a,a,a,a) (B4 a)
-toBufferB4 = proc ~(a, b, c, d) -> do
+toBufferB4 :: forall a. Storable a => ToBuffer (V4 a) (B4 a)
+toBufferB4 = proc ~(V4 a b c d) -> do
         (if sizeOf (undefined :: a) >= 4 then alignWhen [(AlignUniform, 4 * sizeOf (undefined :: a))] else id) -< () -- Small optimization if someone puts non-usable types in a uniform 
         a' <- toBufferBUnaligned -< a
         toBufferBUnaligned -< b
@@ -182,11 +187,36 @@ instance BufferFormat a => BufferFormat (Normalized a) where
     toBuffer = arr Normalized . toBuffer                                   
     getGlType (Normalized a) = getGlType a
     getGlPaddedFormat (Normalized a) = case getGlPaddedFormat a of
-                                            x | x == GL_RGBA_INTEGER -> GL_RGBA
-                                              | x == GL_RGB_INTEGER -> GL_RGB
-                                              | x == GL_RG_INTEGER -> GL_RG
-                                              | x == GL_RED_INTEGER -> GL_RED
-                                              | otherwise -> x
+                                            GL_RGBA_INTEGER -> GL_RGBA
+                                            GL_RGB_INTEGER -> GL_RGB
+                                            GL_RG_INTEGER -> GL_RG
+                                            GL_RED_INTEGER -> GL_RED
+                                            x -> x
+
+instance BufferFormat a => BufferFormat (V0 a) where
+    type HostFormat (V0 a) = V0 (HostFormat a)
+    toBuffer = arr (const V0)
+instance BufferFormat a => BufferFormat (V1 a) where
+    type HostFormat (V1 a) = V1 (HostFormat a)
+    toBuffer = proc ~(V1 a) -> do
+                a' <- toBuffer -< a
+                returnA -< V1 a'
+instance BufferFormat a => BufferFormat (V2 a) where
+    type HostFormat (V2 a) = V2 (HostFormat a)
+    toBuffer = proc ~(V2 a b) -> do
+                (a', b') <- toBuffer -< (a,b)
+                returnA -< V2 a' b'
+instance BufferFormat a => BufferFormat (V3 a) where
+    type HostFormat (V3 a) = V3 (HostFormat a)
+    toBuffer = proc ~(V3 a b c) -> do
+                (a', b', c') <- toBuffer -< (a, b, c)
+                returnA -< V3 a' b' c'
+instance BufferFormat a => BufferFormat (V4 a) where
+    type HostFormat (V4 a) = V4 (HostFormat a)
+    toBuffer = proc ~(V4 a b c d) -> do
+                (a', b', c', d') <- toBuffer -< (a, b, c, d)
+                returnA -< V4 a' b' c' d'
+
    
 instance (BufferFormat a, BufferFormat b) => BufferFormat (a, b) where
     type HostFormat (a,b) = (HostFormat a, HostFormat b)
@@ -205,7 +235,6 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
                 ((a', b', c'), d') <- toBuffer -< ((a, b, c), d)
                 returnA -< (a', b', c', d')
 
--- TODO: Add packed pixelformats with special packing writers                
 
 newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT os f m (Buffer os b)
 newBuffer elementCount | elementCount < 0 = error "newBuffer, length out of bounds" 
@@ -303,59 +332,59 @@ type family BufferColor c h where
     BufferColor Word Word16 = BPacked Word16
     BufferColor Word Word8  = BPacked Word8
 
-    BufferColor (Float, Float) (Int32, Int32) = Normalized (B2 Int32) 
-    BufferColor (Float, Float) (Int16, Int16) = Normalized (B2 Int16) 
-    BufferColor (Float, Float) (Float, Float) = B2 Float
+    BufferColor (V2 Float) (V2 Int32) = Normalized (B2 Int32) 
+    BufferColor (V2 Float) (V2 Int16) = Normalized (B2 Int16) 
+    BufferColor (V2 Float) (V2 Float) = B2 Float
 
-    BufferColor (Int, Int) (Int32, Int32) = B2 Int32
-    BufferColor (Int, Int) (Int16, Int16) = B2 Int16
+    BufferColor (V2 Int) (V2 Int32) = B2 Int32
+    BufferColor (V2 Int) (V2 Int16) = B2 Int16
 
-    BufferColor (Word, Word) (Word32, Word32) = B2 Word32
-    BufferColor (Word, Word) (Word16, Word16) = B2 Word16
+    BufferColor (V2 Word) (V2 Word32) = B2 Word32
+    BufferColor (V2 Word) (V2 Word16) = B2 Word16
 
-    BufferColor (Float, Float, Float) (Int32, Int32, Int32) = Normalized (B3 Int32) 
-    BufferColor (Float, Float, Float) (Int16, Int16, Int16) = Normalized (B3 Int16)
-    BufferColor (Float, Float, Float) (Int8, Int8, Int8)    = Normalized (B3 Int8)
-    BufferColor (Float, Float, Float) (Float, Float, Float) = B3 Float
+    BufferColor (V3 Float) (V3 Int32) = Normalized (B3 Int32) 
+    BufferColor (V3 Float) (V3 Int16) = Normalized (B3 Int16)
+    BufferColor (V3 Float) (V3 Int8)    = Normalized (B3 Int8)
+    BufferColor (V3 Float) (V3 Float) = B3 Float
 
-    BufferColor (Int, Int, Int) (Int32, Int32, Int32) = B3 Int32
-    BufferColor (Int, Int, Int) (Int16, Int16, Int16) = B3 Int16
-    BufferColor (Int, Int, Int) (Int8, Int8, Int8)    = B3 Int8
+    BufferColor (V3 Int) (V3 Int32) = B3 Int32
+    BufferColor (V3 Int) (V3 Int16) = B3 Int16
+    BufferColor (V3 Int) (V3 Int8)    = B3 Int8
 
-    BufferColor (Word, Word, Word) (Word32, Word32, Word32) = B3 Word32
-    BufferColor (Word, Word, Word) (Word16, Word16, Word16) = B3 Word16
-    BufferColor (Word, Word, Word) (Word8, Word8, Word8)    = B3 Word8
+    BufferColor (V3 Word) (V3 Word32) = B3 Word32
+    BufferColor (V3 Word) (V3 Word16) = B3 Word16
+    BufferColor (V3 Word) (V3 Word8)    = B3 Word8
 
-    BufferColor (Float, Float, Float, Float) (Int32, Int32, Int32, Int32) = Normalized (B4 Int32)
-    BufferColor (Float, Float, Float, Float) (Int16, Int16, Int16, Int16) = Normalized (B4 Int16)
-    BufferColor (Float, Float, Float, Float) (Int8, Int8, Int8, Int8)     = Normalized (B4 Int8)
-    BufferColor (Float, Float, Float, Float) (Float, Float, Float, Float) = B4 Float
+    BufferColor (V4 Float) (V4 Int32) = Normalized (B4 Int32)
+    BufferColor (V4 Float) (V4 Int16) = Normalized (B4 Int16)
+    BufferColor (V4 Float) (V4 Int8)     = Normalized (B4 Int8)
+    BufferColor (V4 Float) (V4 Float) = B4 Float
 
-    BufferColor (Int, Int, Int, Int) (Int32, Int32, Int32, Int32) = B4 Int32
-    BufferColor (Int, Int, Int, Int) (Int16, Int16, Int16, Int16) = B4 Int16
-    BufferColor (Int, Int, Int, Int) (Int8, Int8, Int8, Int8)     = B4 Int8
+    BufferColor (V4 Int) (V4 Int32) = B4 Int32
+    BufferColor (V4 Int) (V4 Int16) = B4 Int16
+    BufferColor (V4 Int) (V4 Int8)     = B4 Int8
 
-    BufferColor (Word, Word, Word, Word) (Word32, Word32, Word32, Word32) = B4 Word32
-    BufferColor (Word, Word, Word, Word) (Word16, Word16, Word16, Word16) = B4 Word16
-    BufferColor (Word, Word, Word, Word) (Word8, Word8, Word8, Word8)     = B4 Word8
+    BufferColor (V4 Word) (V4 Word32) = B4 Word32
+    BufferColor (V4 Word) (V4 Word16) = B4 Word16
+    BufferColor (V4 Word) (V4 Word8)     = B4 Word8
 
 peekPixel1 :: Storable a => t -> Ptr x -> IO a
 peekPixel1 _ = peek . castPtr 
-peekPixel2 :: (Storable a) => t -> Ptr x -> IO (a, a)
+peekPixel2 :: (Storable a) => t -> Ptr x -> IO (V2 a)
 peekPixel2 _ ptr = do x <- peek (castPtr ptr)
                       y <- peekElemOff (castPtr ptr ) 1
-                      return (x,y) 
-peekPixel3 :: (Storable a) => t -> Ptr x -> IO (a, a, a)
+                      return (V2 x y) 
+peekPixel3 :: (Storable a) => t -> Ptr x -> IO (V3 a)
 peekPixel3 _ ptr = do x <- peek (castPtr ptr)
                       y <- peekElemOff (castPtr ptr ) 1
                       z <- peekElemOff (castPtr ptr ) 2
-                      return (x,y,z) 
-peekPixel4 :: (Storable a) => t -> Ptr x -> IO (a, a, a, a)
+                      return (V3 x y z) 
+peekPixel4 :: (Storable a) => t -> Ptr x -> IO (V4 a)
 peekPixel4 _ ptr = do x <- peek (castPtr ptr)
                       y <- peekElemOff (castPtr ptr ) 1
                       z <- peekElemOff (castPtr ptr ) 2
                       w <- peekElemOff (castPtr ptr ) 3
-                      return (x,y,z,w) 
+                      return (V4 x y z w) 
 
 
 instance BufferFormat (B Int32) where
@@ -394,133 +423,133 @@ instance BufferFormat (B Float) where
     getGlPaddedFormat _ = GL_RED
 
 instance BufferFormat (B2 Int32) where
-    type HostFormat (B2 Int32) = (Int32, Int32)
+    type HostFormat (B2 Int32) = V2 Int32
     toBuffer = toBufferB2
     getGlType _ = GL_INT
     peekPixel = peekPixel2 
     getGlPaddedFormat _ = GL_RG_INTEGER
 
 instance BufferFormat (B2 Int16) where
-    type HostFormat (B2 Int16) = (Int16, Int16)
+    type HostFormat (B2 Int16) = V2 Int16
     toBuffer = toBufferB2
     getGlType _ = GL_SHORT
     peekPixel = peekPixel2 
     getGlPaddedFormat _ = GL_RG_INTEGER
 
 instance BufferFormat (B2 Word32) where
-    type HostFormat (B2 Word32) = (Word32, Word32)
+    type HostFormat (B2 Word32) = V2 Word32
     toBuffer = toBufferB2
     getGlType _ = GL_UNSIGNED_INT
     peekPixel = peekPixel2 
     getGlPaddedFormat _ = GL_RG_INTEGER
 
 instance BufferFormat (B2 Word16) where
-    type HostFormat (B2 Word16) = (Word16, Word16)
+    type HostFormat (B2 Word16) = V2 Word16
     toBuffer = toBufferB2
     getGlType _ = GL_UNSIGNED_SHORT
     peekPixel = peekPixel2 
     getGlPaddedFormat _ = GL_RG_INTEGER
 
 instance BufferFormat (B2 Float) where
-    type HostFormat (B2 Float) = (Float, Float)
+    type HostFormat (B2 Float) = V2 Float
     toBuffer = toBufferB2
     getGlType _ = GL_FLOAT
     peekPixel = peekPixel2 
     getGlPaddedFormat _ = GL_RG
 
 instance BufferFormat (B3 Int32) where
-    type HostFormat (B3 Int32) = (Int32, Int32, Int32)
+    type HostFormat (B3 Int32) = V3 Int32
     toBuffer = toBufferB3
     getGlType _ = GL_INT
     peekPixel = peekPixel3 
     getGlPaddedFormat _ = GL_RGB_INTEGER
 
 instance BufferFormat (B3 Int16) where
-    type HostFormat (B3 Int16) = (Int16, Int16, Int16)
+    type HostFormat (B3 Int16) = V3 Int16
     toBuffer = toBufferB3
     getGlType _ = GL_SHORT
     peekPixel = peekPixel3 
     getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B3 Int8) where
-    type HostFormat (B3 Int8) = (Int8, Int8, Int8)
+    type HostFormat (B3 Int8) = V3 Int8
     toBuffer = toBufferB3
     getGlType _ = GL_BYTE
     peekPixel = peekPixel3 
     getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B3 Word32) where
-    type HostFormat (B3 Word32) = (Word32, Word32, Word32)
+    type HostFormat (B3 Word32) = V3 Word32
     toBuffer = toBufferB3
     getGlType _ = GL_UNSIGNED_INT
     peekPixel = peekPixel3 
     getGlPaddedFormat _ = GL_RGB_INTEGER
 
 instance BufferFormat (B3 Word16) where
-    type HostFormat (B3 Word16) = (Word16, Word16, Word16)
+    type HostFormat (B3 Word16) = V3 Word16
     toBuffer = toBufferB3
     getGlType _ = GL_UNSIGNED_SHORT
     peekPixel = peekPixel3 
     getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B3 Word8) where
-    type HostFormat (B3 Word8) = (Word8, Word8, Word8)
+    type HostFormat (B3 Word8) = V3 Word8
     toBuffer = toBufferB3
     getGlType _ = GL_UNSIGNED_BYTE
     peekPixel = peekPixel3 
     getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B3 Float) where
-    type HostFormat (B3 Float) = (Float, Float, Float)
+    type HostFormat (B3 Float) = V3 Float
     toBuffer = toBufferB3
     getGlType _ = GL_FLOAT
     peekPixel = peekPixel3 
     getGlPaddedFormat _ = GL_RGB
 
 instance BufferFormat (B4 Int32) where
-    type HostFormat (B4 Int32) = (Int32, Int32, Int32, Int32)
+    type HostFormat (B4 Int32) = V4 Int32
     toBuffer = toBufferB4
     getGlType _ = GL_INT
     peekPixel = peekPixel4 
     getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Int16) where
-    type HostFormat (B4 Int16) = (Int16, Int16, Int16, Int16)
+    type HostFormat (B4 Int16) = V4 Int16
     toBuffer = toBufferB4
     getGlType _ = GL_SHORT
     peekPixel = peekPixel4 
     getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Int8) where
-    type HostFormat (B4 Int8) = (Int8, Int8, Int8, Int8)
+    type HostFormat (B4 Int8) = V4 Int8
     toBuffer = toBufferB4
     getGlType _ = GL_BYTE
     peekPixel = peekPixel4 
     getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Word32) where
-    type HostFormat (B4 Word32) = (Word32, Word32, Word32, Word32)
+    type HostFormat (B4 Word32) = V4 Word32
     toBuffer = toBufferB4
     getGlType _ = GL_UNSIGNED_INT
     peekPixel = peekPixel4 
     getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Word16) where
-    type HostFormat (B4 Word16) = (Word16, Word16, Word16, Word16)
+    type HostFormat (B4 Word16) = V4 Word16
     toBuffer = toBufferB4
     getGlType _ = GL_UNSIGNED_SHORT
     peekPixel = peekPixel4 
     getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Word8) where
-    type HostFormat (B4 Word8) = (Word8, Word8, Word8, Word8)
+    type HostFormat (B4 Word8) = V4 Word8
     toBuffer = toBufferB4
     getGlType _ = GL_UNSIGNED_BYTE
     peekPixel = peekPixel4 
     getGlPaddedFormat _ = GL_RGBA_INTEGER
 
 instance BufferFormat (B4 Float) where
-    type HostFormat (B4 Float) = (Float, Float, Float, Float)
+    type HostFormat (B4 Float) = V4 Float
     toBuffer = toBufferB4
     getGlType _ = GL_FLOAT
     peekPixel = peekPixel4 

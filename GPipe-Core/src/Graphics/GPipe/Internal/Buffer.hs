@@ -257,8 +257,8 @@ bufferWriteInternal b ptr (x:xs) = do bufWriter b ptr x
                                       bufferWriteInternal b (ptr `plusPtr` bufElementSize b) xs
 bufferWriteInternal _ ptr [] = return ptr
 
-writeBuffer :: MonadIO m => [HostFormat b] -> Int -> Buffer os b -> ContextT os f m ()
-writeBuffer elems offset buffer | offset < 0 || offset >= bufferLength buffer = error "writeBuffer, offset out of bounds"
+writeBuffer :: MonadIO m => [HostFormat b] -> Buffer os b -> Int -> ContextT os f m ()
+writeBuffer elems buffer offset | offset < 0 || offset >= bufferLength buffer = error "writeBuffer, offset out of bounds"
                                 | otherwise = 
     let maxElems = max 0 $ bufferLength buffer - offset
         elemSize = bufElementSize buffer
@@ -272,8 +272,8 @@ writeBuffer elems offset buffer | offset < 0 || offset >= bufferLength buffer = 
                           glFlushMappedBufferRange GL_COPY_WRITE_BUFFER off (fromIntegral $ end `minusPtr` ptr) 
                           void $ glUnmapBuffer GL_COPY_WRITE_BUFFER 
 
-copyBuffer :: MonadIO m => Int -> Int -> Buffer os b -> Int -> Buffer os b -> ContextT os f m ()
-copyBuffer len from bFrom to bTo | from < 0 || from >= bufferLength bFrom = error "writeBuffer, source offset out of bounds"
+copyBuffer :: MonadIO m => Buffer os b -> Int -> Buffer os b -> Int -> Int -> ContextT os f m ()
+copyBuffer bFrom from bTo to len | from < 0 || from >= bufferLength bFrom = error "writeBuffer, source offset out of bounds"
                                  | to < 0 || to >= bufferLength bTo = error "writeBuffer, destination offset out of bounds"
                                  | len < 0 = error "writeBuffer, length out of bounds"
                                  | len + from > bufferLength bFrom = error "writeBuffer, source buffer too small"

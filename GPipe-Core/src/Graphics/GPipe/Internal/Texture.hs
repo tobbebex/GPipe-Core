@@ -860,12 +860,12 @@ data SampleLod vx x where
     SampleAuto :: SampleLod v F
     SampleBias :: FFloat -> SampleLod vx F   
     SampleLod :: S x Float -> SampleLod vx x
-    SampleGrad :: (vx, vx) -> SampleLod vx x
+    SampleGrad :: vx -> vx -> SampleLod vx x
 
 data SampleLod' vx x where
     SampleAuto' :: SampleLod' v F
     SampleBias' :: FFloat -> SampleLod' vx F   
-    SampleGrad' :: (vx, vx) -> SampleLod' vx x
+    SampleGrad' :: vx -> vx -> SampleLod' vx x
 
 type SampleLod1 x = SampleLod (S x Float) x
 type SampleLod2 x = SampleLod (V2 (S x Float)) x
@@ -876,7 +876,7 @@ type SampleLod3' x = SampleLod' (V3 (S x Float)) x
 fromLod' :: SampleLod' v x -> SampleLod v x
 fromLod' SampleAuto' = SampleAuto
 fromLod' (SampleBias' x) = SampleBias x
-fromLod' (SampleGrad' x) = SampleGrad x
+fromLod' (SampleGrad' x y) = SampleGrad x y
 
 type SampleProj x = Maybe (S x Float)
 type SampleOffset1 x = Maybe Int 
@@ -1037,7 +1037,7 @@ sampleFunc s proj lod off coord vToS lvToS civToS pvToS = do
     projCoordParam (Just p) = pvToS coord p
     
     lodParam (SampleLod x) = fmap (',':) (unS x)
-    lodParam (SampleGrad (x,y)) = (++) <$> fmap (',':) (lvToS x) <*> fmap (',':) (lvToS y)
+    lodParam (SampleGrad x y) = (++) <$> fmap (',':) (lvToS x) <*> fmap (',':) (lvToS y)
     lodParam _ = return ""
     
     biasParam :: SampleLod v x -> ExprM String 
@@ -1046,7 +1046,7 @@ sampleFunc s proj lod off coord vToS lvToS civToS pvToS = do
     biasParam _ = return ""    
        
     lodName (SampleLod _) = "Lod"
-    lodName (SampleGrad _) = "Grad"
+    lodName (SampleGrad _ _) = "Grad"
     lodName _ = ""
     
 fetchFunc s off coord lod vToS civToS = do

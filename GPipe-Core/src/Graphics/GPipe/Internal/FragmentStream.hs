@@ -55,16 +55,16 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
                                        z' <- z
                                        w' <- w
                                        tellAssignment' "gl_Position" $ "vec4("++x'++',':y'++',':z'++',':w'++")"
-        io s = let (side, ViewPort (x,y) (w,h), DepthRange dmin dmax) = sf s in do setGlCullFace side
-                                                                                   glScissor (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 
-                                                                                   glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 
-                                                                                   glDepthRange (realToFrac dmin) (realToFrac dmax)
+        io s = let (side, ViewPort (V2 x y) (V2 w h), DepthRange dmin dmax) = sf s in do setGlCullFace side
+                                                                                         glScissor (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 
+                                                                                         glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 
+                                                                                         glDepthRange (realToFrac dmin) (realToFrac dmax)
 
         setGlCullFace Front = glEnable GL_CULL_FACE >> glCullFace GL_BACK -- Back is culled when front is rasterized
         setGlCullFace Back = glEnable GL_CULL_FACE >> glCullFace GL_FRONT
         setGlCullFace _ = glDisable GL_CULL_FACE
 
-data ViewPort = ViewPort { viewPortLowerLeft :: (Int,Int), viewPortSize :: (Int,Int) }
+data ViewPort = ViewPort { viewPortLowerLeft :: V2 Int, viewPortSize :: V2 Int }
 data DepthRange = DepthRange { minDepth :: Float, maxDepth :: Float }
  
 filterFragments :: (a -> FBool) -> FragmentStream a -> FragmentStream a 

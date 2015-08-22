@@ -257,8 +257,8 @@ bufferWriteInternal b ptr (x:xs) = do bufWriter b ptr x
                                       bufferWriteInternal b (ptr `plusPtr` bufElementSize b) xs
 bufferWriteInternal _ ptr [] = return ptr
 
-writeBuffer :: MonadIO m => [HostFormat b] -> Buffer os b -> Int -> ContextT os f m ()
-writeBuffer elems buffer offset | offset < 0 || offset >= bufferLength buffer = error "writeBuffer, offset out of bounds"
+writeBuffer :: MonadIO m => Buffer os b -> Int -> [HostFormat b] -> ContextT os f m ()
+writeBuffer buffer offset elems | offset < 0 || offset >= bufferLength buffer = error "writeBuffer, offset out of bounds"
                                 | otherwise = 
     let maxElems = max 0 $ bufferLength buffer - offset
         elemSize = bufElementSize buffer
@@ -344,29 +344,29 @@ type family BufferColor c h where
 
     BufferColor (V3 Float) (V3 Int32) = Normalized (B3 Int32) 
     BufferColor (V3 Float) (V3 Int16) = Normalized (B3 Int16)
-    BufferColor (V3 Float) (V3 Int8)    = Normalized (B3 Int8)
+    BufferColor (V3 Float) (V3 Int8)  = Normalized (B3 Int8)
     BufferColor (V3 Float) (V3 Float) = B3 Float
 
     BufferColor (V3 Int) (V3 Int32) = B3 Int32
     BufferColor (V3 Int) (V3 Int16) = B3 Int16
-    BufferColor (V3 Int) (V3 Int8)    = B3 Int8
+    BufferColor (V3 Int) (V3 Int8)  = B3 Int8
 
     BufferColor (V3 Word) (V3 Word32) = B3 Word32
     BufferColor (V3 Word) (V3 Word16) = B3 Word16
-    BufferColor (V3 Word) (V3 Word8)    = B3 Word8
+    BufferColor (V3 Word) (V3 Word8)  = B3 Word8
 
     BufferColor (V4 Float) (V4 Int32) = Normalized (B4 Int32)
     BufferColor (V4 Float) (V4 Int16) = Normalized (B4 Int16)
-    BufferColor (V4 Float) (V4 Int8)     = Normalized (B4 Int8)
+    BufferColor (V4 Float) (V4 Int8)  = Normalized (B4 Int8)
     BufferColor (V4 Float) (V4 Float) = B4 Float
 
     BufferColor (V4 Int) (V4 Int32) = B4 Int32
     BufferColor (V4 Int) (V4 Int16) = B4 Int16
-    BufferColor (V4 Int) (V4 Int8)     = B4 Int8
+    BufferColor (V4 Int) (V4 Int8)  = B4 Int8
 
     BufferColor (V4 Word) (V4 Word32) = B4 Word32
     BufferColor (V4 Word) (V4 Word16) = B4 Word16
-    BufferColor (V4 Word) (V4 Word8)     = B4 Word8
+    BufferColor (V4 Word) (V4 Word8)  = B4 Word8
 
 peekPixel1 :: Storable a => t -> Ptr x -> IO a
 peekPixel1 _ = peek . castPtr 

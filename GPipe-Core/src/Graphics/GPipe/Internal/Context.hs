@@ -30,7 +30,7 @@ import Control.Monad.Exception (MonadException, Exception, MonadAsyncException,b
 import Control.Monad.Trans.Reader 
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
-import Control.Applicative (Applicative)
+import Control.Applicative (Applicative, (<$>))
 import Data.Typeable (Typeable)
 import qualified Data.Map.Strict as Map 
 import Graphics.GL.Core33
@@ -41,6 +41,7 @@ import Control.Monad
 import Data.List (delete)
 import Foreign.C.Types
 import Data.Maybe (maybeToList)
+import Linear.V2 (V2(V2))
 
 type ContextFactory c ds = ContextFormat c ds -> IO ContextHandle
 
@@ -115,8 +116,8 @@ newtype Render os f a = Render (ReaderT (ContextHandle, (ContextData, SharedCont
 render :: (MonadIO m, MonadException m) => Render os f () -> ContextT os f m ()
 render (Render m) = ContextT ask >>= (\c -> liftIO $ contextDoAsync (fst c) $ runReaderT m c)
 
-getContextBuffersSize :: Render os f (Int, Int)
-getContextBuffersSize = Render (asks fst >>= lift . contextFrameBufferSize)
+getContextBuffersSize :: Render os f (V2 Int)
+getContextBuffersSize = (\(x,y) -> V2 x y) <$> Render (asks fst >>= lift . contextFrameBufferSize)
 
 getRenderContextFinalizerAdder  :: Render os f (IORef a -> IO () -> IO ())
 getRenderContextFinalizerAdder = do h <- Render (asks fst)

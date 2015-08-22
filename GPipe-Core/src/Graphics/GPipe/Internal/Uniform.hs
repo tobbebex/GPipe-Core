@@ -51,15 +51,15 @@ toUniformBlock sf = Shader $ do
             doForUniform n io = modifyRenderIO (\s -> s { uniformNameToRenderIO = insert n io (uniformNameToRenderIO s) } )
 
 buildUDecl :: OffsetToSType -> GlobDeclM ()
-buildUDecl = buildUDecl' 0 . Map.assocs 
-    where buildUDecl' p ((off, stype):xs) | off == p = do tellGlobal $ stypeName stype
-                                                          tellGlobal " u"
-                                                          tellGlobalLn $ show off
-                                                          buildUDecl' (p + stypeSize stype) xs
-                                          | off > p = do tellGlobal " float pad"
-                                                         tellGlobalLn $ show p
-                                                         buildUDecl' (p + 4) xs
-                                          | otherwise = error "buildUDecl: Expected all offsets to be multiple of 4"
+buildUDecl = buildUDecl' 0 . Map.toAscList 
+    where buildUDecl' p xxs@((off, stype):xs) | off == p = do tellGlobal $ stypeName stype
+                                                              tellGlobal " u"
+                                                              tellGlobalLn $ show off
+                                                              buildUDecl' (p + stypeSize stype) xs
+                                              | off > p = do tellGlobal "float pad"
+                                                             tellGlobalLn $ show p
+                                                             buildUDecl' (p + 4) xxs
+                                              | otherwise = error "buildUDecl: Expected all offsets to be multiple of 4"
           buildUDecl' _ [] = return ()
 
 type OffsetToSType = Map.IntMap SType  

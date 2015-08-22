@@ -116,8 +116,10 @@ newtype Render os f a = Render (ReaderT (ContextHandle, (ContextData, SharedCont
 render :: (MonadIO m, MonadException m) => Render os f () -> ContextT os f m ()
 render (Render m) = ContextT ask >>= (\c -> liftIO $ contextDoAsync (fst c) $ runReaderT m c)
 
-getContextBuffersSize :: Render os f (V2 Int)
-getContextBuffersSize = (\(x,y) -> V2 x y) <$> Render (asks fst >>= lift . contextFrameBufferSize)
+getContextBuffersSize :: MonadIO m => ContextT os f m (V2 Int)
+getContextBuffersSize = ContextT $ do c <- asks fst
+                                      (x,y) <- liftIO $ contextDoSync c $ contextFrameBufferSize c
+                                      return $ V2 x y
 
 getRenderContextFinalizerAdder  :: Render os f (IORef a -> IO () -> IO ())
 getRenderContextFinalizerAdder = do h <- Render (asks fst)

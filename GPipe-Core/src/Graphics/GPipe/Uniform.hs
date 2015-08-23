@@ -1,7 +1,7 @@
 module Graphics.GPipe.Uniform (
     UniformInput(..),
     ToUniform(),
-    toUniformBlock,   
+    getUniform,   
     Uniform(..), 
 )
 where

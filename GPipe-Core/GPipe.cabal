@@ -1,5 +1,5 @@
-name:           GPipe-Core
-version:        0.1
+name:           GPipe
+version:        2.0
 cabal-version:  >= 1.8
 build-type:     Simple
 author:         Tobias Bexelius
@@ -7,6 +7,9 @@ license:        MIT
 license-file:   LICENSE
 copyright:      Tobias Bexelius
 category:       Graphics
+stability:      Experimental
+synopsis:       Typesafe functional OpenGl, including DSL to generate GLSL
+homepage:       http://tobbebex.blogspot.se/
 
 library
   hs-source-dirs:   src

@@ -325,6 +325,7 @@ makeBuffer name elementCount uniformAlignment  = do
 
 type family BufferColor c h where
     BufferColor Float Int32 = Normalized (B Int32)
+    BufferColor Float Word32 = Normalized (B Word32)
     BufferColor Float Float = B Float
     BufferColor Int Int32   = B Int32
 
@@ -334,6 +335,8 @@ type family BufferColor c h where
 
     BufferColor (V2 Float) (V2 Int32) = Normalized (B2 Int32) 
     BufferColor (V2 Float) (V2 Int16) = Normalized (B2 Int16) 
+    BufferColor (V2 Float) (V2 Word32) = Normalized (B2 Word32) 
+    BufferColor (V2 Float) (V2 Word16) = Normalized (B2 Word16) 
     BufferColor (V2 Float) (V2 Float) = B2 Float
 
     BufferColor (V2 Int) (V2 Int32) = B2 Int32
@@ -345,6 +348,9 @@ type family BufferColor c h where
     BufferColor (V3 Float) (V3 Int32) = Normalized (B3 Int32) 
     BufferColor (V3 Float) (V3 Int16) = Normalized (B3 Int16)
     BufferColor (V3 Float) (V3 Int8)  = Normalized (B3 Int8)
+    BufferColor (V3 Float) (V3 Word32) = Normalized (B3 Word32) 
+    BufferColor (V3 Float) (V3 Word16) = Normalized (B3 Word16)
+    BufferColor (V3 Float) (V3 Word8)  = Normalized (B3 Word8)
     BufferColor (V3 Float) (V3 Float) = B3 Float
 
     BufferColor (V3 Int) (V3 Int32) = B3 Int32
@@ -358,6 +364,9 @@ type family BufferColor c h where
     BufferColor (V4 Float) (V4 Int32) = Normalized (B4 Int32)
     BufferColor (V4 Float) (V4 Int16) = Normalized (B4 Int16)
     BufferColor (V4 Float) (V4 Int8)  = Normalized (B4 Int8)
+    BufferColor (V4 Float) (V4 Word32) = Normalized (B4 Word32)
+    BufferColor (V4 Float) (V4 Word16) = Normalized (B4 Word16)
+    BufferColor (V4 Float) (V4 Word8)  = Normalized (B4 Word8)
     BufferColor (V4 Float) (V4 Float) = B4 Float
 
     BufferColor (V4 Int) (V4 Int32) = B4 Int32

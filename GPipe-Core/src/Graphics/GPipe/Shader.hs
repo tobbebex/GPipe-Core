@@ -1,8 +1,8 @@
 module Graphics.GPipe.Shader (
     Shader(),
+    compileShader,
     CompiledShader,
     guard',
-    compileShader,
     mapShader,
     maybeShader,
     chooseShader,

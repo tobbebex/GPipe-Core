@@ -37,6 +37,13 @@ module Graphics.GPipe.Texture (
     writeTexture3DFromBuffer,
     writeTextureCubeFromBuffer,
 
+    generateTexture1DMipmap,
+    generateTexture1DArrayMipmap,
+    generateTexture2DMipmap,
+    generateTexture2DArrayMipmap,
+    generateTexture3DMipmap,
+    generateTextureCubeMipmap,
+
     readTexture1D,
     readTexture1DArray,
     readTexture2D,

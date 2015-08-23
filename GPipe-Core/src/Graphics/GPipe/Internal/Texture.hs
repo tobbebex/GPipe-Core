@@ -659,6 +659,26 @@ setGlPixelStoreRange x y z w h = do
         glPixelStorei GL_PACK_SKIP_IMAGES $ fromIntegral z
         glPixelStorei GL_PACK_ROW_LENGTH $ fromIntegral w
         glPixelStorei GL_PACK_IMAGE_HEIGHT $ fromIntegral h
+
+
+generateTexture1DMipmap :: MonadIO m => Texture1D os f -> ContextT os f' m ()
+generateTexture1DArrayMipmap :: MonadIO m => Texture1DArray os f -> ContextT os f' m ()
+generateTexture2DMipmap :: MonadIO m => Texture2D os f -> ContextT os f' m ()
+generateTexture2DArrayMipmap :: MonadIO m => Texture2DArray os f -> ContextT os f' m ()
+generateTexture3DMipmap :: MonadIO m => Texture3D os f -> ContextT os f' m ()
+generateTextureCubeMipmap :: MonadIO m => TextureCube os f -> ContextT os f' m ()
+
+genMips texn target = liftContextIOAsync $ do
+                     useTexSync texn target
+                     glGenerateMipmap target
+
+generateTexture1DMipmap (Texture1D texn _ _) = genMips texn GL_TEXTURE_1D
+generateTexture1DArrayMipmap (Texture1DArray texn _ _) = genMips texn GL_TEXTURE_1D_ARRAY
+generateTexture2DMipmap (Texture2D texn _ _) = genMips texn GL_TEXTURE_2D
+generateTexture2DMipmap _ = return () -- Only one level for renderbuffers
+generateTexture2DArrayMipmap (Texture2DArray texn _ _) = genMips texn GL_TEXTURE_2D_ARRAY
+generateTexture3DMipmap (Texture3D texn _ _) = genMips texn GL_TEXTURE_3D
+generateTextureCubeMipmap (TextureCube texn _ _) = genMips texn GL_TEXTURE_CUBE_MAP
        
 ----------------------------------------------------------------------
 -- Samplers

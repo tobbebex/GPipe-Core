@@ -32,18 +32,28 @@ import Linear.V0
 type DrawCallName = Int
 data PrimitiveStreamData = PrimitiveStreamData DrawCallName
 
+-- | A @PrimitiveStream t a @ is a stream of primitives of type @t@ where the vertices are values of type @a@. 
 newtype PrimitiveStream t a = PrimitiveStream [(a, PrimitiveStreamData)] deriving Monoid
 
 instance Functor (PrimitiveStream t) where
         fmap f (PrimitiveStream xs) = PrimitiveStream $ map (first f) xs
 
+-- | This class constraints which buffer types can be turned into vertex values, and what type those values have.  
 class BufferFormat a => VertexInput a where
+    -- | The type the buffer value will be turned into once it becomes a vertex value.
     type VertexFormat a
+    -- | An arrow action that turns a value from its buffer representation to it's vertex representation. Use 'toVertex' from
+    --   the GPipe provided instances to operate in this arrow. Also note that this arrow needs to be able to return a value
+    --   lazily, so ensure you use
+    -- 
+    --  @proc ~pattern -> do ...@. 
     toVertex :: ToVertex a (VertexFormat a)  
 
+-- | The arrow type for 'toVertex'.
 newtype ToVertex a b = ToVertex (Kleisli (StateT Int (Writer [Binding -> (IO VAOKey, IO ())])) a b) deriving (Category, Arrow)
 
 
+-- | Create a primitive stream from a primitive array provided from the shader environment. 
 toPrimitiveStream :: forall os f s a p. (VertexInput a, PrimitiveTopology p) => (s -> PrimitiveArray p a) -> Shader os f s (PrimitiveStream p (VertexFormat a))   
 toPrimitiveStream sf = Shader $ do n <- getName
                                    uniAl <- askUniformAlignment
@@ -83,8 +93,9 @@ data InputIndices = InputIndices {
         inputInstanceID :: VInt
     }
 
-withInputIndices :: PrimitiveStream p a -> PrimitiveStream p (a, InputIndices)  
-withInputIndices = fmap (\a -> (a, InputIndices (scalarS' "gl_VertexID") (scalarS' "gl_InstanceID")) )
+-- | Like 'fmap', but where the vertex and instance IDs are provided as arguments as well. 
+withInputIndices :: (a -> InputIndices -> b) -> PrimitiveStream p a -> PrimitiveStream p b  
+withInputIndices f = fmap (\a -> f a (InputIndices (scalarS' "gl_VertexID") (scalarS' "gl_InstanceID")))
 
 makeVertexFx norm x f styp typ b = do 
                              n <- get

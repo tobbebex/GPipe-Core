@@ -9,7 +9,7 @@
 -- Portability :  Portable
 --
 -- |
--- This module provides the DSL for shaders in GPipe. The type 'S x a' is an opaque type that represents a value of type 'a' in a shader stage 'x', eg 'S F Float' means a
+-- This module provides the DSL for shaders in GPipe. The type @'S' x a@ is an opaque type that represents a value of type @a@ in a shader stage @x@, eg @S F Float@ means a
 -- floating point value in a fragment stream.
 --
 -----------------------------------------------------------------------------

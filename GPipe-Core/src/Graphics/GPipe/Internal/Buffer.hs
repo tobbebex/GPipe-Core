@@ -15,6 +15,7 @@ module Graphics.GPipe.Internal.Buffer
     newBuffer,
     writeBuffer,
     copyBuffer,
+    BufferStartPos,
     bufSize, bufName, bufElementSize, bufferLength, bufBElement, bufferWriteInternal, makeBuffer, getUniformAlignment, UniformAlignment
 ) where
 
@@ -46,8 +47,15 @@ import Linear.V2
 import Linear.V1
 import Linear.V0
 
+-- | The class that constraints which types can live in a buffer.
 class BufferFormat f where
+    -- | The type a value of this format has when it lives on the host (i.e. normal Haskell world) 
     type HostFormat f
+    -- | An arrow action that turns a value from its host representation to its buffer representation. Use 'toBuffer' from
+    --   the GPipe provided instances to operate in this arrow. Also note that this arrow needs to be able to return a value
+    --   lazily, so ensure you use
+    -- 
+    --   @proc ~pattern -> do ...@ 
     toBuffer :: ToBuffer (HostFormat f) f
     getGlType :: f -> GLenum
     peekPixel :: f -> Ptr () -> IO (HostFormat f)
@@ -56,9 +64,11 @@ class BufferFormat f where
     peekPixel = error "This is only defined for BufferColor types"
     getGlPaddedFormat = error "This is only defined for BufferColor types"
 
+-- | A @Buffer os b@ lives in the object space @os@ and contains elements of type @b@. 
 data Buffer os b = Buffer {
                     bufName :: BufferName,                   
                     bufElementSize :: Int,
+                    -- | Retrieve the number of elements in a buffer.
                     bufferLength :: Int,
                     bufBElement :: BInput -> b,
                     bufWriter :: Ptr () -> HostFormat b -> IO ()
@@ -73,6 +83,7 @@ bufSize b = bufElementSize b * bufferLength b
 type BufferName = IORef GLuint
 type Offset = Int
 type Stride = Int
+type BufferStartPos = Int 
 
 data BInput = BInput {bInSkipElems :: Int, bInInstanceDiv :: Int}
 
@@ -82,6 +93,7 @@ type UniformAlignment = Int
 
 data AlignmentMode = Align4 | AlignUniform | AlignPackedIndices | AlignUnknown deriving (Eq)
 
+-- | The arrow type for 'toBuffer'.
 data ToBuffer a b = ToBuffer
     (Kleisli (StateT Offset (WriterT [Int] (Reader (ToBufferInput, UniformAlignment, AlignmentMode)))) a b) -- Normal = aligned to 4 bytes
     (Kleisli (StateT (Ptr (), [Int]) IO) a b) -- Normal = aligned to 4 bytes
@@ -98,21 +110,29 @@ instance Category ToBuffer where
             comb AlignPackedIndices AlignUnknown = AlignPackedIndices 
             comb AlignUnknown AlignUnknown = AlignUnknown 
             comb _ _ = Align4
-    
+
 instance Arrow ToBuffer where
     arr f = ToBuffer (arr f) (arr f) AlignUnknown
     first (ToBuffer a b m) = ToBuffer (first a) (first b) m
-    
+
+-- | The atomic buffer value that represents a host value of type 'a'.     
 data B a = B { bName :: IORef GLuint, bOffset :: Int, bStride :: Int, bSkipElems :: Int, bInstanceDiv :: Int}
 
-          
+-- | An atomic buffer value that represents a vector of 2 'a's on the host. 
 newtype B2 a = B2 { unB2 :: B a } -- Internal
+-- | An atomic buffer value that represents a vector of 3 'a's on the host. 
 newtype B3 a = B3 { unB3 :: B a } -- Internal
+-- | An atomic buffer value that represents a vector of 4 'a's on the host. This works similar to '(B a, B a, B a, B a)' but has some performance advantage, especially when used
+--   in 'VertexArray's.
 newtype B4 a = B4 { unB4 :: B a } -- Internal
 
+-- | Split up a 'B4 a' into two 'B2 a's.
 toB22 :: forall a. (Storable a, BufferFormat (B2 a)) => B4 a -> (B2 a, B2 a)
+-- | Split up a 'B3 a' into a 'B2 a' and a 'B1 a'.
 toB21 :: forall a. (Storable a, BufferFormat (B a)) => B3 a -> (B2 a, B a)
+-- | Split up a 'B3 a' into a 'B1 a' and a 'B2 a'.
 toB12 :: forall a. (Storable a, BufferFormat (B a)) => B3 a -> (B a, B2 a)
+-- | Split up a 'B2 a' into two 'B1 a's.
 toB11 :: forall a. (Storable a, BufferFormat (B a)) => B2 a -> (B a, B a)
 
 toB22 (B4 b) = (B2 b, B2 $ b { bOffset = bOffset b + 2 * sizeOf (undefined :: a) }) 
@@ -120,9 +140,17 @@ toB21 (B3 b) = (B2 b, b { bOffset = bOffset b + 2*sizeOf (undefined :: a) })
 toB12 (B3 b) = (b, B2 $ b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
 toB11 (B2 b) = (b, b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
 
-
+-- | Any buffer value that is going to be used as a uniform needs to be wrapped in this newtype. This will cause is to be aligned
+--   properly for uniform usage. It can still be used as input for vertex arrays, but due to the uniform alignment it will probably be
+--   padded quite heavily and thus wasteful.
 newtype Uniform a = Uniform a
+
+-- | This wrapper is used for integer values to indicate that it should be interpreted as a floating point value, in the range [-1,1] or [0,1] depending on wether it is a
+--   signed or unsigned integer (i.e. 'Int' or 'Word').
 newtype Normalized a = Normalized a
+
+-- | This works like a 'B a', but has an alignment smaller than 4 bytes that is the limit for vertex buffers, and thus cannot be used for those. 
+--   Index buffers on the other hand need to be tightly packed, so you need to use this type for index buffers of 'Word8' or 'Word16'. 
 newtype BPacked a = BPacked (B a) 
 
 toBufferBUnaligned :: forall a. Storable a => ToBuffer a (B a)
@@ -235,7 +263,7 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
                 ((a', b', c'), d') <- toBuffer -< ((a, b, c), d)
                 returnA -< (a', b', c', d')
 
-
+-- | Create a buffer with a specified number of elements.
 newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT os f m (Buffer os b)
 newBuffer elementCount | elementCount < 0 = error "newBuffer, length out of bounds" 
                        | otherwise = do
@@ -257,7 +285,9 @@ bufferWriteInternal b ptr (x:xs) = do bufWriter b ptr x
                                       bufferWriteInternal b (ptr `plusPtr` bufElementSize b) xs
 bufferWriteInternal _ ptr [] = return ptr
 
-writeBuffer :: MonadIO m => Buffer os b -> Int -> [HostFormat b] -> ContextT os f m ()
+-- | Write a buffer from the host (i.e. the normal Haskell world)
+--   'copyBuffer fromBuffer fromStart toBuffer toStart length' will copy 'length' elements from position 'fromStart' in 'fromBuffer' to position 'toStart' in 'toBuffer'.
+writeBuffer :: MonadIO m => Buffer os b -> BufferStartPos -> [HostFormat b] -> ContextT os f m ()
 writeBuffer buffer offset elems | offset < 0 || offset >= bufferLength buffer = error "writeBuffer, offset out of bounds"
                                 | otherwise = 
     let maxElems = max 0 $ bufferLength buffer - offset
@@ -272,7 +302,9 @@ writeBuffer buffer offset elems | offset < 0 || offset >= bufferLength buffer = 
                           glFlushMappedBufferRange GL_COPY_WRITE_BUFFER off (fromIntegral $ end `minusPtr` ptr) 
                           void $ glUnmapBuffer GL_COPY_WRITE_BUFFER 
 
-copyBuffer :: MonadIO m => Buffer os b -> Int -> Buffer os b -> Int -> Int -> ContextT os f m ()
+-- | Copies values from one buffer to another (of the same type).
+--   'copyBuffer fromBuffer fromStart toBuffer toStart length' will copy 'length' elements from position 'fromStart' in 'fromBuffer' to position 'toStart' in 'toBuffer'.
+copyBuffer :: MonadIO m => Buffer os b -> BufferStartPos -> Buffer os b -> BufferStartPos -> Int -> ContextT os f m ()
 copyBuffer bFrom from bTo to len | from < 0 || from >= bufferLength bFrom = error "writeBuffer, source offset out of bounds"
                                  | to < 0 || to >= bufferLength bTo = error "writeBuffer, destination offset out of bounds"
                                  | len < 0 = error "writeBuffer, length out of bounds"
@@ -316,13 +348,16 @@ getUniformAlignment = fromIntegral <$> alloca (\ ptr -> glGetIntegerv GL_UNIFORM
 makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignment -> Buffer os b
 makeBuffer name elementCount uniformAlignment  = do
     let ToBuffer a b m = toBuffer :: ToBuffer (HostFormat b) b
-        err = error "toBuffer or toVertex are creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders" :: HostFormat b
+        err = error "toBuffer, toVertex or toUniform are creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders" :: HostFormat b
         elementM = runWriterT (runStateT (runKleisli a err) 0)
         ((_,elementSize),pads) = runReader elementM ((name, undefined, undefined), uniformAlignment, m)
         elementF bIn = (fst . fst) $ runReader elementM ((name, elementSize, bIn), uniformAlignment, m)
         writer ptr x = void $ runStateT (runKleisli b x) (ptr,pads)
     Buffer name elementSize elementCount elementF writer
 
+-- | This type family restricts what host and buffer types a texture format may be converted into. 
+-- 'BufferColor t h' for a texture representation 't' and a host representation 'h' will evaluate to a buffer type used in the transfer.
+-- This family is closed, i.e. you cannot create additional instances to it.    
 type family BufferColor c h where
     BufferColor Float Int32 = Normalized (B Int32)
     BufferColor Float Word32 = Normalized (B Word32)

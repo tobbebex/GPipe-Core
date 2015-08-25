@@ -77,8 +77,9 @@ data RasterizedInfo = RasterizedInfo {
         rasterizedPointCoord :: V2 FFloat
     }       
 
-withRasterizedInfo :: FragmentStream a -> FragmentStream (a, RasterizedInfo)
-withRasterizedInfo = fmap (\a -> (a, RasterizedInfo (vec4S' "gl_FragCoord") (scalarS' "gl_FrontFacing") (vec2S' "gl_PointCoord")) )
+-- | Like 'fmap', but where various auto generated information from the rasterization is provided for each vertex. 
+withRasterizedInfo :: (a -> RasterizedInfo -> b) -> FragmentStream a -> FragmentStream b
+withRasterizedInfo f = fmap (\a -> f a (RasterizedInfo (vec4S' "gl_FragCoord") (scalarS' "gl_FrontFacing") (vec2S' "gl_PointCoord")))
 
 data Flat a = Flat a
 data NoPerspective a = NoPerspective a

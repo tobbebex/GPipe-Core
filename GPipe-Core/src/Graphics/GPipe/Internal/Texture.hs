@@ -207,8 +207,6 @@ type StartPos1 = Int
 type StartPos2 = V2 Int
 type StartPos3 = V3 Int
 
-type BufferStartPos = Int 
-
 
 writeTexture1D      :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture1D os (Format c) -> Level -> StartPos1 -> Size1 -> [h] -> ContextT os f m ()
 writeTexture1DArray :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture1DArray os (Format c) -> Level -> StartPos2 -> Size2 -> [h] -> ContextT os f m ()

@@ -32,8 +32,10 @@ import Linear.V0
 type DrawCallName = Int
 data PrimitiveStreamData = PrimitiveStreamData DrawCallName
 
--- | A @'PrimitiveStream' t a @ is a stream of primitives of type @t@ where the vertices are values of type @a@. You may append 'PrimitiveStream's using the 'Monoid' instance, and you
---   can operate a stream's vertex values using the 'Functor' instance (this will result in a shader running on the GPU).    
+-- | A @'PrimitiveStream' t a @ is a stream of primitives of type @t@ where the vertices are values of type @a@. You
+--   can operate a stream's vertex values using the 'Functor' instance (this will result in a shader running on the GPU).
+--   You may also append 'PrimitiveStream's using the 'Monoid' instance, but if possible append the origin 'PrimitiveArray's instead, as this will create more optimized
+--   draw calls. 
 newtype PrimitiveStream t a = PrimitiveStream [(a, PrimitiveStreamData)] deriving Monoid
 
 instance Functor (PrimitiveStream t) where
@@ -55,7 +57,7 @@ newtype ToVertex a b = ToVertex (Kleisli (StateT Int (Writer [Binding -> (IO VAO
 
 
 -- | Create a primitive stream from a primitive array provided from the shader environment. 
-toPrimitiveStream :: forall os f s a p. (VertexInput a, PrimitiveTopology p) => (s -> PrimitiveArray p a) -> Shader os f s (PrimitiveStream p (VertexFormat a))   
+toPrimitiveStream :: forall os f s a p. VertexInput a => (s -> PrimitiveArray p a) -> Shader os f s (PrimitiveStream p (VertexFormat a))   
 toPrimitiveStream sf = Shader $ do n <- getName
                                    uniAl <- askUniformAlignment
                                    let sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os a

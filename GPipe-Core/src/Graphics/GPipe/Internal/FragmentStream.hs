@@ -48,7 +48,7 @@ class FragmentInput a where
     toFragment :: ToFragment a (FragmentFormat a)  
 
 -- | Rasterize a stream of primitives into fragments, using a 'Side', 'Viewport' and 'DepthRange' from the shader environment    
-rasterize:: forall p a s os f. (PrimitiveTopology p, FragmentInput a)
+rasterize:: forall p a s os f. FragmentInput a
           => (s -> (Side, ViewPort, DepthRange))
           -> PrimitiveStream p (VPos, a)
           -> Shader os f s (FragmentStream (FragmentFormat a)) 

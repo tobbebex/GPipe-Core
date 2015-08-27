@@ -9,7 +9,7 @@ module Graphics.GPipe.Internal.Buffer
     Buffer(),
     ToBuffer(),
     B(..), B2(..), B3(..), B4(..),
-    toB22, toB21, toB12, toB11,
+    toB22, toB3, toB21, toB12, toB11,
     Uniform(..), Normalized(..), BPacked(),
     BInput(..),
     newBuffer,
@@ -126,19 +126,22 @@ newtype B3 a = B3 { unB3 :: B a } -- Internal
 --   in 'VertexArray's.
 newtype B4 a = B4 { unB4 :: B a } -- Internal
 
--- | Split up a 'B4 a' into two 'B2 a's.
+-- | Split up a @'B4' a@ into two @'B2' a@s.
 toB22 :: forall a. (Storable a, BufferFormat (B2 a)) => B4 a -> (B2 a, B2 a)
--- | Split up a 'B3 a' into a 'B2 a' and a 'B1 a'.
+-- | Discard the last component of a @'B4' a@ to get a @'B3' a@.
+toB3 :: forall a. (Storable a, BufferFormat (B3 a)) => B4 a -> B3 a
+-- | Split up a @'B3' a@ into a @'B2' a@ and a @'B1' a@.
 toB21 :: forall a. (Storable a, BufferFormat (B a)) => B3 a -> (B2 a, B a)
--- | Split up a 'B3 a' into a 'B1 a' and a 'B2 a'.
+-- | Split up a @'B3' a@ into a @'B1' a@ and a @'B2' a@.
 toB12 :: forall a. (Storable a, BufferFormat (B a)) => B3 a -> (B a, B2 a)
--- | Split up a 'B2 a' into two 'B1 a's.
+-- | Split up a @'B2' a@ into two @'B1' a@s.
 toB11 :: forall a. (Storable a, BufferFormat (B a)) => B2 a -> (B a, B a)
 
-toB22 (B4 b) = (B2 b, B2 $ b { bOffset = bOffset b + 2 * sizeOf (undefined :: a) }) 
-toB21 (B3 b) = (B2 b, b { bOffset = bOffset b + 2*sizeOf (undefined :: a) }) 
-toB12 (B3 b) = (b, B2 $ b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
-toB11 (B2 b) = (b, b { bOffset = bOffset b + sizeOf (undefined :: a) }) 
+toB22 (B4 b) = (B2 b, B2 $ b { bOffset = bOffset b + 2 * sizeOf (undefined :: a) })
+toB3 (B4 b) = B3 b
+toB21 (B3 b) = (B2 b, b { bOffset = bOffset b + 2*sizeOf (undefined :: a) })
+toB12 (B3 b) = (b, B2 $ b { bOffset = bOffset b + sizeOf (undefined :: a) })
+toB11 (B2 b) = (b, b { bOffset = bOffset b + sizeOf (undefined :: a) })
 
 -- | Any buffer value that is going to be used as a uniform needs to be wrapped in this newtype. This will cause is to be aligned
 --   properly for uniform usage. It can still be used as input for vertex arrays, but due to the uniform alignment it will probably be

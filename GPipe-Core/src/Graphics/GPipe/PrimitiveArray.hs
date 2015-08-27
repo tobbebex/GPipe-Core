@@ -47,10 +47,10 @@ module Graphics.GPipe.PrimitiveArray (
    
     -- * Primitive arrays
     PrimitiveArray(),   
-    PrimitiveTopology(),
-    Triangles(..),
-    Lines(..),
-    Points(..),    
+    PrimitiveTopology(..),
+    Triangles,
+    Lines,
+    Points,    
     toPrimitiveArray,
     toPrimitiveArrayIndexed,
     toPrimitiveArrayInstanced,
@@ -59,7 +59,7 @@ module Graphics.GPipe.PrimitiveArray (
     -- * Operations on buffer values
     -- | You may split up a @B4 a@, @B3 a@ and @B2 a@ value into its components, if the parts are representable buffer types (e.g. due to alignment, you may for instance not split a @B4 Word8@).
     --   Note that there are no functions to combine smaller parts together again. 
-    toB22, toB21, toB12, toB11,
+    toB22, toB3, toB21, toB12, toB11,
 )
 where
 

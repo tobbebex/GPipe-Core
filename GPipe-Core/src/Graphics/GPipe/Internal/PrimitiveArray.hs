@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, ScopedTypeVariables, EmptyDataDecls, TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, ScopedTypeVariables, EmptyDataDecls, TypeFamilies, GADTs #-}
 module Graphics.GPipe.Internal.PrimitiveArray where
 
 import Graphics.GPipe.Internal.Buffer
@@ -65,7 +65,14 @@ type family IndexFormat a where
 
 -- | An index array is like a vertex array, but contains only integer indices. These indices must come from a tightly packed 'Buffer', hence the lack of
 --   a 'Functor' instance and no conversion from 'VertexArray's.
-data IndexArray = IndexArray { iArrName :: IORef GLuint, indexArrayLength:: Int, offset:: Int, restart:: Maybe Int, indexType :: GLuint } 
+data IndexArray = IndexArray { 
+    iArrName :: IORef GLuint, 
+    -- | Numer of indices in an 'IndexArray'.
+    indexArrayLength:: Int, 
+    offset:: Int, 
+    restart:: Maybe Int, 
+    indexType :: GLuint 
+    } 
 
 -- | Create an 'IndexArray' from a 'Buffer' of unsigned integers (as constrained by the closed 'IndexFormat' type family instances). The index array will have the same number of elements as the buffer, use 'takeIndices' and 'dropIndices' to make it smaller.
 --   The @Maybe a@ argument is used to optionally denote a primitive restart index. 
@@ -79,34 +86,29 @@ takeIndices n i = i { indexArrayLength = min n (indexArrayLength i) }
 -- | @dropIndices n a@ creates a shorter index array by dropping the @n@ first indices of the array @a@.
 dropIndices :: Int -> IndexArray -> IndexArray
 dropIndices n i = i { indexArrayLength = max (l - n) 0, offset = offset i + n } where l = indexArrayLength i
- 
-class PrimitiveTopology p where
-    toGLtopology :: p -> GLuint
-    toGLtopology = error "You cannot create your own instances of IndexFormat"
-    --data Geometry p :: * -> *
-    --makeGeometry :: [a] -> Geometry p a  
-   
-data Triangles = TriangleList | TriangleStrip | TriangleFan
-data Lines = LineList | LineStrip | LineLoop
-data Points = PointList
---data TrianglesWithAdjacency = TriangleStripWithAdjacency
---data LinesWithAdjacency = LinesWithAdjacencyList | LinesWithAdjacencyStrip   
 
-instance PrimitiveTopology Triangles where
-    toGLtopology TriangleList = GL_TRIANGLES
-    toGLtopology TriangleStrip = GL_TRIANGLE_STRIP
-    toGLtopology TriangleFan = GL_TRIANGLE_FAN
-    --data Geometry Triangles a = Triangle a a a
-   
-instance PrimitiveTopology Lines where
-    toGLtopology LineList = GL_LINES
-    toGLtopology LineStrip = GL_LINE_STRIP
-    toGLtopology LineLoop = GL_LINE_LOOP
-    --data Geometry Lines a = Line a a
+data Triangles
+data Lines
+data Points
 
-instance PrimitiveTopology Points where
-    toGLtopology PointList = GL_POINTS
-    --data Geometry Points a = Point a
+data PrimitiveTopology p where
+    TriangleList :: PrimitiveTopology Triangles
+    TriangleStrip :: PrimitiveTopology Triangles
+    TriangleFan :: PrimitiveTopology Triangles
+    LineList :: PrimitiveTopology Lines
+    LineStrip :: PrimitiveTopology Lines
+    LineLoop :: PrimitiveTopology Lines
+    PointList :: PrimitiveTopology Points
+    
+toGLtopology :: PrimitiveTopology p -> GLuint
+toGLtopology TriangleList = GL_TRIANGLES
+toGLtopology TriangleStrip = GL_TRIANGLE_STRIP
+toGLtopology TriangleFan = GL_TRIANGLE_FAN
+toGLtopology LineList = GL_LINES
+toGLtopology LineStrip = GL_LINE_STRIP
+toGLtopology LineLoop = GL_LINE_LOOP
+toGLtopology PointList = GL_POINTS
+  
 
 {-
 Some day:
@@ -123,10 +125,10 @@ instance PrimitiveTopology LinesWithAdjacency where
 
 type InstanceCount = Int
 
-data PrimitiveArrayInt p a = PrimitiveArraySimple p Int a 
-                           | PrimitiveArrayIndexed p IndexArray a 
-                           | PrimitiveArrayInstanced p InstanceCount Int a 
-                           | PrimitiveArrayIndexedInstanced p IndexArray InstanceCount a 
+data PrimitiveArrayInt p a = PrimitiveArraySimple (PrimitiveTopology p) Int a 
+                           | PrimitiveArrayIndexed (PrimitiveTopology p) IndexArray a 
+                           | PrimitiveArrayInstanced (PrimitiveTopology p) InstanceCount Int a 
+                           | PrimitiveArrayIndexedInstanced (PrimitiveTopology p) IndexArray InstanceCount a 
 
 -- | An array of primitives
 newtype PrimitiveArray p a = PrimitiveArray {getPrimitiveArray :: [PrimitiveArrayInt p a]}
@@ -142,11 +144,11 @@ instance Functor (PrimitiveArray p) where
               g (PrimitiveArrayInstanced p il l a) = PrimitiveArrayInstanced p il l (f a)
               g (PrimitiveArrayIndexedInstanced p i il a) = PrimitiveArrayIndexedInstanced p i il (f a)
               
-toPrimitiveArray :: PrimitiveTopology p => p -> VertexArray () a -> PrimitiveArray p a
+toPrimitiveArray :: PrimitiveTopology p -> VertexArray () a -> PrimitiveArray p a
 toPrimitiveArray p va = PrimitiveArray [PrimitiveArraySimple p (vertexArrayLength va) (bArrBFunc va (BInput 0 0))]
-toPrimitiveArrayIndexed :: PrimitiveTopology p => p -> IndexArray -> VertexArray () a -> PrimitiveArray p a
+toPrimitiveArrayIndexed :: PrimitiveTopology p -> IndexArray -> VertexArray () a -> PrimitiveArray p a
 toPrimitiveArrayIndexed p ia va = PrimitiveArray [PrimitiveArrayIndexed p ia (bArrBFunc va (BInput 0 0))]
-toPrimitiveArrayInstanced :: PrimitiveTopology p => p -> VertexArray () a -> VertexArray t b -> (a -> b -> c) -> PrimitiveArray p c
+toPrimitiveArrayInstanced :: PrimitiveTopology p -> VertexArray () a -> VertexArray t b -> (a -> b -> c) -> PrimitiveArray p c
 toPrimitiveArrayInstanced p va ina f = PrimitiveArray [PrimitiveArrayInstanced p (vertexArrayLength ina) (vertexArrayLength va) (f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1))]
-toPrimitiveArrayIndexedInstanced :: PrimitiveTopology p => p -> IndexArray -> VertexArray () a -> VertexArray t b -> (a -> b -> c) -> PrimitiveArray p c
+toPrimitiveArrayIndexedInstanced :: PrimitiveTopology p -> IndexArray -> VertexArray () a -> VertexArray t b -> (a -> b -> c) -> PrimitiveArray p c
 toPrimitiveArrayIndexedInstanced p ia va ina f = PrimitiveArray [PrimitiveArrayIndexedInstanced p ia (vertexArrayLength ina) (f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1))]

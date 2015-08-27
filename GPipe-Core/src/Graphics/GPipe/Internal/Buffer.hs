@@ -51,7 +51,7 @@ import Linear.V0
 class BufferFormat f where
     -- | The type a value of this format has when it lives on the host (i.e. normal Haskell world) 
     type HostFormat f
-    -- | An arrow action that turns a value from its host representation to its buffer representation. Use 'toBuffer' from
+    -- | An arrow action that turns a value from it's host representation to it's buffer representation. Use 'toBuffer' from
     --   the GPipe provided instances to operate in this arrow. Also note that this arrow needs to be able to return a value
     --   lazily, so ensure you use
     -- 
@@ -285,8 +285,7 @@ bufferWriteInternal b ptr (x:xs) = do bufWriter b ptr x
                                       bufferWriteInternal b (ptr `plusPtr` bufElementSize b) xs
 bufferWriteInternal _ ptr [] = return ptr
 
--- | Write a buffer from the host (i.e. the normal Haskell world)
---   'copyBuffer fromBuffer fromStart toBuffer toStart length' will copy 'length' elements from position 'fromStart' in 'fromBuffer' to position 'toStart' in 'toBuffer'.
+-- | Write a buffer from the host (i.e. the normal Haskell world).
 writeBuffer :: MonadIO m => Buffer os b -> BufferStartPos -> [HostFormat b] -> ContextT os f m ()
 writeBuffer buffer offset elems | offset < 0 || offset >= bufferLength buffer = error "writeBuffer, offset out of bounds"
                                 | otherwise = 
@@ -303,7 +302,8 @@ writeBuffer buffer offset elems | offset < 0 || offset >= bufferLength buffer = 
                           void $ glUnmapBuffer GL_COPY_WRITE_BUFFER 
 
 -- | Copies values from one buffer to another (of the same type).
---   'copyBuffer fromBuffer fromStart toBuffer toStart length' will copy 'length' elements from position 'fromStart' in 'fromBuffer' to position 'toStart' in 'toBuffer'.
+--
+--   @copyBuffer fromBuffer fromStart toBuffer toStart length@ will copy @length@ elements from position @fromStart@ in @fromBuffer@ to position @toStart@ in @toBuffer@.
 copyBuffer :: MonadIO m => Buffer os b -> BufferStartPos -> Buffer os b -> BufferStartPos -> Int -> ContextT os f m ()
 copyBuffer bFrom from bTo to len | from < 0 || from >= bufferLength bFrom = error "writeBuffer, source offset out of bounds"
                                  | to < 0 || to >= bufferLength bTo = error "writeBuffer, destination offset out of bounds"

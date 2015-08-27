@@ -21,7 +21,7 @@
 -----------------------------------------------------------------------------
 
 module Graphics.GPipe.Texture (
-    -- * Texture types
+    -- * Texture data types
     Texture1D(), Texture1DArray(), Texture2D(), Texture2DArray(), Texture3D(), TextureCube(), 
     CubeSide(..),
 
@@ -37,14 +37,14 @@ module Graphics.GPipe.Texture (
     newTextureCube,
 
     -- * Texture properties
-    -- | These functions retrieve number of levels a texture has. This number is always smaller or equal to the 'MaxLevels' parameter provided when the texture was created.
+    -- | The following functions retrieve number of levels a texture has. This number is always smaller or equal to the 'MaxLevels' parameter provided when the texture was created.
     texture1DLevels, 
     texture1DArrayLevels, 
     texture2DLevels, 
     texture2DArrayLevels, 
     texture3DLevels, 
     textureCubeLevels, 
-    -- | These functions retrieve a list of texture sizes for each level of detail, from the largest to the smallest, where the first has the size as defined by the 'newTextureX' call. 
+    -- | The following functions retrieve a list of texture sizes for each level of detail, from the largest to the smallest, where the first has the size as defined by the 'newTextureX' call. 
     texture1DSizes, 
     texture1DArraySizes, 
     texture2DSizes, 
@@ -53,21 +53,21 @@ module Graphics.GPipe.Texture (
     textureCubeSizes, 
 
     -- * Writing texture data
-    -- | These functions write the texture data from the host (i.e. the normal Haskell world), using a compatible 'HostFormat' of the texture's format, see 'BufferColor'.  
+    -- | The following functions write the texture data from the host (i.e. the normal Haskell world), using a compatible 'Graphics.GPipe.Buffer.HostFormat' of the texture's format, see 'Graphics.GPipe.Buffer.BufferColor'.  
     writeTexture1D,
     writeTexture1DArray,
     writeTexture2D,
     writeTexture2DArray,
     writeTexture3D,
     writeTextureCube,    
-    -- | These functions write the texture data using values in a 'Buffer' with a format compatible with the texture's format, see 'BufferColor'.
+    -- | The following functions write the texture data using values in a 'Graphics.GPipe.Buffer.Buffer' with a format compatible with the texture's format, see 'Graphics.GPipe.Buffer.BufferColor'.
     writeTexture1DFromBuffer,
     writeTexture1DArrayFromBuffer,
     writeTexture2DFromBuffer,
     writeTexture2DArrayFromBuffer,
     writeTexture3DFromBuffer,
     writeTextureCubeFromBuffer,
-    -- | These functions uses the level of detail 0 to generate all other levels of detail. The common pattern is to call this directly after a call to
+    -- | The following functions uses the level of detail 0 to generate all other levels of detail. The common pattern is to call this directly after a call to
     --   'writeTextureX' where parameter 'Level' is 0.    
     generateTexture1DMipmap,
     generateTexture1DArrayMipmap,
@@ -77,7 +77,7 @@ module Graphics.GPipe.Texture (
     generateTextureCubeMipmap,
 
     -- * Reading texture data
-    -- | Read textures to the host (i.e. the normal Haskell world), using a compatible 'HostFormat' of the texture's format, see 'BufferColor'.
+    -- | Read textures to the host (i.e. the normal Haskell world), using a compatible 'Graphics.GPipe.Buffer.HostFormat' of the texture's format, see 'Graphics.GPipe.Buffer.BufferColor'.
     --   This works like any 'fold' like function.
     readTexture1D,
     readTexture1DArray,
@@ -86,7 +86,7 @@ module Graphics.GPipe.Texture (
     readTexture3D,
     readTextureCube,
     
-    -- | Read textures into a 'Buffer' with a format compatible with the texture's format, see 'BufferColor'.
+    -- | The following read textures into a 'Graphics.GPipe.Buffer.Buffer' with a format compatible with the texture's format, see 'Graphics.GPipe.Buffer.BufferColor'.
     readTexture1DToBuffer,
     readTexture1DArrayToBuffer,
     readTexture2DToBuffer,

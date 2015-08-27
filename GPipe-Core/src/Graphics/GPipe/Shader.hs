@@ -19,10 +19,17 @@
 -----------------------------------------------------------------------------
 
 module Graphics.GPipe.Shader (
+    -- * The Shader monad
     Shader(),
     compileShader,
     withoutContext,
     CompiledShader,
+
+    -- * The Render monad
+    Render(), 
+    render,
+        
+    -- * Shader monad combinators
     guard',
     mapShader,
     maybeShader,
@@ -31,4 +38,5 @@ module Graphics.GPipe.Shader (
 )
 where
 
+import Graphics.GPipe.Internal.Context
 import Graphics.GPipe.Internal.Shader 

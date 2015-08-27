@@ -54,6 +54,7 @@ data ContextHandle = ContextHandle {
     contextDelete :: IO ()
 } 
 
+-- | The monad transformer that encapsulates a GPipe context (which wraps an OpenGl context). The monad transformer stack needs to have 'IO' in the bottom to be runnable. 
 newtype ContextT os f m a = 
     ContextT (ReaderT (ContextHandle, (ContextData, SharedContextDatas)) m a) 
     deriving (Functor, Applicative, Monad, MonadIO, MonadException, MonadAsyncException)
@@ -61,7 +62,9 @@ newtype ContextT os f m a =
 instance MonadTrans (ContextT os f) where
     lift = ContextT . lift 
 
-
+-- | Run a 'ContextT' monad transformer, creating a window (unless the 'ContextFormat' is 'ContextFormatNone') that is later destroyed when the action returns. This function will
+--   also create a new object space. 
+--   You need a 'ContextFactory', which is provided by an auxillary package, such as @GPipe-GLFW@.
 runContextT :: (MonadIO m, MonadAsyncException m) => ContextFactory c ds -> ContextFormat c ds -> (forall os. ContextT os (ContextFormat c ds) m a) -> m a
 runContextT cf f (ContextT m) = 
     bracket 
@@ -73,6 +76,8 @@ runContextT cf f (ContextT m) =
                         rs = (h, (cd, cds))
                     runReaderT (i >> m) rs
 
+-- | Run a 'ContextT' monad transformer inside another one, creating a window (unless the 'ContextFormat' is 'ContextFormatNone') that is later destroyed when the action returns. The inner 'ContextT' monad
+-- transformer will share object space with the outer one. The 'ContextFactory' of the outer context will be used in the creation of the inner context. 
 runSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFormat c ds -> ContextT os (ContextFormat c ds) (ContextT os f m) a -> ContextT os f m a
 runSharedContextT f (ContextT m) =
     bracket
@@ -108,11 +113,16 @@ getContextFinalizerAdder = do h <- ContextT (asks fst)
 liftContextIOAsync :: MonadIO m => IO () -> ContextT os f m ()
 liftContextIOAsync m = ContextT (asks fst) >>= liftIO . flip contextDoAsync m
 
+-- | Run this action after a 'render' call to swap out the context windows back buffer with the front buffer, effectively showing the result.
+--   This call may block if vsync is enabled in the system and/or too many frames are outstanding.
+--   After this call, the context window content is undefined and should be cleared at earliest convenience using 'clearContextColor' and friends.
 swapContextBuffers :: MonadIO m => ContextT os f m ()
 swapContextBuffers = ContextT (asks fst) >>= (\c -> liftIO $ contextDoSync c $ contextSwap c)
 
+-- | A monad in which shaders are run.
 newtype Render os f a = Render (ReaderT (ContextHandle, (ContextData, SharedContextDatas)) IO a) deriving (Monad, Applicative, Functor)
 
+-- | Run a 'Render' monad, that may have the effect of the context window or textures being drawn to.   
 render :: (MonadIO m, MonadException m) => Render os f () -> ContextT os f m ()
 render (Render m) = ContextT ask >>= (\c -> liftIO $ contextDoAsync (fst c) $ runReaderT m c)
 
@@ -125,6 +135,7 @@ getRenderContextFinalizerAdder  :: Render os f (IORef a -> IO () -> IO ())
 getRenderContextFinalizerAdder = do h <- Render (asks fst)
                                     return $ \k m -> void $ mkWeakIORef k (contextDoAsync h m)  
 
+-- | This kind of exception may be thrown from GPipe when a GPU hardware limit is reached (for instance, too many textures are drawn to from the same 'FragmentStream') 
 data GPipeException = GPipeException String
      deriving (Show, Typeable)
 

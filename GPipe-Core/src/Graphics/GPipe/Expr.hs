@@ -9,33 +9,36 @@
 -- Portability :  Portable
 --
 -- |
--- This module provides the DSL for shaders in GPipe. The type @'S' x a@ is an opaque type that represents a value of type @a@ in a shader stage @x@, eg @S F Float@ means a
+-- This module provides the DSL for shader operations in GPipe. The type @'S' x a@ is an opaque type that represents a value of type @a@ in a shader stage @x@, eg @S F Float@ means a
 -- floating point value in a fragment stream.
 --
 -----------------------------------------------------------------------------
 
 module Graphics.GPipe.Expr (
+    -- * Atomic shader type
     S(),   
     V, F,
     VFloat, VInt, VWord, VBool,
     FFloat, FInt, FWord, FBool,
 
+    -- * Type classes where the Prelude ones are lacking
     Convert(..),
-    
-    ShaderBase(),
-    ShaderType(..),
-    
-    while,
-    ifThen,
-    ifThenElse,
-    ifThenElse',
+    Integral'(..),
+    Real'(..),
+    module Data.Boolean,
+
+    -- * Additional functions
     dFdx,
     dFdy,
     fwidth,
-    Integral'(..),
-    Real'(..),
-    
-    module Data.Boolean
+
+    -- * Shader control structures    
+    ShaderBase(),
+    ShaderType(..),   
+    while,
+    ifThen,
+    ifThenElse,
+    ifThenElse'    
 )
 where
 

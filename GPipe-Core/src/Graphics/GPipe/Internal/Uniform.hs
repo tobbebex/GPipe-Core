@@ -24,10 +24,18 @@ import Linear.V2
 import Linear.V1
 import Linear.V0
 
+-- | This class constraints which buffer types can be loaded as uniforms, and what type those values have.  
 class BufferFormat a => UniformInput a where
+    -- | The type the buffer value will be turned into once it becomes a vertex or fragment value (the @x@ parameter is either 'V' or 'F'). 
     type UniformFormat a x
+    -- | An arrow action that turns a value from it's buffer representation to it's vertex or fragment representation. Use 'toUniform' from
+    --   the GPipe provided instances to operate in this arrow. Also note that this arrow needs to be able to return a value
+    --   lazily, so ensure you use
+    -- 
+    --  @proc ~pattern -> do ...@. 
     toUniform :: ToUniform x a (UniformFormat a x) 
 
+-- | Load a uniform value from a 'Buffer' into a 'Shader'. The argument function is used to retrieve the buffer and the index into this buffer from the shader environment. 
 getUniform :: forall os f s b x. (UniformInput b) => (s -> (Buffer os (Uniform b), Int)) -> Shader os f s (UniformFormat b x)
 getUniform sf = Shader $ do
                    uniAl <- askUniformAlignment 
@@ -64,7 +72,7 @@ buildUDecl = buildUDecl' 0 . Map.toAscList
 
 type OffsetToSType = Map.IntMap SType  
                     
-
+-- | The arrow type for 'toUniform'.
 newtype ToUniform x a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader (Int -> ExprM String))) a b) deriving (Category, Arrow) 
 
 makeUniform :: SType -> ToUniform x (B a) (S x b)

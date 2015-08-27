@@ -9,9 +9,10 @@
 -- Portability :  Portable
 --
 -- |
--- GPipe models the entire OpenGl 3.3 core profile graphics pipeline in a functional typesafe way. It supports typesafe mutable buffers and textures, 
--- customized VBO specification including instancing and multiple attribute buffers, DSL to write typesafe shader code in haskell, FBOs with multiple render targets, 
--- integral texture types, and more!
+-- A typesafe API based on the conceptual model of OpenGl, but without the imperative state machine. 
+-- Aims to be as close to the raw OpenGl performance as possible, without compromising type safety or functional style. 
+-- Includes DSL for shaders to provide typesafety even when crossing into that domain.
+-- Uses OpenGl 3.3 under the hood.
 --
 -- This is a convenience module, combining GPipes all other modules.
 -----------------------------------------------------------------------------

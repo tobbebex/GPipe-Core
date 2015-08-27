@@ -690,6 +690,7 @@ type MinFilter = Filter
 type MagFilter = Filter
 type LodFilter = Filter
 
+-- | A GADT for sample filters, where 'SamplerFilter' cannot be used for integer textures. 
 data SamplerFilter c where
     SamplerFilter :: (ColorElement c ~ Float) => MagFilter -> MinFilter -> LodFilter -> Anisotropy -> SamplerFilter c 
     SamplerNearest :: SamplerFilter c
@@ -866,6 +867,7 @@ setSamplerFilter' t magf minf lodf a = do
 doForSampler :: Int -> (s -> Binding -> IO()) -> ShaderM s ()
 doForSampler n io = modifyRenderIO (\s -> s { samplerNameToRenderIO = insert n io (samplerNameToRenderIO s) } )
 
+-- | Used instead of 'Format' for shadow samplers. These samplers have specialized sampler values, see 'sample1DShadow' and friends.
 data Shadow
 data Sampler1D f = Sampler1D Int Bool String
 data Sampler1DArray f = Sampler1DArray Int Bool String
@@ -874,12 +876,15 @@ data Sampler2DArray f = Sampler2DArray Int Bool String
 data Sampler3D f = Sampler3D Int Bool String
 data SamplerCube f = SamplerCube Int Bool String
 
+-- | A GADT to specify where the level of detail and/or partial derivates should be taken from. Some values of this GADT are restricted to
+--   only 'FragmentStream's.
 data SampleLod vx x where
     SampleAuto :: SampleLod v F
     SampleBias :: FFloat -> SampleLod vx F   
     SampleLod :: S x Float -> SampleLod vx x
     SampleGrad :: vx -> vx -> SampleLod vx x
 
+-- | For some reason, OpenGl doesnt allow explicit lod to be specified for some sampler types, hence this extra GADT. 
 data SampleLod' vx x where
     SampleAuto' :: SampleLod' v F
     SampleBias' :: FFloat -> SampleLod' vx F   

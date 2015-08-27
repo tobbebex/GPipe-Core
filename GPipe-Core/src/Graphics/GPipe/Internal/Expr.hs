@@ -116,9 +116,10 @@ vec4S'' :: S c a -> V4 (S c a)
 vec4S'' s = let f p = S $ fmap (++ ('[': show (p :: Int) ++"]")) (unS s)
             in V4 (f 0) (f 1) (f 2) (f 3)
 
-           
+-- | Phantom type used as first argument in @'S' 'V' a@ that denotes that the shader value is a vertex value              
 data V
 --data P
+-- | Phantom type used as first argument in @'S' 'F' a@ that denotes that the shader value is a fragment value              
 data F
 
 type VFloat = S V Float

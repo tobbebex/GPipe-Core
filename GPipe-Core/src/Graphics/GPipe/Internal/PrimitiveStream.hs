@@ -32,7 +32,8 @@ import Linear.V0
 type DrawCallName = Int
 data PrimitiveStreamData = PrimitiveStreamData DrawCallName
 
--- | A @PrimitiveStream t a @ is a stream of primitives of type @t@ where the vertices are values of type @a@. 
+-- | A @'PrimitiveStream' t a @ is a stream of primitives of type @t@ where the vertices are values of type @a@. You may append 'PrimitiveStream's using the 'Monoid' instance, and you
+--   can operate a stream's vertex values using the 'Functor' instance (this will result in a shader running on the GPU).    
 newtype PrimitiveStream t a = PrimitiveStream [(a, PrimitiveStreamData)] deriving Monoid
 
 instance Functor (PrimitiveStream t) where
@@ -42,7 +43,7 @@ instance Functor (PrimitiveStream t) where
 class BufferFormat a => VertexInput a where
     -- | The type the buffer value will be turned into once it becomes a vertex value.
     type VertexFormat a
-    -- | An arrow action that turns a value from its buffer representation to it's vertex representation. Use 'toVertex' from
+    -- | An arrow action that turns a value from it's buffer representation to it's vertex representation. Use 'toVertex' from
     --   the GPipe provided instances to operate in this arrow. Also note that this arrow needs to be able to return a value
     --   lazily, so ensure you use
     -- 

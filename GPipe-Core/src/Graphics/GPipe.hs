@@ -11,8 +11,8 @@
 -- |
 -- A typesafe API based on the conceptual model of OpenGl, but without the imperative state machine. 
 -- Aims to be as close to the raw OpenGl performance as possible, without compromising type safety or functional style. 
--- Includes DSL for shaders to provide typesafety even when crossing into that domain.
--- Uses OpenGl 3.3 under the hood.
+-- Includes DSL for shaders to provide type safety even when crossing into that domain.
+--  Uses OpenGl 3.3 core profile under the hood.
 --
 -- This is a convenience module, combining GPipes all other modules.
 -----------------------------------------------------------------------------

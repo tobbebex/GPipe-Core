@@ -29,6 +29,7 @@ import Foreign.Marshal.Array (withArray)
 import Foreign.Ptr (nullPtr)
 import Linear.V4
 
+-- | A monad in which individual color images can be drawn. 
 newtype DrawColors os s a = DrawColors (StateT Int (Writer [Int -> (ExprM (), GlobDeclM (), s -> (IO FBOKey, IO (), IO ()))]) a) deriving (Functor, Applicative, Monad)
 
 runDrawColors :: DrawColors os s a -> (ExprM (), GlobDeclM (), s -> (IO [FBOKey], IO (), IO ()))
@@ -40,6 +41,8 @@ runDrawColors (DrawColors m) = foldl sf (return (), return (), const (return [],
                                 n <- x
                                 return $ ns ++ [n]
                             , b >> y, c >> z)
+
+-- | Draw color values into a color renderable texture image.                            
 drawColor :: forall c s os. ColorRenderable c => (s -> (Image (Format c), ColorMask c, UseBlending)) -> FragColor c -> DrawColors os s ()
 drawColor sf c = DrawColors $ do n <- get
                                  put $ n+1
@@ -54,9 +57,15 @@ drawColor sf c = DrawColors $ do n <- get
                                                                                        ]
     where cf = undefined :: c
 
+-- | Draw all fragments in a 'FragmentStream' using the provided function that passes each fragment value into a 'DrawColors' monad. The first argument is a function
+--   that retrieves a 'Blending' setting from the shader environment, which will be used for all 'drawColor' actions in the 'DrawColors' monad where 'UseBlending' is 'True'.
+--   (OpenGl 3.3 unfortunately doesn't support having different blending settings for different color targets.) 
 draw :: forall a os f s. (s -> Blending) -> FragmentStream a -> (a -> DrawColors os s ()) -> Shader os f s ()
+-- | Like 'draw', but performs a depth test on each fragment first. The 'DrawColors' monad is then only run for fragments where the depth test passes. 
 drawDepth :: forall a os f s d. DepthRenderable d => (s -> (Blending, Image (Format d), DepthOption)) -> FragmentStream (a, FragDepth) -> (a -> DrawColors os s ()) -> Shader os f s ()
+-- | Like 'draw', but performs a stencil test on each fragment first. The 'DrawColors' monad is then only run for fragments where the stencil test passes. 
 drawStencil :: forall a os f s st. StencilRenderable st => (s -> (Blending, Image (Format st), StencilOptions)) -> FragmentStream a -> (a -> DrawColors os s ()) -> Shader os f s ()
+-- | Like 'draw', but performs a stencil test and a depth test (in that order) on each fragment first. The 'DrawColors' monad is then only run for fragments where the stencil and depth test passes. 
 drawDepthStencil :: forall a os f s d st. (DepthRenderable d, StencilRenderable st) => (s -> (Blending, Image (Format d), Image (Format st), DepthStencilOption)) -> FragmentStream (a, FragDepth) -> (a -> DrawColors os s ()) -> Shader os f s ()
 
 makeFBOKeys :: IO [FBOKey] -> IO (Maybe FBOKey) -> IO (Maybe FBOKey) -> IO FBOKeys
@@ -94,13 +103,19 @@ drawDepthStencil sf fs m = Shader $ tellDrawcalls fs $ \(c,d) -> let (sh,g,ioc) 
           getCombinedBinding di si | imageEquals di si = getImageBinding di GL_DEPTH_STENCIL_ATTACHMENT
                                    | otherwise = getImageBinding di GL_DEPTH_ATTACHMENT >> getImageBinding si GL_STENCIL_ATTACHMENT
 
-
+-- | Draw color values from a 'FragmentStream' into the context window.
 drawContextColor :: forall os s c ds. ContextColorFormat c => (s -> ContextColorOption c) -> FragmentStream (FragColor c) -> Shader os (ContextFormat c ds) s ()
+-- | Perform a depth test for each fragment from a 'FragmentStream' in the context window. This doesn't draw any color values and only affects the depth buffer.
 drawContextDepth :: forall os s c ds. DepthRenderable ds => (s -> DepthOption) -> FragmentStream FragDepth -> Shader os (ContextFormat c ds) s ()
+-- | Perform a depth test for each fragment from a 'FragmentStream' and write a color value from each fragment that passes the test into the context window.
 drawContextColorDepth :: forall os s c ds. (ContextColorFormat c, DepthRenderable ds) => (s -> (ContextColorOption c, DepthOption)) -> FragmentStream (FragColor c, FragDepth) -> Shader os (ContextFormat c ds) s ()
+-- | Perform a stencil test for each fragment from a 'FragmentStream' in the context window. This doesn't draw any color values and only affects the stencil buffer.
 drawContextStencil :: forall os s c ds. StencilRenderable ds => (s -> StencilOptions) -> FragmentStream () -> Shader os (ContextFormat c ds) s ()
+-- | Perform a stencil test for each fragment from a 'FragmentStream' and write a color value from each fragment that passes the test into the context window.
 drawContextColorStencil :: forall os s c ds. (ContextColorFormat c, StencilRenderable ds) => (s -> (ContextColorOption c, StencilOptions)) -> FragmentStream (FragColor c) -> Shader os (ContextFormat c ds) s ()
+-- | Perform a stencil test and depth test (in that order) for each fragment from a 'FragmentStream' in the context window. This doesnt draw any color values and only affects the depth and stencil buffer.
 drawContextDepthStencil :: forall os s c ds. (DepthRenderable ds, StencilRenderable ds) => (s -> DepthStencilOption) -> FragmentStream FragDepth -> Shader os (ContextFormat c ds) s ()
+-- | Perform a stencil test and depth test (in that order) for each fragment from a 'FragmentStream' and write a color value from each fragment that passes the tests into the context window.
 drawContextColorDepthStencil :: forall os s c ds. (ContextColorFormat c, DepthRenderable ds, StencilRenderable ds) => (s -> (ContextColorOption c, DepthStencilOption)) -> FragmentStream (FragColor c, FragDepth) -> Shader os (ContextFormat c ds) s ()
 
 drawContextColor sf fs = Shader $ tellDrawcalls fs $ \ a -> make3 (setColor cf 0 a) io
@@ -191,7 +206,8 @@ setGlBlend NoBlending = return ()
 setGlBlend (BlendRgbAlpha (e, ea) (BlendingFactors sf df, BlendingFactors sfa dfa) (V4 r g b a)) = do
                             glBlendEquationSeparate (getGlBlendEquation e) (getGlBlendEquation ea)
                             glBlendFuncSeparate (getGlBlendFunc sf) (getGlBlendFunc df) (getGlBlendFunc sfa) (getGlBlendFunc dfa)
-                            glBlendColor (realToFrac r) (realToFrac g) (realToFrac b) (realToFrac a)
+                            when (usesConstantColor sf || usesConstantColor df || usesConstantColor sfa || usesConstantColor dfa) $
+                                glBlendColor (realToFrac r) (realToFrac g) (realToFrac b) (realToFrac a)
 setGlBlend (LogicOp op) = glEnable GL_COLOR_LOGIC_OP >> glLogicOp (getGlLogicOp op)
 
 
@@ -235,25 +251,34 @@ data DepthStencilOption = DepthStencilOption {
 
 data FrontBack a = FrontBack { front :: a, back :: a }
 
--- | 'True' for each color component that should be written to the 'ShaderBuffer'.
+-- | 'True' for each color component that should be written to the target.
 type ColorMask f = Color f Bool
--- | 'True' if the depth component should be written to the 'ShaderBuffer'.
+-- | 'True' if the depth component should be written to the target.
 type DepthMask = Bool
--- | The function used to compare the fragment's depth and the depth buffers depth with.
+-- | The function used to compare the fragment's depth and the depth buffers depth with. E.g. 'Less' means "where fragment's depth is less than the buffers current depth".
 type DepthFunction = ComparisonFunction
 
+-- | Indicates whether this color draw should use the 'Blending' setting given to the draw action. If this is 'False', the fragment's color value will simply replace the
+--   target value.
 type UseBlending = Bool
 
--- | Sets how the painted colors are blended with the 'ShaderBuffer's previous value.
+-- | Denotes how each fragment's color value should be blended with the target value. 
 data Blending =
+      -- | The fragment's color will simply replace the target value.
       NoBlending
+      -- | The fragment's color will be blended using an equation and a set of factors for the RGB components, and a separate equation and set of factors for the Alpha component (if present), and a 'ConstantColor' that may be referenced from the 'BlendingFactors'. The 'ConstantColor' may be 'undefined' if none of the 'BlendingFactors' needs it.
+      --   This kind of blending will only be made on colors with a 'Float' representation (e.g. 'RGB8' or 'RGB32F', but not 'RGB8I'), integer colors will simply replace the target value.
     | BlendRgbAlpha (BlendEquation, BlendEquation) (BlendingFactors, BlendingFactors) ConstantColor
+      -- | A logical operation that will be done on the bits of the fragment color and the target color. This kind of blending is only done on colors that has a
+      --   integral /internal/ representation (e.g. 'RGB8' or 'RGB8I', but not 'RGB32F'; note the difference with @BlendRgbAlpha@ restriction). For targets with an internal floating point representation, the fragment value will simply replace the target value.
     | LogicOp LogicOp
 
 type ConstantColor = V4 Float
 
+-- | A set of blending factors used for the source (fragment) and the destination (target).
 data BlendingFactors = BlendingFactors { blendFactorSrc :: BlendingFactor, blendFactorDst :: BlendingFactor }
 
+-- | The equation used to combine the source (fragment) and the destination (target) after they have been multiplied with their respective 'BlendingFactor's.
 data BlendEquation =
      FuncAdd
    | FuncSubtract
@@ -261,6 +286,7 @@ data BlendEquation =
    | Min
    | Max
 
+-- | A factor that the source (fragment) or the destination (target) will be multiplied with before combined with the other in the 'BlendEquation'.
 data BlendingFactor =
      Zero
    | One
@@ -278,6 +304,13 @@ data BlendingFactor =
    | OneMinusConstantAlpha
    | SrcAlphaSaturate
 
+usesConstantColor ConstantColor = True
+usesConstantColor OneMinusConstantColor = True
+usesConstantColor ConstantAlpha = True
+usesConstantColor OneMinusConstantAlpha = True
+usesConstantColor _ = False 
+
+-- | A bitwise logical operation that will be used to combine colors that has an integral internal representation.
 data LogicOp =
      Clear
    | And
@@ -296,7 +329,7 @@ data LogicOp =
    | Nand
    | Set
 
--- | Sets the operations that should be performed on the 'ShaderBuffer's stencil value
+-- | Denotes the operation that will be performed on the target's stencil value
 data StencilOp =
      OpZero
    | OpKeep
@@ -309,6 +342,7 @@ data StencilOp =
 
 -----------
 
+-- | Fill a color image with a constant color value
 clearColorImage :: forall c os f. ColorRenderable c => Image c -> Color c (ColorElement c) -> Render os f ()
 clearColorImage i c = do cd <- getRenderContextData
                          key <- Render $ lift $ getImageFBOKey i
@@ -331,6 +365,7 @@ clearColorImage i c = do cd <- getRenderContextData
                                             clearColor (undefined :: c) c
                                             glEnable GL_SCISSOR_TEST
 
+-- | Fill a depth image with a constant depth value (in the range [0,1])
 clearDepthImage :: DepthRenderable d => Image d -> Float -> Render os f ()
 clearDepthImage i d = do cd <- getRenderContextData
                          key <- Render $ lift $ getImageFBOKey i
@@ -353,6 +388,7 @@ clearDepthImage i d = do cd <- getRenderContextData
                                             with (realToFrac d) $ glClearBufferfv GL_DEPTH 0
                                             glEnable GL_SCISSOR_TEST
 
+-- | Fill a depth image with a constant stencil value
 clearStencilImage :: StencilRenderable s => Image s -> Int -> Render os f ()
 clearStencilImage i s = do cd <- getRenderContextData
                            key <- Render $ lift $ getImageFBOKey i
@@ -375,6 +411,7 @@ clearStencilImage i s = do cd <- getRenderContextData
                                               with (fromIntegral s) $ glClearBufferiv GL_STENCIL 0
                                               glEnable GL_SCISSOR_TEST
 
+-- | Fill a combined depth stencil image with a constant depth value (in the range [0,1]) and a constant stencil value
 clearDepthStencilImage :: Image DepthStencil -> Float -> Int -> Render os f ()
 clearDepthStencilImage i d s = do
                            cd <- getRenderContextData
@@ -398,24 +435,28 @@ clearDepthStencilImage i d s = do
                                               glClearBufferfi GL_DEPTH_STENCIL 0 (realToFrac d) (fromIntegral s)
                                               glEnable GL_SCISSOR_TEST 
 
+-- | Fill the context window's back buffer with a constant color value
 clearContextColor :: forall os c ds. ContextColorFormat c => Color c Float -> Render os (ContextFormat c ds) ()
 clearContextColor c = Render $ lift $ do glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
                                          glDisable GL_SCISSOR_TEST 
                                          withArray (map realToFrac (fromColor (undefined :: c) c ++ replicate 3 0 :: [Float])) $ glClearBufferfv GL_COLOR 0
                                          glEnable GL_SCISSOR_TEST 
 
+-- | Fill the context window's back depth buffer with a constant depth value (in the range [0,1]) 
 clearContextDepth :: DepthRenderable ds => Float -> Render os (ContextFormat c ds) ()
 clearContextDepth d = Render $ lift $ do glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
                                          glDisable GL_SCISSOR_TEST 
                                          with (realToFrac d) $ glClearBufferfv GL_DEPTH 0
                                          glEnable GL_SCISSOR_TEST 
 
+-- | Fill the context window's back stencil buffer with a constant stencil value
 clearContextStencil :: StencilRenderable ds => Int -> Render os (ContextFormat c ds) ()
 clearContextStencil s = Render $ lift $ do glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
                                            glDisable GL_SCISSOR_TEST 
                                            with (fromIntegral s) $ glClearBufferiv GL_STENCIL 0
                                            glEnable GL_SCISSOR_TEST
 
+-- | Fill the context window's back depth and stencil buffers with a constant depth value (in the range [0,1]) and a constant stencil value
 clearContextDepthStencil :: Float -> Int -> Render os (ContextFormat c DepthStencil) ()
 clearContextDepthStencil d s = Render $ lift $ do glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
                                                   glDisable GL_SCISSOR_TEST 

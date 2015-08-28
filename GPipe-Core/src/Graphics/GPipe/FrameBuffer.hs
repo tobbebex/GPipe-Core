@@ -1,4 +1,18 @@
+-----------------------------------------------------------------------------
+--
+-- Module      :  Graphics.GPipe.FrameBuffer
+-- Copyright   :  Tobias Bexelius
+-- License     :  MIT
+--
+-- Maintainer  :  Tobias Bexelius
+-- Stability   :  Experimental
+-- Portability :  Portable
+--
+-- | This module defines all functions and types for drawing into a context window 
+--   or texture from a 'Graphics.GPipe.Shader.Shader'.
+-----------------------------------------------------------------------------
 module Graphics.GPipe.FrameBuffer (
+    -- * Draw into the context window
     drawContextColor,
     drawContextDepth,
     drawContextColorDepth,
@@ -7,6 +21,7 @@ module Graphics.GPipe.FrameBuffer (
     drawContextDepthStencil,
     drawContextColorDepthStencil,
 
+    -- * Draw into one or more texture images
     draw,
     drawDepth,
     drawStencil,
@@ -14,6 +29,7 @@ module Graphics.GPipe.FrameBuffer (
     drawColor,
     DrawColors(),
 
+    -- * Texture images
     Image(),
     imageEquals,
     imageSize,
@@ -22,29 +38,26 @@ module Graphics.GPipe.FrameBuffer (
     getTexture2DImage, 
     getTexture2DArrayImage, 
     getTexture3DImage, 
-    getTextureCubeImage,
+    getTextureCubeImage,    
     
-    clearColorImage,
-    clearDepthImage,
-    clearStencilImage,
-    clearDepthStencilImage,
+    -- * Clearing the context window
+    -- | Use these functions to clear the color, depth or stencil values in the context's window 
     clearContextColor,
     clearContextDepth,
     clearContextStencil, 
     clearContextDepthStencil, 
+
+    -- * Clearing texture images
+    -- | Use these functions to clear the color, depth or stencil values in texture images. 
+    clearColorImage,
+    clearDepthImage,
+    clearStencilImage,
+    clearDepthStencilImage,
         
+    -- * Color drawing types
     FragColor, 
-    FragDepth,
-       
     ContextColorOption(..),
-    DepthOption(..),
-    StencilOptions,
-    StencilOption(..),
-    DepthStencilOption(..),
-    FrontBack(..),
     ColorMask,
-    DepthMask,
-    DepthFunction,
     UseBlending,
     Blending(..),
     ConstantColor,
@@ -52,6 +65,18 @@ module Graphics.GPipe.FrameBuffer (
     BlendEquation(..),
     BlendingFactor(..),
     LogicOp(..),
+
+    -- * Depth drawing types        
+    FragDepth,      
+    DepthOption(..),
+    DepthMask,
+    DepthFunction,
+    
+    -- * Stencil drawing types
+    StencilOptions,
+    StencilOption(..),
+    DepthStencilOption(..),   
+    FrontBack(..),    
     StencilOp(..),
 )
 where

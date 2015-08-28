@@ -45,7 +45,7 @@ module Graphics.GPipe.Sampler (
     --   different variations of sampling. In most cases when sampling in a 'FragmentStream', use 'Nothing' or 'SampleAuto' to get what you need.
     --   Float coordinates are given with components in range [0,1]. 
     sample1D, sample1DArray, sample2D, sample2DArray, sample3D, sampleCube,
-    -- | The following functions sample a shadow sampler using a 'ReferenceValue' to compare the texture values to.
+    -- | The following functions sample a shadow sampler using a 'ReferenceValue' to compare the texture values to. The returned value is a @S x Float@ value in the range [0,1] where 0 means false, 1 means true and any value in between is a fuzzy boolean value indicating how many adjacent texels compared true and how many compared false.
     sample1DShadow, sample1DArrayShadow, sample2DShadow, sample2DArrayShadow, sampleCubeShadow, 
     -- | The following functions retrieve a texel value from a samplers texture without using any filtering. Coordinates for these functions are integer texel indices, and not normalized coordinates.
     texelFetch1D, texelFetch1DArray, texelFetch2D, texelFetch2DArray, texelFetch3D,   

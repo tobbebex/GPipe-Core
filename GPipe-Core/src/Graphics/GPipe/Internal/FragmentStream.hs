@@ -47,7 +47,9 @@ class FragmentInput a where
     --  @proc ~pattern -> do ...@. 
     toFragment :: ToFragment a (FragmentFormat a)  
 
--- | Rasterize a stream of primitives into fragments, using a 'Side', 'Viewport' and 'DepthRange' from the shader environment    
+-- | Rasterize a stream of primitives into fragments, using a 'Side', 'Viewport' and 'DepthRange' from the shader environment.
+--   Primitives will be transformed from canonical view space, i.e. [(-1,-1,-1),(1,1,1)], to the 2D space defined by the 'ViewPort' parameter and the depth range
+--   defined by the 'DepthRange' parameter.
 rasterize:: forall p a s os f. FragmentInput a
           => (s -> (Side, ViewPort, DepthRange))
           -> PrimitiveStream p (VPos, a)

@@ -1089,11 +1089,13 @@ offName _ = "Offset"
 
 ----------------------------------------------------------------------------------
 
+-- | A texture image is a reference to a 2D array of pixels in a texture. Some textures contain one 'Image' per level of detail while some contain several. 
 data Image f = Image TexName Int Int (V2 Int) (GLuint -> IO ()) -- the two Ints is last two in FBOKey
 
 instance Eq (Image f) where
     (==) = imageEquals 
 
+-- | Compare two images that doesn't necessarily has same type
 imageEquals :: Image a -> Image b -> Bool
 imageEquals (Image tn' k1' k2' _ _) (Image tn k1 k2 _ _) = tn' == tn && k1' == k1 && k2' == k2
 
@@ -1103,7 +1105,7 @@ getImageBinding (Image _ _ _ _ io) = io
 getImageFBOKey :: Image t -> IO FBOKey
 getImageFBOKey (Image tn k1 k2 _ _) = do tn' <- readIORef tn
                                          return $ FBOKey tn' k1 k2 
-
+-- | Retrieve the 2D size an image
 imageSize :: Image f -> V2 Int
 imageSize (Image _ _ _ s _) = s
 

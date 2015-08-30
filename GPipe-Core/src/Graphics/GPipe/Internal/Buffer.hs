@@ -268,7 +268,7 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
 
 -- | Create a buffer with a specified number of elements.
 newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT w os f m (Buffer os b)
-newBuffer elementCount | elementCount < 0 = error "newBuffer, length out of bounds" 
+newBuffer elementCount | elementCount < 0 = error "newBuffer, length negative" 
                        | otherwise = do
     (buffer, nameRef, name) <- liftContextIO $ do
                        name <- alloca (\ptr -> glGenBuffers 1 ptr >> peek ptr) 
@@ -310,7 +310,7 @@ writeBuffer buffer offset elems | offset < 0 || offset >= bufferLength buffer = 
 copyBuffer :: MonadIO m => Buffer os b -> BufferStartPos -> Buffer os b -> BufferStartPos -> Int -> ContextT w os f m ()
 copyBuffer bFrom from bTo to len | from < 0 || from >= bufferLength bFrom = error "writeBuffer, source offset out of bounds"
                                  | to < 0 || to >= bufferLength bTo = error "writeBuffer, destination offset out of bounds"
-                                 | len < 0 = error "writeBuffer, length out of bounds"
+                                 | len < 0 = error "writeBuffer, length negative"
                                  | len + from > bufferLength bFrom = error "writeBuffer, source buffer too small"
                                  | len + to > bufferLength bTo = error "writeBuffer, destination buffer too small"
                                  | otherwise = liftContextIOAsync $ do 

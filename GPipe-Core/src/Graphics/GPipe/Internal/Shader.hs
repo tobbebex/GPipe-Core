@@ -18,7 +18,8 @@ module Graphics.GPipe.Internal.Shader (
     guard',
     maybeShader,
     chooseShader,
-    silenceShader
+    silenceShader,
+    throwFromMaybe
 ) where
 
 
@@ -38,6 +39,7 @@ import Control.Monad.Trans.List (ListT(..))
 import Data.Monoid (All(..), mempty)
 import Data.Either
 import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Error (throwError)
 
 data ShaderState s = ShaderState Int (RenderIOState s)
 
@@ -58,7 +60,7 @@ tellDrawcall :: IO (Drawcall s) -> ShaderM s ()
 tellDrawcall dc = ShaderM $ lift $ tell ([dc], mempty) 
 
 mapDrawcall :: (s -> s') -> Drawcall s' -> Drawcall s
-mapDrawcall f (Drawcall a b c d e g h i) = Drawcall (a . f) b c d e g h i 
+mapDrawcall f (Drawcall a b c d e g h i j k) = Drawcall (a . f) b c d e g h i j k 
 
 newtype ShaderM s a = ShaderM (ReaderT UniformAlignment (WriterT ([IO (Drawcall s)], s -> All) (ListT (State (ShaderState s)))) a) deriving (MonadPlus, Monad, Alternative, Applicative, Functor)
 
@@ -104,17 +106,26 @@ silenceShader (Shader (ShaderM m)) = Shader $ ShaderM $ do
 type CompiledShader os f s = s -> Render os f ()
 
 -- | Compiles a shader into a 'CompiledShader'. This action will usually take a second or more, so put it during a loading sequence or something.   
+--
+--   May throw a 'GPipeException' if the graphics driver doesn't support something in this shader (e.g. too many interpolated floats sent between a vertex and a fragment shader),
+--   or if shader evaluates to 'mzero'.
 compileShader :: (MonadIO m, MonadException m) => Shader os f x () -> ContextT w os f' m (CompiledShader os f x)
 compileShader (Shader (ShaderM m)) = do
         uniAl <- liftContextIO getUniformAlignment
         let (adcs, ShaderState _ s) = runState (runListT (runWriterT (runReaderT m uniAl))) newShaderState
             f ((disc, runF):ys) e@(cd, env) = if getAll (disc env) then runF cd env else f ys e
-            f  [] _               = return ()
+            f  [] _               = return $ Just "Shader evaluated to mzero\n"
         xs <- mapM (\(_,(dcs, disc)) -> do 
                                 runF <- compile dcs s
                                 return (disc, runF)) adcs
-        return $ \ s -> Render $ do cd <- asks $ fst . snd
-                                    lift $ f xs (cd, s)     
+        return $ \ s -> Render $ do cd <- lift $ asks $ fst . snd
+                                    throwFromMaybe $ lift $ lift $ f xs (cd, s)
+
+throwFromMaybe m = do mErr <- m
+                      case mErr of
+                          Just err -> throwError err
+                          Nothing -> return ()
+                         
 
 -- | Use this to run a shader that doesn't reference the context frame buffer, allowing the same shader to be run in another context with a different context format (but still with same object space).
 withoutContext :: Render os () () -> Render os f ()

@@ -1,4 +1,4 @@
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE PatternGuards, PatternSynonyms #-}
 module Graphics.GPipe.Internal.Compiler where
 
 import Graphics.GPipe.Internal.Context
@@ -21,6 +21,8 @@ import Foreign.Ptr (nullPtr)
 import Data.Either
 import Control.Exception (throwIO)
 import Data.IORef
+import Data.List (zip5)
+import Data.Monoid ((<>))
 
 data Drawcall s = Drawcall {
                     drawcallFBO :: s -> (Maybe (IO FBOKeys, IO ()), IO ()),
@@ -29,8 +31,10 @@ data Drawcall s = Drawcall {
                     vertexsSource :: String,
                     fragmentSource :: String,
                     usedInputs :: [Int],
-                    usedUniforms :: [Int],
-                    usedSamplers :: [Int]
+                    usedVUniforms :: [Int],
+                    usedVSamplers :: [Int],
+                    usedFUniforms :: [Int],
+                    usedFSamplers :: [Int]
                     }                                      
 
 -- index/binding refers to what is used in the final shader. Index space is limited, usually 16
@@ -61,27 +65,58 @@ data BoundState = BoundState {
                         }  
 
 
--- | May throw a GPipeCompileException 
-compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT w os f m (ContextData -> s -> IO ())
+-- | May throw a GPipeException 
+compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT w os f m (ContextData -> s -> IO (Maybe String))
 compile dcs s = do
     drawcalls <- liftIO $ sequence dcs -- IO only for SNMap
-    (maxUnis, maxSamplers) <- liftContextIO $ do 
+    (maxUnis, 
+     maxSamplers,
+     maxVUnis,
+     maxVSamplers,
+     maxFUnis,
+     maxFSamplers) <- liftContextIO $ do 
                        maxUnis <- alloca (\ptr -> glGetIntegerv GL_MAX_COMBINED_UNIFORM_BLOCKS ptr >> peek ptr)
                        maxSamplers <- alloca (\ptr -> glGetIntegerv GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS ptr >> peek ptr)
-                       return (fromIntegral maxUnis, fromIntegral maxSamplers)
-    let unisPerDc = map usedUniforms drawcalls
-    let sampsPerDc = map usedSamplers drawcalls
-    -- TODO: Check if this is really needed, if so make it more verbose:
-    let errUni = ["Too many uniform blocks used in a single shader\n" | any (\ xs -> length xs >= maxUnis) unisPerDc]
-    let errSamp = ["Too many textures used in a single shader\n" | any (\ xs -> length xs >= maxSamplers) sampsPerDc]
-    let allocatedUniforms = allocate maxUnis unisPerDc      
-    let allocatedSamplers = allocate maxSamplers sampsPerDc
-    compRet <- evalStateT (mapM comp  (zip3 drawcalls allocatedUniforms allocatedSamplers)) (BoundState Map.empty Map.empty (-1))
+                       maxVUnis <- alloca (\ptr -> glGetIntegerv GL_MAX_VERTEX_UNIFORM_BLOCKS ptr >> peek ptr)
+                       maxVSamplers <- alloca (\ptr -> glGetIntegerv GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS ptr >> peek ptr)
+                       maxFUnis <- alloca (\ptr -> glGetIntegerv GL_MAX_FRAGMENT_UNIFORM_BLOCKS ptr >> peek ptr)
+                       maxFSamplers <- alloca (\ptr -> glGetIntegerv GL_MAX_TEXTURE_IMAGE_UNITS ptr >> peek ptr)
+                       return 
+                        (fromIntegral maxUnis, 
+                         fromIntegral maxSamplers,
+                         fromIntegral maxVUnis, 
+                         fromIntegral maxVSamplers,
+                         fromIntegral maxFUnis, 
+                         fromIntegral maxFSamplers)
+
+    let vUnisPerDc = map usedVUniforms drawcalls
+        vSampsPerDc = map usedVSamplers drawcalls
+        fUnisPerDc = map usedFUniforms drawcalls
+        fSampsPerDc = map usedFSamplers drawcalls
+        unisPerDc = zipWith orderedUnion vUnisPerDc fUnisPerDc
+        sampsPerDc = zipWith orderedUnion vSampsPerDc fSampsPerDc
+        
+        limitErrors = concat [
+            ["Too many uniform blocks used in a single shader program\n" | any (\ xs -> length xs >= maxUnis) unisPerDc], 
+            ["Too many textures used in a single shader program\n" | any (\ xs -> length xs >= maxSamplers) sampsPerDc],
+            ["Too many uniform blocks used in a single vertex shader\n" | any (\ xs -> length xs >= maxVUnis) vUnisPerDc],
+            ["Too many textures used in a single vertex shader\n" | any (\ xs -> length xs >= maxVSamplers) vSampsPerDc],
+            ["Too many uniform blocks used in a single fragment shader\n" | any (\ xs -> length xs >= maxFUnis) fUnisPerDc],
+            ["Too many textures used in a single fragment shader\n" | any (\ xs -> length xs >= maxFSamplers) fSampsPerDc]
+            ]
+        
+        allocatedUniforms = allocate maxUnis unisPerDc      
+        allocatedSamplers = allocate maxSamplers sampsPerDc
+    compRet <- evalStateT (mapM comp  (zip5 drawcalls unisPerDc sampsPerDc allocatedUniforms allocatedSamplers)) (BoundState Map.empty Map.empty (-1))
     fAdd <- getContextFinalizerAdder
-    let (errs, ret) = partitionEithers compRet      
+    let (errs, ret) = partitionEithers compRet
         (pnames, fs) = unzip ret
-        fr cd x = foldl (\ io f -> io >> f x cd fAdd) (return ()) fs
-        allErrs = errUni ++ errSamp ++ errs
+        fr cd x = foldl (\ io f -> do mErr <- io
+                                      mErr2 <- f x cd fAdd
+                                      return $ mErr <> mErr2)
+                        (return Nothing) 
+                        fs
+        allErrs = limitErrors ++ errs
     if null allErrs 
         then do  
             forM_ pnames (\pNameRef -> do pName <- liftIO $ readIORef pNameRef 
@@ -89,9 +124,9 @@ compile dcs s = do
             return fr
         else do
             liftContextIOAsync $ mapM_ (readIORef >=> glDeleteProgram) pnames
-            liftIO $ throwIO (GPipeException $ concat allErrs)   
+            liftIO $ throwIO $ GPipeException $ concat allErrs   
  where   
-    comp (Drawcall fboSetup primN rastN vsource fsource inps unis samps, ubinds, sbinds) = do
+    comp (Drawcall fboSetup primN rastN vsource fsource inps _ _ _ _, unis, samps, ubinds, sbinds) = do
            BoundState uniState sampState boundRastN <- get
            let (bindUni, uniState') = makeBind uniState (uniformNameToRenderIO s) (zip unis ubinds)
            let (bindSamp, sampState') = makeBind sampState (samplerNameToRenderIO s) $ zip samps sbinds
@@ -144,38 +179,42 @@ compile dcs s = do
                                            bindRast x
                                            let (mfbokeyio, blendio) = fboSetup x
                                            blendio
-                                           case mfbokeyio of
-                                                Nothing -> glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
+                                           mError <- case mfbokeyio of
+                                                Nothing -> do glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
+                                                              return Nothing
                                                 Just (fbokeyio, fboio) -> do
                                                    fbokey <- fbokeyio
                                                    mfbo <- getFBO cd fbokey
                                                    case mfbo of
                                                         Just fbo -> do fbo' <- readIORef fbo
                                                                        glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
+                                                                       return Nothing
                                                         Nothing -> do fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
                                                                       fbo <- newIORef fbo'
                                                                       void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
                                                                       setFBO cd fbokey fbo
                                                                       glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
                                                                       glEnable GL_FRAMEBUFFER_SRGB
-                                                                      fboio
+                                                                      fboio                                                                      
                                                                       let numColors = length $ fboColors fbokey
                                                                       withArray [GL_COLOR_ATTACHMENT0 .. (GL_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $ glDrawBuffers (fromIntegral numColors)
-                                           -- Draw each Vertex Array --
-                                           forM_ (map ($ inps) ((inputArrayToRenderIOs s ! primN) x)) $ \ ((keyio, vaoio), drawio) -> do
-                                                key <- keyio
-                                                mvao <- getVAO cd key
-                                                case mvao of
-                                                    Just vao -> do vao' <- readIORef vao
-                                                                   glBindVertexArray vao'
-                                                    Nothing -> do vao' <- alloca (\ptr -> glGenVertexArrays 1 ptr >> peek ptr)
-                                                                  vao <- newIORef vao'
-                                                                  void $ fAdd vao $ with vao' (glDeleteVertexArrays 1)
-                                                                  setVAO cd key vao
-                                                                  glBindVertexArray vao'
-                                                                  vaoio
-                                                drawio
-                                           )
+                                                                      getFBOerror                                           
+                                           when (isNothing mError) $                             
+                                               -- Draw each Vertex Array --
+                                               forM_ (map ($ inps) ((inputArrayToRenderIOs s ! primN) x)) $ \ ((keyio, vaoio), drawio) -> do
+                                                    key <- keyio
+                                                    mvao <- getVAO cd key
+                                                    case mvao of
+                                                        Just vao -> do vao' <- readIORef vao
+                                                                       glBindVertexArray vao'
+                                                        Nothing -> do vao' <- alloca (\ptr -> glGenVertexArrays 1 ptr >> peek ptr)
+                                                                      vao <- newIORef vao'
+                                                                      void $ fAdd vao $ with vao' (glDeleteVertexArrays 1)
+                                                                      setVAO cd key vao
+                                                                      glBindVertexArray vao'
+                                                                      vaoio
+                                                    drawio
+                                           return mError)
 
     compileShader name source = do 
         withCStringLen source $ \ (ptr, len) ->
@@ -200,7 +239,13 @@ compile dcs s = do
                                     liftM Just $ allocaArray logLen' $ \ ptr -> do
                                                     glGetProgramInfoLog name logLen nullPtr ptr
                                                     peekCString ptr 
-            
+
+orderedUnion :: Ord a => [a] -> [a] -> [a]
+orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys
+                                   | x < y     = x : orderedUnion xs yys
+                                   | otherwise = y : orderedUnion xxs ys
+orderedUnion xs [] = xs
+orderedUnion [] ys = ys
 
 -- Optimization, save gl calls to already bound buffers/samplers
 makeBind :: Map.IntMap Int -> Map.IntMap (s -> Binding -> IO ()) -> [(Int, Int)] -> (s -> IO (), Map.IntMap Int)
@@ -226,5 +271,9 @@ allocate mx = allocate' Map.empty []
                                             in findLastUsed m' n' xs
           findLastUsed m _ _ = head $ Map.toList m                                    
           
-                             
-      
+getFBOerror :: MonadIO m => m (Maybe String)                  
+getFBOerror = do status <- glCheckFramebufferStatus GL_DRAW_FRAMEBUFFER
+                 return $ case status of
+                    GL_FRAMEBUFFER_COMPLETE -> Nothing
+                    GL_FRAMEBUFFER_UNSUPPORTED -> Just "The combination of draw images (FBO) used in the render call is unsupported by this graphics driver\n"
+                    _ -> error "GPipe internal FBO error"      

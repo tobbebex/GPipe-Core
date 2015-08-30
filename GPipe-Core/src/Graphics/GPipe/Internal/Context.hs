@@ -44,6 +44,8 @@ import Data.List (delete)
 import Foreign.C.Types
 import Data.Maybe (maybeToList)
 import Linear.V2 (V2(V2))
+import Control.Monad.Trans.Error
+import Control.Exception (throwIO)
 
 type ContextFactory c ds w = ContextFormat c ds -> IO (ContextHandle w)
 
@@ -147,11 +149,17 @@ swapContextBuffers = ContextT (asks fst) >>= (\c -> liftIO $ contextDoSync c $ c
 type ContextDoAsync = IO () -> IO ()
 
 -- | A monad in which shaders are run.
-newtype Render os f a = Render (ReaderT (ContextDoAsync, (ContextData, SharedContextDatas)) IO a) deriving (Monad, Applicative, Functor)
+newtype Render os f a = Render (ErrorT String (ReaderT (ContextDoAsync, (ContextData, SharedContextDatas)) IO) a) deriving (Monad, Applicative, Functor)
 
--- | Run a 'Render' monad, that may have the effect of the context window or textures being drawn to.   
+-- | Run a 'Render' monad, that may have the effect of the context window or textures being drawn to.
+--
+--   May throw a 'GPipeException' if a combination of draw images (FBO) used by this render call is unsupported by the graphics driver    
 render :: (MonadIO m, MonadException m) => Render os f () -> ContextT w os f m ()
-render (Render m) = ContextT ask >>= (\c -> let doAsync = contextDoAsync (fst c) in liftIO $ doAsync $ runReaderT m (doAsync, snd c))
+render (Render m) = do c <- ContextT ask
+                       eError <- liftIO $ contextDoSync (fst c) $ runReaderT (runErrorT m) (contextDoAsync (fst c), snd c)
+                       case eError of
+                        Left s -> liftIO $ throwIO $ GPipeException s
+                        _ -> return ()
 
 -- | Return the current size of the context frame buffer. This is needed to set viewport size and to get the aspect ratio to calculate projection matrices.  
 getContextBuffersSize :: MonadIO m => ContextT w os f m (V2 Int)
@@ -165,7 +173,7 @@ withContextWindow f= ContextT $ do c <- asks fst
                                    liftIO $ contextDoSync c $ f (contextWindow c)
 
 getRenderContextFinalizerAdder  :: Render os f (IORef a -> IO () -> IO ())
-getRenderContextFinalizerAdder = do f <- Render (asks fst)
+getRenderContextFinalizerAdder = do f <- Render (lift $ asks fst)
                                     return $ \k m -> void $ mkWeakIORef k (f m)  
 
 -- | This kind of exception may be thrown from GPipe when a GPU hardware limit is reached (for instance, too many textures are drawn to from the same 'FragmentStream') 
@@ -231,7 +239,7 @@ getContextData :: MonadIO m => ContextT w os f m ContextData
 getContextData = ContextT $ asks (fst . snd)
 
 getRenderContextData :: Render os f ContextData
-getRenderContextData = Render $ asks (fst . snd)
+getRenderContextData = Render $ lift $ asks (fst . snd)
 
 getVAO :: ContextData -> [VAOKey] -> IO (Maybe (IORef GLuint))
 getVAO cd k = do (vaos, _) <- readMVar cd

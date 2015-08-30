@@ -23,9 +23,14 @@ module Graphics.GPipe.Context (
     runSharedContextT,
     getContextBuffersSize,    
     swapContextBuffers,
-    -- * External interfaces 
+    -- * External interfaces
+    -- | Users of GPipe shouldn't bother with these functions, instead use a separate window manager package such as GPipe-GLFW that will provide you with
+    --   a function of type 'ContextFactory'.
+    --
+    --   To create a window manager package, create a 'ContextFactory' function that provides a 'ContextHandle' with all functionality needed.
     ContextFactory,
     ContextHandle(..),
+    withContextWindow,
     -- * Hardware exceptions
     GPipeException(..),
 )

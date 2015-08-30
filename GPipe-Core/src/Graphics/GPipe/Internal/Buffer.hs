@@ -267,7 +267,7 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
                 returnA -< (a', b', c', d')
 
 -- | Create a buffer with a specified number of elements.
-newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT os f m (Buffer os b)
+newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT w os f m (Buffer os b)
 newBuffer elementCount | elementCount < 0 = error "newBuffer, length out of bounds" 
                        | otherwise = do
     (buffer, nameRef, name) <- liftContextIO $ do
@@ -289,7 +289,7 @@ bufferWriteInternal b ptr (x:xs) = do bufWriter b ptr x
 bufferWriteInternal _ ptr [] = return ptr
 
 -- | Write a buffer from the host (i.e. the normal Haskell world).
-writeBuffer :: MonadIO m => Buffer os b -> BufferStartPos -> [HostFormat b] -> ContextT os f m ()
+writeBuffer :: MonadIO m => Buffer os b -> BufferStartPos -> [HostFormat b] -> ContextT w os f m ()
 writeBuffer buffer offset elems | offset < 0 || offset >= bufferLength buffer = error "writeBuffer, offset out of bounds"
                                 | otherwise = 
     let maxElems = max 0 $ bufferLength buffer - offset
@@ -307,7 +307,7 @@ writeBuffer buffer offset elems | offset < 0 || offset >= bufferLength buffer = 
 -- | Copies values from one buffer to another (of the same type).
 --
 --   @copyBuffer fromBuffer fromStart toBuffer toStart length@ will copy @length@ elements from position @fromStart@ in @fromBuffer@ to position @toStart@ in @toBuffer@.
-copyBuffer :: MonadIO m => Buffer os b -> BufferStartPos -> Buffer os b -> BufferStartPos -> Int -> ContextT os f m ()
+copyBuffer :: MonadIO m => Buffer os b -> BufferStartPos -> Buffer os b -> BufferStartPos -> Int -> ContextT w os f m ()
 copyBuffer bFrom from bTo to len | from < 0 || from >= bufferLength bFrom = error "writeBuffer, source offset out of bounds"
                                  | to < 0 || to >= bufferLength bTo = error "writeBuffer, destination offset out of bounds"
                                  | len < 0 = error "writeBuffer, length out of bounds"

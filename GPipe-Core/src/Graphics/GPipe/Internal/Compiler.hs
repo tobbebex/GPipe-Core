@@ -62,7 +62,7 @@ data BoundState = BoundState {
 
 
 -- | May throw a GPipeCompileException 
-compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT os f m (s -> IO ())
+compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT w os f m (ContextData -> s -> IO ())
 compile dcs s = do
     drawcalls <- liftIO $ sequence dcs -- IO only for SNMap
     (maxUnis, maxSamplers) <- liftContextIO $ do 
@@ -77,11 +77,10 @@ compile dcs s = do
     let allocatedUniforms = allocate maxUnis unisPerDc      
     let allocatedSamplers = allocate maxSamplers sampsPerDc
     compRet <- evalStateT (mapM comp  (zip3 drawcalls allocatedUniforms allocatedSamplers)) (BoundState Map.empty Map.empty (-1))
-    cd <- getContextData
     fAdd <- getContextFinalizerAdder
     let (errs, ret) = partitionEithers compRet      
         (pnames, fs) = unzip ret
-        fr x = foldl (\ io f -> io >> f x cd fAdd) (return ()) fs
+        fr cd x = foldl (\ io f -> io >> f x cd fAdd) (return ()) fs
         allErrs = errUni ++ errSamp ++ errs
     if null allErrs 
         then do  

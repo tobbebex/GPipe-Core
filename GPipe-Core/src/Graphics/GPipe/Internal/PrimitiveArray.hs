@@ -148,7 +148,7 @@ toPrimitiveArray :: PrimitiveTopology p -> VertexArray () a -> PrimitiveArray p 
 toPrimitiveArray p va = PrimitiveArray [PrimitiveArraySimple p (vertexArrayLength va) (bArrBFunc va (BInput 0 0))]
 toPrimitiveArrayIndexed :: PrimitiveTopology p -> IndexArray -> VertexArray () a -> PrimitiveArray p a
 toPrimitiveArrayIndexed p ia va = PrimitiveArray [PrimitiveArrayIndexed p ia (bArrBFunc va (BInput 0 0))]
-toPrimitiveArrayInstanced :: PrimitiveTopology p -> VertexArray () a -> VertexArray t b -> (a -> b -> c) -> PrimitiveArray p c
-toPrimitiveArrayInstanced p va ina f = PrimitiveArray [PrimitiveArrayInstanced p (vertexArrayLength ina) (vertexArrayLength va) (f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1))]
-toPrimitiveArrayIndexedInstanced :: PrimitiveTopology p -> IndexArray -> VertexArray () a -> VertexArray t b -> (a -> b -> c) -> PrimitiveArray p c
-toPrimitiveArrayIndexedInstanced p ia va ina f = PrimitiveArray [PrimitiveArrayIndexedInstanced p ia (vertexArrayLength ina) (f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1))]
+toPrimitiveArrayInstanced :: PrimitiveTopology p -> (a -> b -> c) -> VertexArray () a -> VertexArray t b -> PrimitiveArray p c
+toPrimitiveArrayInstanced p f va ina = PrimitiveArray [PrimitiveArrayInstanced p (vertexArrayLength ina) (vertexArrayLength va) (f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1))]
+toPrimitiveArrayIndexedInstanced :: PrimitiveTopology p -> IndexArray -> (a -> b -> c) -> VertexArray () a -> VertexArray t b -> PrimitiveArray p c
+toPrimitiveArrayIndexedInstanced p ia f va ina = PrimitiveArray [PrimitiveArrayIndexedInstanced p ia (vertexArrayLength ina) (f (bArrBFunc va $ BInput 0 0) (bArrBFunc ina $ BInput 0 1))]

@@ -40,12 +40,12 @@ type Size1 = Int
 type Size2 = V2 Int
 type Size3 = V3 Int
 
-newTexture1D :: forall os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size1 -> MaxLevels -> ContextT os f m (Texture1D os (Format c))
-newTexture1DArray :: forall os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size2 -> MaxLevels -> ContextT os f m (Texture1DArray os (Format c))
-newTexture2D :: forall os f c m. (TextureFormat c, MonadIO m) => Format c -> Size2 -> MaxLevels -> ContextT os f m (Texture2D os (Format c))
-newTexture2DArray :: forall os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size3 -> MaxLevels -> ContextT os f m (Texture2DArray os (Format c))
-newTexture3D :: forall os f c m. (ColorRenderable c, MonadIO m) => Format c -> Size3 -> MaxLevels -> ContextT os f m (Texture3D os (Format c))
-newTextureCube :: forall os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size1 -> MaxLevels -> ContextT os f m (TextureCube os (Format c))
+newTexture1D :: forall w os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size1 -> MaxLevels -> ContextT w os f m (Texture1D os (Format c))
+newTexture1DArray :: forall w os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size2 -> MaxLevels -> ContextT w os f m (Texture1DArray os (Format c))
+newTexture2D :: forall w os f c m. (TextureFormat c, MonadIO m) => Format c -> Size2 -> MaxLevels -> ContextT w os f m (Texture2D os (Format c))
+newTexture2DArray :: forall w os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size3 -> MaxLevels -> ContextT w os f m (Texture2DArray os (Format c))
+newTexture3D :: forall w os f c m. (ColorRenderable c, MonadIO m) => Format c -> Size3 -> MaxLevels -> ContextT w os f m (Texture3D os (Format c))
+newTextureCube :: forall w os f c m. (ColorSampleable c, MonadIO m) => Format c -> Size1 -> MaxLevels -> ContextT w os f m (TextureCube os (Format c))
 
 newTexture1D f s mx = do
                         t <- makeTex
@@ -174,7 +174,7 @@ calcMaxLevels s = 1 + truncate (logBase 2.0 (fromIntegral s :: Double))
 
 type TexName = IORef GLuint 
 
-makeTex :: MonadIO m => ContextT os f m TexName 
+makeTex :: MonadIO m => ContextT w os f m TexName 
 makeTex = do
     name <- liftContextIO $ alloca (\ptr -> glGenTextures 1 ptr >> peek ptr)
     tex <- liftIO $ newIORef name 
@@ -182,7 +182,7 @@ makeTex = do
     addFBOTextureFinalizer False tex
     return tex 
 
-makeRenderBuff :: MonadIO m => ContextT os f m TexName 
+makeRenderBuff :: MonadIO m => ContextT w os f m TexName 
 makeRenderBuff = do
     name <- liftContextIO $ alloca (\ptr -> glGenRenderbuffers 1 ptr >> peek ptr)
     tex <- liftIO $ newIORef name 
@@ -208,34 +208,34 @@ type StartPos2 = V2 Int
 type StartPos3 = V3 Int
 
 
-writeTexture1D      :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture1D os (Format c) -> Level -> StartPos1 -> Size1 -> [h] -> ContextT os f m ()
-writeTexture1DArray :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture1DArray os (Format c) -> Level -> StartPos2 -> Size2 -> [h] -> ContextT os f m ()
-writeTexture2D      :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture2D os (Format c) -> Level -> StartPos2 -> Size2 -> [h] -> ContextT os f m ()
-writeTexture2DArray :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture2DArray os (Format c) -> Level -> StartPos3 -> Size3 -> [h] -> ContextT os f m ()
-writeTexture3D      :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture3D os (Format c) -> Level -> StartPos3 -> Size3 -> [h] -> ContextT os f m ()
-writeTextureCube    :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => TextureCube os (Format c) -> Level -> CubeSide -> StartPos2 -> Size2 -> [h] -> ContextT os f m ()
+writeTexture1D      :: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture1D os (Format c) -> Level -> StartPos1 -> Size1 -> [h] -> ContextT w os f m ()
+writeTexture1DArray :: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture1DArray os (Format c) -> Level -> StartPos2 -> Size2 -> [h] -> ContextT w os f m ()
+writeTexture2D      :: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture2D os (Format c) -> Level -> StartPos2 -> Size2 -> [h] -> ContextT w os f m ()
+writeTexture2DArray :: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture2DArray os (Format c) -> Level -> StartPos3 -> Size3 -> [h] -> ContextT w os f m ()
+writeTexture3D      :: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture3D os (Format c) -> Level -> StartPos3 -> Size3 -> [h] -> ContextT w os f m ()
+writeTextureCube    :: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => TextureCube os (Format c) -> Level -> CubeSide -> StartPos2 -> Size2 -> [h] -> ContextT w os f m ()
 
-writeTexture1DFromBuffer     :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture1D os (Format c) -> Level -> StartPos1 -> Size1 -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-writeTexture1DArrayFromBuffer:: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture1DArray os (Format c) -> Level -> StartPos2 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-writeTexture2DFromBuffer     :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture2D os (Format c) -> Level -> StartPos2 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-writeTexture2DArrayFromBuffer:: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture2DArray os (Format c) -> Level -> StartPos3 -> Size3 -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-writeTexture3DFromBuffer     :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture3D os (Format c) -> Level -> StartPos3 -> Size3 -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-writeTextureCubeFromBuffer   :: forall b c h os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => TextureCube os (Format c) -> Level -> CubeSide -> StartPos2 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT os f m ()
+writeTexture1DFromBuffer     :: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture1D os (Format c) -> Level -> StartPos1 -> Size1 -> Buffer os b -> BufferStartPos -> ContextT w os f m ()
+writeTexture1DArrayFromBuffer:: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture1DArray os (Format c) -> Level -> StartPos2 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT w os f m ()
+writeTexture2DFromBuffer     :: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture2D os (Format c) -> Level -> StartPos2 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT w os f m ()
+writeTexture2DArrayFromBuffer:: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture2DArray os (Format c) -> Level -> StartPos3 -> Size3 -> Buffer os b -> BufferStartPos -> ContextT w os f m ()
+writeTexture3DFromBuffer     :: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture3D os (Format c) -> Level -> StartPos3 -> Size3 -> Buffer os b -> BufferStartPos -> ContextT w os f m ()
+writeTextureCubeFromBuffer   :: forall b c h w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => TextureCube os (Format c) -> Level -> CubeSide -> StartPos2 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT w os f m ()
 
 
-readTexture1D      :: forall a b c h os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture1D os (Format c) -> Level -> StartPos1 -> Size1 -> (a -> h -> ContextT os f m a) -> a -> ContextT os f m a
-readTexture1DArray :: forall a b c h os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture1DArray os (Format c) -> Level -> StartPos2 -> Size1 -> (a -> h -> ContextT os f m a) -> a -> ContextT os f m a
-readTexture2D      :: forall a b c h os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture2D os (Format c) -> Level -> StartPos2 -> Size2 -> (a -> h -> ContextT os f m a) -> a -> ContextT os f m a
-readTexture2DArray :: forall a b c h os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture2DArray os (Format c) -> Level -> StartPos3 -> Size2 -> (a -> h -> ContextT os f m a) -> a -> ContextT os f m a
-readTexture3D      :: forall a b c h os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture3D os (Format c) -> Level -> StartPos3 -> Size2 -> (a -> h -> ContextT os f m a) -> a -> ContextT os f m a
-readTextureCube    :: forall a b c h os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => TextureCube os (Format c) -> Level -> CubeSide -> StartPos2 -> Size2 -> (a -> h -> ContextT os f m a) -> a -> ContextT os f m a
+readTexture1D      :: forall a b c h w os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture1D os (Format c) -> Level -> StartPos1 -> Size1 -> (a -> h -> ContextT w os f m a) -> a -> ContextT w os f m a
+readTexture1DArray :: forall a b c h w os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture1DArray os (Format c) -> Level -> StartPos2 -> Size1 -> (a -> h -> ContextT w os f m a) -> a -> ContextT w os f m a
+readTexture2D      :: forall a b c h w os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture2D os (Format c) -> Level -> StartPos2 -> Size2 -> (a -> h -> ContextT w os f m a) -> a -> ContextT w os f m a
+readTexture2DArray :: forall a b c h w os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture2DArray os (Format c) -> Level -> StartPos3 -> Size2 -> (a -> h -> ContextT w os f m a) -> a -> ContextT w os f m a
+readTexture3D      :: forall a b c h w os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => Texture3D os (Format c) -> Level -> StartPos3 -> Size2 -> (a -> h -> ContextT w os f m a) -> a -> ContextT w os f m a
+readTextureCube    :: forall a b c h w os f m. (MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) => TextureCube os (Format c) -> Level -> CubeSide -> StartPos2 -> Size2 -> (a -> h -> ContextT w os f m a) -> a -> ContextT w os f m a
 
-readTexture1DToBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture1D os (Format c) -> Level -> StartPos1 -> Size1 -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTexture1DArrayToBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture1DArray os (Format c) -> Level -> StartPos2 -> Size1 -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTexture2DToBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture2D os (Format c) -> Level -> StartPos2 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTexture2DArrayToBuffer:: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture2DArray os (Format c) -> Level -> StartPos3 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTexture3DToBuffer     :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture3D os (Format c) -> Level -> StartPos3 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT os f m ()
-readTextureCubeToBuffer   :: forall b c os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => TextureCube os (Format c) -> Level -> CubeSide -> StartPos2 -> Size2 -> Buffer os b-> BufferStartPos -> ContextT os f m ()
+readTexture1DToBuffer     :: forall b c w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture1D os (Format c) -> Level -> StartPos1 -> Size1 -> Buffer os b -> BufferStartPos -> ContextT w os f m ()
+readTexture1DArrayToBuffer:: forall b c w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture1DArray os (Format c) -> Level -> StartPos2 -> Size1 -> Buffer os b -> BufferStartPos -> ContextT w os f m ()
+readTexture2DToBuffer     :: forall b c w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture2D os (Format c) -> Level -> StartPos2 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT w os f m ()
+readTexture2DArrayToBuffer:: forall b c w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture2DArray os (Format c) -> Level -> StartPos3 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT w os f m ()
+readTexture3DToBuffer     :: forall b c w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => Texture3D os (Format c) -> Level -> StartPos3 -> Size2 -> Buffer os b -> BufferStartPos -> ContextT w os f m ()
+readTextureCubeToBuffer   :: forall b c w os f m. (MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) (HostFormat b) ~ b) => TextureCube os (Format c) -> Level -> CubeSide -> StartPos2 -> Size2 -> Buffer os b-> BufferStartPos -> ContextT w os f m ()
 
 getGlColorFormat :: (TextureFormat f, BufferFormat b) => f -> b -> GLenum
 getGlColorFormat f b = let x = getGlFormat f in if x == GL_DEPTH_STENCIL || x == GL_DEPTH_COMPONENT then GL_DEPTH_COMPONENT else getGlPaddedFormat b
@@ -659,12 +659,12 @@ setGlPixelStoreRange x y z w h = do
         glPixelStorei GL_PACK_IMAGE_HEIGHT $ fromIntegral h
 
 
-generateTexture1DMipmap :: MonadIO m => Texture1D os f -> ContextT os f' m ()
-generateTexture1DArrayMipmap :: MonadIO m => Texture1DArray os f -> ContextT os f' m ()
-generateTexture2DMipmap :: MonadIO m => Texture2D os f -> ContextT os f' m ()
-generateTexture2DArrayMipmap :: MonadIO m => Texture2DArray os f -> ContextT os f' m ()
-generateTexture3DMipmap :: MonadIO m => Texture3D os f -> ContextT os f' m ()
-generateTextureCubeMipmap :: MonadIO m => TextureCube os f -> ContextT os f' m ()
+generateTexture1DMipmap :: MonadIO m => Texture1D os f -> ContextT w os f' m ()
+generateTexture1DArrayMipmap :: MonadIO m => Texture1DArray os f -> ContextT w os f' m ()
+generateTexture2DMipmap :: MonadIO m => Texture2D os f -> ContextT w os f' m ()
+generateTexture2DArrayMipmap :: MonadIO m => Texture2DArray os f -> ContextT w os f' m ()
+generateTexture3DMipmap :: MonadIO m => Texture3D os f -> ContextT w os f' m ()
+generateTextureCubeMipmap :: MonadIO m => TextureCube os f -> ContextT w os f' m ()
 
 genMips texn target = liftContextIOAsync $ do
                      useTexSync texn target

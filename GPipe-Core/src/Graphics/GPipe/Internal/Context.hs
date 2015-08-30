@@ -14,12 +14,14 @@ module Graphics.GPipe.Internal.Context
     getContextFinalizerAdder,
     getRenderContextFinalizerAdder ,
     swapContextBuffers,
+    withContextWindow,
     addVAOBufferFinalizer,
     addFBOTextureFinalizer,
     getContextData,
     getRenderContextData,
     getVAO, setVAO,
     getFBO, setFBO,
+    ContextData,
     VAOKey(..), FBOKey(..), FBOKeys(..),
     Render(..), render, getContextBuffersSize
 )
@@ -43,29 +45,52 @@ import Foreign.C.Types
 import Data.Maybe (maybeToList)
 import Linear.V2 (V2(V2))
 
-type ContextFactory c ds = ContextFormat c ds -> IO ContextHandle
+type ContextFactory c ds w = ContextFormat c ds -> IO (ContextHandle w)
 
-data ContextHandle = ContextHandle {
-    newSharedContext :: forall c ds. ContextFormat c ds -> IO ContextHandle,
+data ContextHandle w = ContextHandle {
+    -- | Like a 'ContextFactory' but creates a context that shares the object space of this handle's context  
+    newSharedContext :: forall c ds. ContextFormat c ds -> IO (ContextHandle w),
+    -- | Run an OpenGL IO action in this context, returning a value to the caller. The thread calling this may not be the same creating the context. 
     contextDoSync :: forall a. IO a -> IO a,
+    -- | Run an OpenGL IO action in this context, that doesn't return any value to the caller. The thread calling this may not be the same creating the context (for finalizers it is most definetly not).
     contextDoAsync :: IO () -> IO (),
+    -- | Swap the front and back buffers in the context's default frame buffer. This will be called as an argument to 'contextDoSync' so you can assume it is run on the right GL thread. 
     contextSwap :: IO (),   
+    -- | Get the current size of the context's default framebuffer (which may change if the window is resized). This will be called as an argument to 'contextDoSync' so you can assume it is run on the right GL thread. 
     contextFrameBufferSize :: IO (Int, Int),
-    contextDelete :: IO ()
+    -- | Delete this context and close any associated window. The thread calling this may not be the same creating the context.  
+    contextDelete :: IO (),
+    -- | A value representing the context's window. It is recommended that this is an opaque type that doesn't have any exported functions. Instead, provide 'ContextT' actions 
+    --   that are implemented in terms of 'withContextWindow' to expose any functionality to the user that need a reference the context's window.
+    contextWindow :: w
 } 
 
--- | The monad transformer that encapsulates a GPipe context (which wraps an OpenGl context). The monad transformer stack needs to have 'IO' in the bottom to be runnable. 
-newtype ContextT os f m a = 
-    ContextT (ReaderT (ContextHandle, (ContextData, SharedContextDatas)) m a) 
+-- | The monad transformer that encapsulates a GPipe context (which wraps an OpenGl context).
+--
+--   A value of type @ContextT w os f m a@ is an action on a context with these parameters:
+--
+--   [@w@] The type of the window that is bound to this context. It is defined by the window manager package and is probably an opaque type.
+--
+--   [@os@] An abstract type that is used to denote the object space. This is an forall type defined by the 'runContextT' call which will restrict any objects created inside this context 
+--          to be returned from it or used by another context (the same trick as the 'ST' monad uses).
+--
+--   [@f@] The format of the context's default frame buffer, always an instance of 'ContextFormat'.
+--
+--   [@m@] The monad this monad transformer wraps. Need to have 'IO' in the bottom for this 'ContextT' to be runnable.
+--
+--   [@a@] The value returned from this monad action. 
+--
+newtype ContextT w os f m a = 
+    ContextT (ReaderT (ContextHandle w, (ContextData, SharedContextDatas)) m a) 
     deriving (Functor, Applicative, Monad, MonadIO, MonadException, MonadAsyncException)
     
-instance MonadTrans (ContextT os f) where
+instance MonadTrans (ContextT w os f) where
     lift = ContextT . lift 
 
 -- | Run a 'ContextT' monad transformer, creating a window (unless the 'ContextFormat' is 'ContextFormatNone') that is later destroyed when the action returns. This function will
 --   also create a new object space. 
 --   You need a 'ContextFactory', which is provided by an auxillary package, such as @GPipe-GLFW@.
-runContextT :: (MonadIO m, MonadAsyncException m) => ContextFactory c ds -> ContextFormat c ds -> (forall os. ContextT os (ContextFormat c ds) m a) -> m a
+runContextT :: (MonadIO m, MonadAsyncException m) => ContextFactory c ds w -> ContextFormat c ds -> (forall os. ContextT w os (ContextFormat c ds) m a) -> m a
 runContextT cf f (ContextT m) = 
     bracket 
         (liftIO $ cf f)
@@ -78,7 +103,7 @@ runContextT cf f (ContextT m) =
 
 -- | Run a 'ContextT' monad transformer inside another one, creating a window (unless the 'ContextFormat' is 'ContextFormatNone') that is later destroyed when the action returns. The inner 'ContextT' monad
 -- transformer will share object space with the outer one. The 'ContextFactory' of the outer context will be used in the creation of the inner context. 
-runSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFormat c ds -> ContextT os (ContextFormat c ds) (ContextT os f m) a -> ContextT os f m a
+runSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFormat c ds -> ContextT w os (ContextFormat c ds) (ContextT w os f m) a -> ContextT w os f m a
 runSharedContextT f (ContextT m) =
     bracket
         (do (h',(_,cds)) <- ContextT ask
@@ -94,46 +119,54 @@ runSharedContextT f (ContextT m) =
                             rs = (h, (cd, cds))
                         runReaderT (i >> m) rs
 
-initGlState :: MonadIO m => ContextT os f m ()
+initGlState :: MonadIO m => ContextT w os f m ()
 initGlState = liftContextIOAsync $ do glEnable GL_FRAMEBUFFER_SRGB
                                       glEnable GL_SCISSOR_TEST
                                       glPixelStorei GL_PACK_ALIGNMENT 1
                                       glPixelStorei GL_UNPACK_ALIGNMENT 1
 
-liftContextIO :: MonadIO m => IO a -> ContextT os f m a
+liftContextIO :: MonadIO m => IO a -> ContextT w os f m a
 liftContextIO m = ContextT (asks fst) >>= liftIO . flip contextDoSync m
 
-addContextFinalizer :: MonadIO m => IORef a -> IO () -> ContextT os f m ()
+addContextFinalizer :: MonadIO m => IORef a -> IO () -> ContextT w os f m ()
 addContextFinalizer k m = ContextT (asks fst) >>= liftIO . void . mkWeakIORef k . flip contextDoAsync m
 
-getContextFinalizerAdder  :: MonadIO m =>  ContextT os f m (IORef a -> IO () -> IO ())
+getContextFinalizerAdder  :: MonadIO m =>  ContextT w os f m (IORef a -> IO () -> IO ())
 getContextFinalizerAdder = do h <- ContextT (asks fst)
                               return $ \k m -> void $ mkWeakIORef k (contextDoAsync h m)  
 
-liftContextIOAsync :: MonadIO m => IO () -> ContextT os f m ()
+liftContextIOAsync :: MonadIO m => IO () -> ContextT w os f m ()
 liftContextIOAsync m = ContextT (asks fst) >>= liftIO . flip contextDoAsync m
 
 -- | Run this action after a 'render' call to swap out the context windows back buffer with the front buffer, effectively showing the result.
 --   This call may block if vsync is enabled in the system and/or too many frames are outstanding.
 --   After this call, the context window content is undefined and should be cleared at earliest convenience using 'clearContextColor' and friends.
-swapContextBuffers :: MonadIO m => ContextT os f m ()
+swapContextBuffers :: MonadIO m => ContextT w os f m ()
 swapContextBuffers = ContextT (asks fst) >>= (\c -> liftIO $ contextDoSync c $ contextSwap c)
 
+type ContextDoAsync = IO () -> IO ()
+
 -- | A monad in which shaders are run.
-newtype Render os f a = Render (ReaderT (ContextHandle, (ContextData, SharedContextDatas)) IO a) deriving (Monad, Applicative, Functor)
+newtype Render os f a = Render (ReaderT (ContextDoAsync, (ContextData, SharedContextDatas)) IO a) deriving (Monad, Applicative, Functor)
 
 -- | Run a 'Render' monad, that may have the effect of the context window or textures being drawn to.   
-render :: (MonadIO m, MonadException m) => Render os f () -> ContextT os f m ()
-render (Render m) = ContextT ask >>= (\c -> liftIO $ contextDoAsync (fst c) $ runReaderT m c)
+render :: (MonadIO m, MonadException m) => Render os f () -> ContextT w os f m ()
+render (Render m) = ContextT ask >>= (\c -> let doAsync = contextDoAsync (fst c) in liftIO $ doAsync $ runReaderT m (doAsync, snd c))
 
-getContextBuffersSize :: MonadIO m => ContextT os f m (V2 Int)
+-- | Return the current size of the context frame buffer. This is needed to set viewport size and to get the aspect ratio to calculate projection matrices.  
+getContextBuffersSize :: MonadIO m => ContextT w os f m (V2 Int)
 getContextBuffersSize = ContextT $ do c <- asks fst
                                       (x,y) <- liftIO $ contextDoSync c $ contextFrameBufferSize c
                                       return $ V2 x y
 
+-- | Use the context window handle, which type is specific to the window system used. This handle shouldn't be returned from this function
+withContextWindow :: MonadIO m => (w -> IO a) -> ContextT w os f m a
+withContextWindow f= ContextT $ do c <- asks fst
+                                   liftIO $ contextDoSync c $ f (contextWindow c)
+
 getRenderContextFinalizerAdder  :: Render os f (IORef a -> IO () -> IO ())
-getRenderContextFinalizerAdder = do h <- Render (asks fst)
-                                    return $ \k m -> void $ mkWeakIORef k (contextDoAsync h m)  
+getRenderContextFinalizerAdder = do f <- Render (asks fst)
+                                    return $ \k m -> void $ mkWeakIORef k (f m)  
 
 -- | This kind of exception may be thrown from GPipe when a GPU hardware limit is reached (for instance, too many textures are drawn to from the same 'FragmentStream') 
 data GPipeException = GPipeException String
@@ -172,18 +205,18 @@ addContextData r = do cd <- newMVar (Map.empty, Map.empty)
 removeContextData :: SharedContextDatas -> ContextData -> IO ()
 removeContextData r cd = modifyMVar_ r $ return . delete cd
 
-addCacheFinalizer :: MonadIO m => (GLuint -> (VAOCache, FBOCache) -> (VAOCache, FBOCache)) -> IORef GLuint -> ContextT os f m ()
+addCacheFinalizer :: MonadIO m => (GLuint -> (VAOCache, FBOCache) -> (VAOCache, FBOCache)) -> IORef GLuint -> ContextT w os f m ()
 addCacheFinalizer f r =  ContextT $ do cds <- asks (snd . snd)
                                        liftIO $ do n <- readIORef r
                                                    void $ mkWeakIORef r $ do cs' <- readMVar cds 
                                                                              mapM_ (`modifyMVar_` (return . f n)) cs'
 
-addVAOBufferFinalizer :: MonadIO m => IORef GLuint -> ContextT os f m ()
+addVAOBufferFinalizer :: MonadIO m => IORef GLuint -> ContextT w os f m ()
 addVAOBufferFinalizer = addCacheFinalizer deleteVAOBuf  
     where deleteVAOBuf n (vao, fbo) = (Map.filterWithKey (\k _ -> all ((/=n) . vaoBname) k) vao, fbo)
 
     
-addFBOTextureFinalizer :: MonadIO m => Bool -> IORef GLuint -> ContextT os f m ()
+addFBOTextureFinalizer :: MonadIO m => Bool -> IORef GLuint -> ContextT w os f m ()
 addFBOTextureFinalizer isRB = addCacheFinalizer deleteVBOBuf    
     where deleteVBOBuf n (vao, fbo) = (vao, Map.filterWithKey
                                           (\ k _ ->
@@ -194,7 +227,7 @@ addFBOTextureFinalizer isRB = addCacheFinalizer deleteVBOBuf
                                           fbo)
 
 
-getContextData :: MonadIO m => ContextT os f m ContextData
+getContextData :: MonadIO m => ContextT w os f m ContextData
 getContextData = ContextT $ asks (fst . snd)
 
 getRenderContextData :: Render os f ContextData

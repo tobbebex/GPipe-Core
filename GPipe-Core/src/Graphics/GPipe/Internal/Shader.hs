@@ -104,16 +104,17 @@ silenceShader (Shader (ShaderM m)) = Shader $ ShaderM $ do
 type CompiledShader os f s = s -> Render os f ()
 
 -- | Compiles a shader into a 'CompiledShader'. This action will usually take a second or more, so put it during a loading sequence or something.   
-compileShader :: (MonadIO m, MonadException m) => Shader os f x () -> ContextT os f' m (CompiledShader os f x)
+compileShader :: (MonadIO m, MonadException m) => Shader os f x () -> ContextT w os f' m (CompiledShader os f x)
 compileShader (Shader (ShaderM m)) = do
         uniAl <- liftContextIO getUniformAlignment
         let (adcs, ShaderState _ s) = runState (runListT (runWriterT (runReaderT m uniAl))) newShaderState
-            f ((disc, runF):ys) e = if getAll (disc e) then runF e else f ys e
+            f ((disc, runF):ys) e@(cd, env) = if getAll (disc env) then runF cd env else f ys e
             f  [] _               = return ()
         xs <- mapM (\(_,(dcs, disc)) -> do 
                                 runF <- compile dcs s
                                 return (disc, runF)) adcs
-        return $ Render . lift . f xs     
+        return $ \ s -> Render $ do cd <- asks $ fst . snd
+                                    lift $ f xs (cd, s)     
 
 -- | Use this to run a shader that doesn't reference the context frame buffer, allowing the same shader to be run in another context with a different context format (but still with same object space).
 withoutContext :: Render os () () -> Render os f ()

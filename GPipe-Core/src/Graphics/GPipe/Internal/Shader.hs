@@ -114,7 +114,7 @@ compileShader (Shader (ShaderM m)) = do
         uniAl <- liftContextIO getUniformAlignment
         let (adcs, ShaderState _ s) = runState (runListT (runWriterT (runReaderT m uniAl))) newShaderState
             f ((disc, runF):ys) e@(cd, env) = if getAll (disc env) then runF cd env else f ys e
-            f  [] _               = return $ Just "Shader evaluated to mzero\n"
+            f  [] _               = error "render: Shader evaluated to mzero\n"
         xs <- mapM (\(_,(dcs, disc)) -> do 
                                 runF <- compile dcs s
                                 return (disc, runF)) adcs

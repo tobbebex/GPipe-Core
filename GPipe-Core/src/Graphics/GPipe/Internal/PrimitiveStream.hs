@@ -83,7 +83,7 @@ toPrimitiveStream sf = Shader $ do n <- getName
         assignIxs :: Int -> Binding -> [Int] -> [Binding -> (IO VAOKey, IO ())] -> [(IO VAOKey, IO ())] 
         assignIxs n ix xxs@(x:xs) (f:fs) | x == n    = f ix : assignIxs (n+1) (ix+1) xs fs
                                          | otherwise = assignIxs (n+1) ix xxs fs
-        assignIxs _ _ _ [] = []                                          
+        assignIxs _ _ [] _ = []                                          
         assignIxs _ _ _ _ = error "Too few attributes generated in toPrimitiveStream"
                 
         attribs a binds = first sequence $ second sequence_ $ unzip $ assignIxs 0 0 binds $ execWriter (runStateT (mf a) 0)

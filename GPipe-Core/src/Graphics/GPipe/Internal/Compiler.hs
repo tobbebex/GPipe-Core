@@ -46,8 +46,8 @@ type Binding = Int
 
 data RenderIOState s = RenderIOState 
     {
-        uniformNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()),
-        samplerNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()),
+        uniformNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()), -- TODO: Return buffer name here when we start writing to buffers during rendering (transform feedback, buffer textures)
+        samplerNameToRenderIO :: Map.IntMap (s -> Binding -> IO Int), -- IO returns texturename for validating that it isnt used as render target
         rasterizationNameToRenderIO :: Map.IntMap (s -> IO ()),
         inputArrayToRenderIOs :: Map.IntMap (s -> [[Binding] -> ((IO [VAOKey], IO ()), IO ())])
     }  
@@ -66,7 +66,7 @@ data BoundState = BoundState {
 
 
 -- | May throw a GPipeException 
-compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT w os f m (ContextData -> s -> IO (Maybe String))
+compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT w os f m (ContextData -> s -> Asserter Int -> IO (Maybe String))
 compile dcs s = do
     drawcalls <- liftIO $ sequence dcs -- IO only for SNMap
     (maxUnis, 
@@ -111,8 +111,9 @@ compile dcs s = do
     fAdd <- getContextFinalizerAdder
     let (errs, ret) = partitionEithers compRet
         (pnames, fs) = unzip ret
-        fr cd x = foldl (\ io f -> do mErr <- io
-                                      mErr2 <- f x cd fAdd
+        fr cd x asserter = foldl (\ io f -> do 
+                                      mErr <- io
+                                      mErr2 <- f x asserter cd fAdd
                                       return $ mErr <> mErr2)
                         (return Nothing) 
                         fs
@@ -170,12 +171,12 @@ compile dcs s = do
                                     glUniform1i six (fromIntegral bind)
                               pNameRef <- newIORef pName
                                                                  
-                              return $ Right (pNameRef, \x cd fAdd -> do
+                              return $ Right (pNameRef, \x asserter cd fAdd -> do
                                            -- Drawing with program --
                                            pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
                                            glUseProgram pName'
-                                           bindUni x 
-                                           bindSamp x
+                                           bindUni x return
+                                           bindSamp x asserter
                                            bindRast x
                                            let (mfbokeyio, blendio) = fboSetup x
                                            blendio
@@ -247,16 +248,18 @@ orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys
 orderedUnion xs [] = xs
 orderedUnion [] ys = ys
 
+type Asserter x = x -> IO () -- Used to assert we may use textures
+
 -- Optimization, save gl calls to already bound buffers/samplers
-makeBind :: Map.IntMap Int -> Map.IntMap (s -> Binding -> IO ()) -> [(Int, Int)] -> (s -> IO (), Map.IntMap Int)
+makeBind :: Map.IntMap Int -> Map.IntMap (s -> Binding -> IO x) -> [(Int, Int)] -> (s -> Asserter x -> IO (), Map.IntMap Int)
 makeBind m iom ((n,b):xs) = (g, m'')
     where 
         (f, m') = makeBind m iom xs
         (io, m'') = case Map.lookup b m' of
-                            Just x | x == n -> (const $ return (), m')
-                            _               -> (\s -> (iom ! n) s b, Map.insert b n m')      
+                            Just x | x == n -> (\_ _ -> return (), m')
+                            _               -> (\s asserter -> (iom ! n) s b >>= asserter, Map.insert b n m')      
         g s = f s >> io s
-makeBind m _ [] = (const $ return (), m)                          
+makeBind m _ [] = (\_ _ -> return (), m)                          
 
 allocate :: Int -> [[Int]] -> [[Int]]
 allocate mx = allocate' Map.empty []

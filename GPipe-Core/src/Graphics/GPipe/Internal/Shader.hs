@@ -27,14 +27,15 @@ import Graphics.GPipe.Internal.Compiler
 import Graphics.GPipe.Internal.Context
 import Graphics.GPipe.Internal.Buffer
 import Control.Monad.Trans.State 
+import qualified Control.Monad.Trans.State.Strict as StrictState 
 import Control.Monad.IO.Class
-
+import qualified Data.IntSet as Set 
 import Control.Monad.Trans.Writer.Lazy (tell, WriterT(..), runWriterT)
 import Control.Monad.Exception (MonadException)
 import Control.Applicative (Applicative, Alternative, (<|>))
 import Control.Monad.Trans.Class (lift)
 import Data.Maybe (fromJust, isJust, isNothing)
-import Control.Monad (MonadPlus)
+import Control.Monad (MonadPlus, when)
 import Control.Monad.Trans.List (ListT(..))
 import Data.Monoid (All(..), mempty)
 import Data.Either
@@ -113,13 +114,15 @@ compileShader :: (MonadIO m, MonadException m) => Shader os f x () -> ContextT w
 compileShader (Shader (ShaderM m)) = do
         uniAl <- liftContextIO getUniformAlignment
         let (adcs, ShaderState _ s) = runState (runListT (runWriterT (runReaderT m uniAl))) newShaderState
-            f ((disc, runF):ys) e@(cd, env) = if getAll (disc env) then runF cd env else f ys e
+            f ((disc, runF):ys) e@(cd, env, asserter) = if getAll (disc env) then runF cd env asserter else f ys e
             f  [] _               = error "render: Shader evaluated to mzero\n"
         xs <- mapM (\(_,(dcs, disc)) -> do 
                                 runF <- compile dcs s
                                 return (disc, runF)) adcs
-        return $ \ s -> Render $ do cd <- lift $ asks $ fst . snd
-                                    throwFromMaybe $ lift $ lift $ f xs (cd, s)
+        return $ \ s -> Render $ do cd <- lift $ lift $ asks $ fst . snd
+                                    texmap <- lift StrictState.get
+                                    let asserter x = when (Set.member x texmap) $ error "render: Running shader that samples from texture that currently has an image borrowed from it. Try run this shader from a separate render call where no images from the same texture are drawn to or cleared." 
+                                    throwFromMaybe $ lift $ lift $ lift $ f xs (cd, s, asserter)
 
 throwFromMaybe m = do mErr <- m
                       case mErr of

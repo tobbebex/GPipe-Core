@@ -26,6 +26,7 @@ import Linear.V4
 import Linear.V3
 import Linear.V2
 import Control.Exception (throwIO)
+import Control.Monad.Trans.Class (lift)
 
 data Texture1D os a = Texture1D TexName Size1 MaxLevels
 data Texture1DArray os a = Texture1DArray TexName Size2 MaxLevels
@@ -236,14 +237,15 @@ makeRenderBuff = do
     addFBOTextureFinalizer True tex
     return tex 
     
-useTex :: Integral a => TexName -> GLenum -> a -> IO ()
+useTex :: Integral a => TexName -> GLenum -> a -> IO Int
 useTex texNameRef t bind = do glActiveTexture (GL_TEXTURE0 + fromIntegral bind)
                               n <- readIORef texNameRef
                               glBindTexture t n
+                              return (fromIntegral n)
                                              
 useTexSync :: TexName -> GLenum -> IO ()
 useTexSync tn t = do maxUnits <- alloca (\ptr -> glGetIntegerv GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS ptr >> peek ptr)  -- Use last for all sync actions, keeping 0.. for async drawcalls
-                     useTex tn t (maxUnits-1)
+                     void $ useTex tn t (maxUnits-1)
                                  
 
 type Level = Int
@@ -781,90 +783,101 @@ newSamplerCubeShadow :: forall os f s d. DepthRenderable d => (s -> (TextureCube
 newSampler1D sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture1D tn _ _, filt, (ex, ec)) = sf s
-                                                    in  do useTex tn GL_TEXTURE_1D bind
+                                                    in  do n <- useTex tn GL_TEXTURE_1D bind
                                                            setNoShadowMode GL_TEXTURE_1D                                       
                                                            setSamplerFilter GL_TEXTURE_1D filt
                                                            setEdgeMode GL_TEXTURE_1D (Just ex, Nothing, Nothing) (setBorderColor (undefined :: c) GL_TEXTURE_1D ec)
+                                                           return n
                    return $ Sampler1D sampId False (samplerPrefix (undefined :: c))
 newSampler1DArray sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture1DArray tn _ _, filt, (ex, ec)) = sf s 
-                                                    in  do useTex tn GL_TEXTURE_1D_ARRAY bind
+                                                    in  do n <- useTex tn GL_TEXTURE_1D_ARRAY bind
                                                            setNoShadowMode GL_TEXTURE_1D_ARRAY                                       
                                                            setSamplerFilter GL_TEXTURE_1D_ARRAY filt
                                                            setEdgeMode GL_TEXTURE_1D_ARRAY (Just ex, Nothing, Nothing) (setBorderColor (undefined :: c) GL_TEXTURE_1D_ARRAY ec)
+                                                           return n
                    return $ Sampler1DArray sampId False (samplerPrefix (undefined :: c))
 newSampler2D sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture2D tn _ _, filt, (V2 ex ey, ec)) = sf s 
-                                                    in  do useTex tn GL_TEXTURE_2D bind
+                                                    in  do n <- useTex tn GL_TEXTURE_2D bind
                                                            setNoShadowMode GL_TEXTURE_2D                                      
                                                            setSamplerFilter GL_TEXTURE_2D filt
                                                            setEdgeMode GL_TEXTURE_2D (Just ex, Just ey, Nothing) (setBorderColor (undefined :: c) GL_TEXTURE_2D ec)
+                                                           return n
                    return $ Sampler2D sampId False (samplerPrefix (undefined :: c))
 newSampler2DArray sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture2DArray tn _ _, filt, (V2 ex ey, ec)) = sf s 
-                                                    in  do useTex tn GL_TEXTURE_2D_ARRAY bind
+                                                    in  do n <- useTex tn GL_TEXTURE_2D_ARRAY bind
                                                            setNoShadowMode GL_TEXTURE_2D_ARRAY                                       
                                                            setSamplerFilter GL_TEXTURE_2D_ARRAY filt
                                                            setEdgeMode GL_TEXTURE_2D_ARRAY (Just ex, Just ey, Nothing) (setBorderColor (undefined :: c) GL_TEXTURE_2D_ARRAY ec)
+                                                           return n
                    return $ Sampler2DArray sampId False (samplerPrefix (undefined :: c))
 newSampler3D sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture3D tn _ _, filt, (V3 ex ey ez, ec)) = sf s 
-                                                    in  do useTex tn GL_TEXTURE_3D bind
+                                                    in  do n <- useTex tn GL_TEXTURE_3D bind
                                                            setNoShadowMode GL_TEXTURE_3D                                       
                                                            setSamplerFilter GL_TEXTURE_3D filt
                                                            setEdgeMode GL_TEXTURE_3D (Just ex, Just ey, Just ez) (setBorderColor (undefined :: c) GL_TEXTURE_3D ec)
+                                                           return n
                    return $ Sampler3D sampId False (samplerPrefix (undefined :: c))
 newSamplerCube sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (TextureCube tn _ _, filt) = sf s 
-                                                    in  do useTex tn GL_TEXTURE_CUBE_MAP bind
+                                                    in  do n <- useTex tn GL_TEXTURE_CUBE_MAP bind
                                                            setNoShadowMode GL_TEXTURE_CUBE_MAP                                       
                                                            setSamplerFilter GL_TEXTURE_CUBE_MAP filt
+                                                           return n
                    return $ SamplerCube sampId False (samplerPrefix (undefined :: c))
 
 
 newSampler1DShadow sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture1D tn _ _, filt, (ex, ec), cf) = sf s
-                                                    in  do useTex tn GL_TEXTURE_1D bind
+                                                    in  do n <- useTex tn GL_TEXTURE_1D bind
                                                            setShadowFunc GL_TEXTURE_1D cf                                     
                                                            setSamplerFilter GL_TEXTURE_1D filt
                                                            setEdgeMode GL_TEXTURE_1D (Just ex, Nothing, Nothing) (setBorderColor (undefined :: d) GL_TEXTURE_1D ec)
+                                                           return n
                    return $ Sampler1D sampId True ""
 newSampler1DArrayShadow sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture1DArray tn _ _, filt, (ex, ec), cf) = sf s 
-                                                    in  do useTex tn GL_TEXTURE_1D_ARRAY bind
+                                                    in  do n <- useTex tn GL_TEXTURE_1D_ARRAY bind
                                                            setShadowFunc GL_TEXTURE_1D_ARRAY cf                                       
                                                            setSamplerFilter GL_TEXTURE_1D_ARRAY filt
                                                            setEdgeMode GL_TEXTURE_1D_ARRAY (Just ex, Nothing, Nothing) (setBorderColor (undefined :: d) GL_TEXTURE_1D_ARRAY ec)
+                                                           return n
                    return $ Sampler1DArray sampId True ""
 newSampler2DShadow sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture2D tn _ _, filt, (V2 ex ey, ec), cf) = sf s 
-                                                    in  do useTex tn GL_TEXTURE_2D bind
+                                                    in  do n <- useTex tn GL_TEXTURE_2D bind
                                                            setShadowFunc GL_TEXTURE_2D cf                                      
                                                            setSamplerFilter GL_TEXTURE_2D filt
                                                            setEdgeMode GL_TEXTURE_2D (Just ex, Just ey, Nothing) (setBorderColor (undefined :: d) GL_TEXTURE_2D ec)
+                                                           return n
                    return $ Sampler2D sampId True ""
 newSampler2DArrayShadow sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (Texture2DArray tn _ _, filt, (V2 ex ey, ec), cf) = sf s 
-                                                    in  do useTex tn GL_TEXTURE_2D_ARRAY bind
+                                                    in  do n <- useTex tn GL_TEXTURE_2D_ARRAY bind
                                                            setShadowFunc GL_TEXTURE_2D_ARRAY cf                                       
                                                            setSamplerFilter GL_TEXTURE_2D_ARRAY filt
                                                            setEdgeMode GL_TEXTURE_2D_ARRAY (Just ex, Just ey, Nothing) (setBorderColor (undefined :: d) GL_TEXTURE_2D_ARRAY ec)
+                                                           return n
                    return $ Sampler2DArray sampId True ""
 newSamplerCubeShadow sf = Shader $ do 
                    sampId <- getName
                    doForSampler sampId $ \s bind -> let (TextureCube tn _ _, filt, cf) = sf s 
-                                                    in  do useTex tn GL_TEXTURE_CUBE_MAP bind
+                                                    in  do n <- useTex tn GL_TEXTURE_CUBE_MAP bind
                                                            setShadowFunc GL_TEXTURE_CUBE_MAP cf                                       
                                                            setSamplerFilter GL_TEXTURE_CUBE_MAP filt
+                                                           return n
                    return $ SamplerCube sampId True ""
 
 setNoShadowMode :: GLenum -> IO ()
@@ -910,7 +923,7 @@ setSamplerFilter' t magf minf lodf a = do
 
 
 
-doForSampler :: Int -> (s -> Binding -> IO()) -> ShaderM s ()
+doForSampler :: Int -> (s -> Binding -> IO Int) -> ShaderM s ()
 doForSampler n io = modifyRenderIO (\s -> s { samplerNameToRenderIO = insert n io (samplerNameToRenderIO s) } )
 
 -- | Used instead of 'Format' for shadow samplers. These samplers have specialized sampler values, see 'sample1DShadow' and friends.
@@ -1162,22 +1175,30 @@ getTexture2DArrayImage :: Texture2DArray os f -> Level -> Int -> Render os f' (I
 getTexture3DImage :: Texture3D os f -> Level -> Int -> Render os f' (Image f) 
 getTextureCubeImage :: TextureCube os f -> Level -> CubeSide -> Render os f' (Image f) 
 
-getTexture1DImage t@(Texture1D tn _ ls) l' = let l = min ls l' in return $ Image tn 0 l (V2 (texture1DSizes t !! l) 1) $ \attP -> do { n <- readIORef tn; glFramebufferTexture1D GL_DRAW_FRAMEBUFFER attP GL_TEXTURE_1D n (fromIntegral l) }
+registerRenderWriteTextureName tn = Render (lift $ lift $ lift $ readIORef tn) >>= registerRenderWriteTexture . fromIntegral
+
+getTexture1DImage t@(Texture1D tn _ ls) l' = let l = min ls l' in do registerRenderWriteTextureName tn 
+                                                                     return $ Image tn 0 l (V2 (texture1DSizes t !! l) 1) $ \attP -> do { n <- readIORef tn; glFramebufferTexture1D GL_DRAW_FRAMEBUFFER attP GL_TEXTURE_1D n (fromIntegral l) }
 getTexture1DArrayImage t@(Texture1DArray tn _ ls) l' y' = let l = min ls l' 
                                                               V2 x y = texture1DArraySizes t !! l 
-                                                          in return $ Image tn y' l (V2 x 1) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min y' (y-1)) }
-getTexture2DImage t@(Texture2D tn _ ls) l' = let l = min ls l' in return $ Image tn 0 l (texture2DSizes t !! l) $ \attP -> do { n <- readIORef tn; glFramebufferTexture2D GL_DRAW_FRAMEBUFFER attP GL_TEXTURE_2D n (fromIntegral l) }
+                                                          in do registerRenderWriteTextureName tn 
+                                                                return $ Image tn y' l (V2 x 1) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min y' (y-1)) }
+getTexture2DImage t@(Texture2D tn _ ls) l' = let l = min ls l' in do registerRenderWriteTextureName tn 
+                                                                     return $ Image tn 0 l (texture2DSizes t !! l) $ \attP -> do { n <- readIORef tn; glFramebufferTexture2D GL_DRAW_FRAMEBUFFER attP GL_TEXTURE_2D n (fromIntegral l) }
 getTexture2DImage t@(RenderBuffer2D tn _) _ = return $ Image tn (-1) 0 (head $ texture2DSizes t) $ \attP -> do { n <- readIORef tn; glFramebufferRenderbuffer GL_DRAW_FRAMEBUFFER attP GL_RENDERBUFFER n }
 getTexture2DArrayImage t@(Texture2DArray tn _ ls) l' z' = let l = min ls l' 
                                                               V3 x y z = texture2DArraySizes t !! l 
-                                                          in return $ Image tn z' l (V2 x y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) } 
+                                                          in do registerRenderWriteTextureName tn 
+                                                                return $ Image tn z' l (V2 x y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) } 
 getTexture3DImage t@(Texture3D tn _ ls) l' z' = let l = min ls l' 
                                                     V3 x y z = texture3DSizes t !! l 
-                                                in return $ Image tn z' l (V2 x y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) }
+                                                in do registerRenderWriteTextureName tn 
+                                                      return $ Image tn z' l (V2 x y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) }
 getTextureCubeImage t@(TextureCube tn _ ls) l' s = let l = min ls l' 
                                                        x = textureCubeSizes t !! l
                                                        s' = getGlCubeSide s
-                                                   in return $ Image tn (fromIntegral s') l (V2 x x) $ \attP -> do { n <- readIORef tn; glFramebufferTexture2D GL_DRAW_FRAMEBUFFER attP s' n (fromIntegral l) }
+                                                   in do registerRenderWriteTextureName tn 
+                                                         return $ Image tn (fromIntegral s') l (V2 x x) $ \attP -> do { n <- readIORef tn; glFramebufferTexture2D GL_DRAW_FRAMEBUFFER attP s' n (fromIntegral l) }
 
 getGlCubeSide :: CubeSide -> GLenum
 getGlCubeSide CubePosX = GL_TEXTURE_CUBE_MAP_POSITIVE_X 

@@ -50,17 +50,17 @@ import Control.Exception (throwIO)
 type ContextFactory c ds w = ContextFormat c ds -> IO (ContextHandle w)
 
 data ContextHandle w = ContextHandle {
-    -- | Like a 'ContextFactory' but creates a context that shares the object space of this handle's context  
+    -- | Like a 'ContextFactory' but creates a context that shares the object space of this handle's context. Called from same thread as created the initial context.  
     newSharedContext :: forall c ds. ContextFormat c ds -> IO (ContextHandle w),
     -- | Run an OpenGL IO action in this context, returning a value to the caller. The thread calling this may not be the same creating the context. 
     contextDoSync :: forall a. IO a -> IO a,
     -- | Run an OpenGL IO action in this context, that doesn't return any value to the caller. The thread calling this may not be the same creating the context (for finalizers it is most definetly not).
     contextDoAsync :: IO () -> IO (),
-    -- | Swap the front and back buffers in the context's default frame buffer. This will be called as an argument to 'contextDoSync' so you can assume it is run on the right GL thread. 
+    -- | Swap the front and back buffers in the context's default frame buffer. Called from same thread as created context. 
     contextSwap :: IO (),   
-    -- | Get the current size of the context's default framebuffer (which may change if the window is resized). This will be called as an argument to 'contextDoSync' so you can assume it is run on the right GL thread. 
+    -- | Get the current size of the context's default framebuffer (which may change if the window is resized). Called from same thread as created context. 
     contextFrameBufferSize :: IO (Int, Int),
-    -- | Delete this context and close any associated window. The thread calling this may not be the same creating the context.  
+    -- | Delete this context and close any associated window. Called from same thread as created context.  
     contextDelete :: IO (),
     -- | A value representing the context's window. It is recommended that this is an opaque type that doesn't have any exported functions. Instead, provide 'ContextT' actions 
     --   that are implemented in terms of 'withContextWindow' to expose any functionality to the user that need a reference the context's window.
@@ -114,8 +114,8 @@ runSharedContextT f (ContextT m) =
             return (h,cd)
         )
         (\(h,cd) -> do cds <- ContextT $ asks (snd . snd)
-                       liftIO $ removeContextData cds cd
-                       liftIO $ contextDelete h)
+                       liftIO $ do removeContextData cds cd
+                                   contextDelete h)
         $ \(h,cd) -> do cds <- ContextT $ asks (snd . snd)
                         let ContextT i = initGlState
                             rs = (h, (cd, cds))
@@ -144,7 +144,7 @@ liftContextIOAsync m = ContextT (asks fst) >>= liftIO . flip contextDoAsync m
 --   This call may block if vsync is enabled in the system and/or too many frames are outstanding.
 --   After this call, the context window content is undefined and should be cleared at earliest convenience using 'clearContextColor' and friends.
 swapContextBuffers :: MonadIO m => ContextT w os f m ()
-swapContextBuffers = ContextT (asks fst) >>= (\c -> liftIO $ contextDoSync c $ contextSwap c)
+swapContextBuffers = ContextT (asks fst) >>= (\c -> liftIO $ contextSwap c)
 
 type ContextDoAsync = IO () -> IO ()
 
@@ -164,7 +164,7 @@ render (Render m) = do c <- ContextT ask
 -- | Return the current size of the context frame buffer. This is needed to set viewport size and to get the aspect ratio to calculate projection matrices.  
 getContextBuffersSize :: MonadIO m => ContextT w os f m (V2 Int)
 getContextBuffersSize = ContextT $ do c <- asks fst
-                                      (x,y) <- liftIO $ contextDoSync c $ contextFrameBufferSize c
+                                      (x,y) <- liftIO $ contextFrameBufferSize c
                                       return $ V2 x y
 
 -- | Use the context window handle, which type is specific to the window system used. This handle shouldn't be returned from this function

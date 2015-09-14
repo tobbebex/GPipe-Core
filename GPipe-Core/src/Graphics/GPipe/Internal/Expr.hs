@@ -27,6 +27,7 @@ import Linear.Affine
 import Linear.Metric
 import Linear.Matrix
 import Linear.Vector
+import Linear.Conjugate
 import Data.Foldable (toList, Foldable)
 
 type NextTempVar = Int
@@ -590,6 +591,13 @@ instance IfB a => IfB (V3 a) where
         ifB q (V3 a b c) (V3 x y z) = V3 (ifB q a x) (ifB q b y) (ifB q c z) 
 instance IfB a => IfB (V4 a) where
         ifB q (V4 a b c d) (V4 x y z w) = V4 (ifB q a x) (ifB q b y) (ifB q c z) (ifB q d w) 
+
+instance Conjugate (S a Float)
+instance Conjugate (S a Int)
+instance Conjugate (S a Word)
+instance TrivialConjugate  (S a Float)
+instance TrivialConjugate  (S a Int)
+instance TrivialConjugate  (S a Word)
                                        
 -- | This class provides the GPU functions either not found in Prelude's numerical classes, or that has wrong types.
 --   Instances are also provided for normal 'Float's and 'Double's.

@@ -28,6 +28,9 @@ import Linear.V3
 import Linear.V2
 import Linear.V1
 import Linear.V0
+import Linear.Plucker (Plucker(..))
+import Linear.Quaternion (Quaternion(..))
+import Linear.Affine (Point(..))
 
 type DrawCallName = Int
 data PrimitiveStreamData = PrimitiveStreamData DrawCallName
@@ -318,3 +321,30 @@ instance VertexInput a => VertexInput (V4 a) where
                                         c' <- toVertex -< c
                                         d' <- toVertex -< d
                                         returnA -< V4 a' b' c' d'
+
+               
+instance VertexInput a => VertexInput (Quaternion a) where
+    type VertexFormat (Quaternion a) = Quaternion (VertexFormat a)
+    toVertex = proc ~(Quaternion a v) -> do
+                a' <- toVertex -< a
+                v' <- toVertex -< v
+                returnA -< Quaternion a' v'
+                
+instance (VertexInput (f a), VertexInput a, HostFormat (f a) ~ f (HostFormat a), VertexFormat (f a) ~ f (VertexFormat a)) => VertexInput (Point f a) where
+    type VertexFormat (Point f a) = Point f (VertexFormat a)
+    toVertex = proc ~(P a) -> do
+                a' <- toVertex -< a
+                returnA -< P a'
+                 
+instance VertexInput a => VertexInput (Plucker a) where
+    type VertexFormat (Plucker a) = Plucker (VertexFormat a)
+    toVertex = proc ~(Plucker a b c d e f) -> do
+                a' <- toVertex -< a
+                b' <- toVertex -< b
+                c' <- toVertex -< c
+                d' <- toVertex -< d
+                e' <- toVertex -< e
+                f' <- toVertex -< f
+                returnA -< Plucker a' b' c' d' e' f'
+
+                                        

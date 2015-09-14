@@ -23,6 +23,8 @@ import Linear.V3
 import Linear.V2
 import Linear.V1
 import Linear.V0
+import Linear.Plucker (Plucker(..))
+import Linear.Quaternion (Quaternion(..))
 
 -- | This class constraints which buffer types can be loaded as uniforms, and what type those values have.  
 class BufferFormat a => UniformInput a where
@@ -179,4 +181,25 @@ instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d) => Uni
                                       b' <- toUniform -< b
                                       c' <- toUniform -< c
                                       d' <- toUniform -< d
-                                      returnA -< (a', b', c', d')                                                   
+                                      returnA -< (a', b', c', d')
+
+               
+instance UniformInput a => UniformInput (Quaternion a) where
+    type UniformFormat (Quaternion a) x = Quaternion (UniformFormat a x)
+    toUniform = proc ~(Quaternion a v) -> do
+                    a' <- toUniform -< a
+                    v' <- toUniform -< v
+                    returnA -< Quaternion a' v'
+                 
+instance UniformInput a => UniformInput (Plucker a) where
+    type UniformFormat (Plucker a) x = Plucker (UniformFormat a x)
+    toUniform = proc ~(Plucker a b c d e f) -> do
+                    a' <- toUniform -< a
+                    b' <- toUniform -< b
+                    c' <- toUniform -< c
+                    d' <- toUniform -< d
+                    e' <- toUniform -< e
+                    f' <- toUniform -< f
+                    returnA -< Plucker a' b' c' d' e' f'
+
+

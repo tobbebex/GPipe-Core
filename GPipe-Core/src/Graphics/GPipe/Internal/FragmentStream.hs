@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances, GeneralizedNewtypeDeriving, Arrows  #-}
+{-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances, GeneralizedNewtypeDeriving, Arrows, FlexibleContexts  #-}
 module Graphics.GPipe.Internal.FragmentStream where
 
 import Control.Category hiding ((.))
@@ -17,6 +17,9 @@ import Linear.V3
 import Linear.V2
 import Linear.V1
 import Linear.V0
+import Linear.Plucker (Plucker(..))
+import Linear.Quaternion (Quaternion(..))
+import Linear.Affine (Point(..))
 
 import Graphics.GL.Core33
 
@@ -194,3 +197,26 @@ instance (FragmentInput a, FragmentInput b, FragmentInput c, FragmentInput d) =>
                                        d' <- toFragment -< d
                                        returnA -< (a', b', c', d')
 
+instance FragmentInput a => FragmentInput (Quaternion a) where
+    type FragmentFormat (Quaternion a) = Quaternion (FragmentFormat a)
+    toFragment = proc ~(Quaternion a v) -> do
+                a' <- toFragment -< a
+                v' <- toFragment -< v
+                returnA -< Quaternion a' v'
+                
+instance (FragmentInput (f a), FragmentInput a, FragmentFormat (f a) ~ f (FragmentFormat a)) => FragmentInput (Point f a) where
+    type FragmentFormat (Point f a) = Point f (FragmentFormat a)
+    toFragment = proc ~(P a) -> do
+                a' <- toFragment -< a
+                returnA -< P a'
+                 
+instance FragmentInput a => FragmentInput (Plucker a) where
+    type FragmentFormat (Plucker a) = Plucker (FragmentFormat a)
+    toFragment = proc ~(Plucker a b c d e f) -> do
+                a' <- toFragment -< a
+                b' <- toFragment -< b
+                c' <- toFragment -< c
+                d' <- toFragment -< d
+                e' <- toFragment -< e
+                f' <- toFragment -< f
+                returnA -< Plucker a' b' c' d' e' f'

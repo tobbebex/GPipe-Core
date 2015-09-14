@@ -46,6 +46,9 @@ import Linear.V3
 import Linear.V2
 import Linear.V1
 import Linear.V0
+import Linear.Plucker (Plucker(..))
+import Linear.Quaternion (Quaternion(..))
+import Linear.Affine (Point(..))
 
 -- | The class that constraints which types can live in a buffer.
 class BufferFormat f where
@@ -265,6 +268,30 @@ instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => Buf
     toBuffer = proc ~(a, b, c, d) -> do
                 ((a', b', c'), d') <- toBuffer -< ((a, b, c), d)
                 returnA -< (a', b', c', d')
+               
+instance BufferFormat a => BufferFormat (Quaternion a) where
+    type HostFormat (Quaternion a) = Quaternion (HostFormat a)
+    toBuffer = proc ~(Quaternion a v) -> do
+                a' <- toBuffer -< a
+                v' <- toBuffer -< v
+                returnA -< Quaternion a' v'
+                
+instance (BufferFormat (f a), BufferFormat a, HostFormat (f a) ~ f (HostFormat a)) => BufferFormat (Point f a) where
+    type HostFormat (Point f a) = Point f (HostFormat a)
+    toBuffer = proc ~(P a) -> do
+                a' <- toBuffer -< a
+                returnA -< P a'
+                 
+instance BufferFormat a => BufferFormat (Plucker a) where
+    type HostFormat (Plucker a) = Plucker (HostFormat a)
+    toBuffer = proc ~(Plucker a b c d e f) -> do
+                a' <- toBuffer -< a
+                b' <- toBuffer -< b
+                c' <- toBuffer -< c
+                d' <- toBuffer -< d
+                e' <- toBuffer -< e
+                f' <- toBuffer -< f
+                returnA -< Plucker a' b' c' d' e' f'
 
 -- | Create a buffer with a specified number of elements.
 newBuffer :: (MonadIO m, BufferFormat b) => Int -> ContextT w os f m (Buffer os b)

@@ -55,10 +55,14 @@ type ContextFactory c ds w = ContextFormat c ds -> IO (ContextHandle w)
 data ContextHandle w = ContextHandle {
     -- | Like a 'ContextFactory' but creates a context that shares the object space of this handle's context. Called from same thread as created the initial context.  
     newSharedContext :: forall c ds. ContextFormat c ds -> IO (ContextHandle w),
-    -- | Run an OpenGL IO action in this context, returning a value to the caller. The thread calling this may not be the same creating the context. 
-    contextDoSync :: forall a. IO a -> IO a,
-    -- | Run an OpenGL IO action in this context, that doesn't return any value to the caller. The thread calling this may not be the same creating the context (for finalizers it is most definetly not).
-    contextDoAsync :: IO () -> IO (),
+    -- | Run an OpenGL IO action in this context, returning a value to the caller.
+    --   The boolean argument will be @True@ if this call references this context's window, and @False@ if it only references shared objects 
+    --   The thread calling this may not be the same creating the context.     
+    contextDoSync :: forall a. Bool ->IO a -> IO a,
+    -- | Run an OpenGL IO action in this context, that doesn't return any value to the caller. 
+    --   The boolean argument will be @True@ if this call references this context's window, and @False@ if it only references shared objects 
+    --   The thread calling this may not be the same creating the context (for finalizers it is most definetly not).
+    contextDoAsync :: Bool -> IO () -> IO (),
     -- | Swap the front and back buffers in the context's default frame buffer. Called from same thread as created context. 
     contextSwap :: IO (),   
     -- | Get the current size of the context's default framebuffer (which may change if the window is resized). Called from same thread as created context. 
@@ -125,31 +129,39 @@ runSharedContextT f (ContextT m) =
                         runReaderT (i >> m) rs
 
 initGlState :: MonadIO m => ContextT w os f m ()
-initGlState = liftContextIOAsync $ do glEnable GL_FRAMEBUFFER_SRGB
-                                      glEnable GL_SCISSOR_TEST
-                                      glPixelStorei GL_PACK_ALIGNMENT 1
-                                      glPixelStorei GL_UNPACK_ALIGNMENT 1
+initGlState = liftContextIOAsyncInWin $ do glEnable GL_FRAMEBUFFER_SRGB
+                                           glEnable GL_SCISSOR_TEST
+                                           glPixelStorei GL_PACK_ALIGNMENT 1
+                                           glPixelStorei GL_UNPACK_ALIGNMENT 1
 
 liftContextIO :: MonadIO m => IO a -> ContextT w os f m a
-liftContextIO m = ContextT (asks fst) >>= liftIO . flip contextDoSync m
+liftContextIO m = do h <- ContextT (asks fst) 
+                     liftIO $ contextDoSync h False m
 
 addContextFinalizer :: MonadIO m => IORef a -> IO () -> ContextT w os f m ()
-addContextFinalizer k m = ContextT (asks fst) >>= liftIO . void . mkWeakIORef k . flip contextDoAsync m
+addContextFinalizer k m = do h <- ContextT (asks fst)
+                             liftIO $ void $ mkWeakIORef k $ contextDoAsync h False m
 
+-- | This is only used to finalize nonShared objects such as VBOs and FBOs
 getContextFinalizerAdder  :: MonadIO m =>  ContextT w os f m (IORef a -> IO () -> IO ())
 getContextFinalizerAdder = do h <- ContextT (asks fst)
-                              return $ \k m -> void $ mkWeakIORef k (contextDoAsync h m)  
+                              return $ \k m -> void $ mkWeakIORef k $ contextDoAsync h True m  
 
 liftContextIOAsync :: MonadIO m => IO () -> ContextT w os f m ()
-liftContextIOAsync m = ContextT (asks fst) >>= liftIO . flip contextDoAsync m
+liftContextIOAsync m = do h <- ContextT (asks fst)
+                          liftIO $ contextDoAsync h False m
 
+liftContextIOAsyncInWin :: MonadIO m => IO () -> ContextT w os f m ()
+liftContextIOAsyncInWin m = do h <- ContextT (asks fst)
+                               liftIO $ contextDoAsync h True m
+                          
 -- | Run this action after a 'render' call to swap out the context windows back buffer with the front buffer, effectively showing the result.
 --   This call may block if vsync is enabled in the system and/or too many frames are outstanding.
 --   After this call, the context window content is undefined and should be cleared at earliest convenience using 'clearContextColor' and friends.
 swapContextBuffers :: MonadIO m => ContextT w os f m ()
 swapContextBuffers = ContextT (asks fst) >>= (\c -> liftIO $ contextSwap c)
 
-type ContextDoAsync = IO () -> IO ()
+type ContextDoAsync = Bool -> IO () -> IO ()
 
 -- | A monad in which shaders are run.
 newtype Render os f a = Render (ErrorT String (StateT Set.IntSet (ReaderT (ContextDoAsync, (ContextData, SharedContextDatas)) IO)) a) deriving (Monad, Applicative, Functor)
@@ -159,7 +171,7 @@ newtype Render os f a = Render (ErrorT String (StateT Set.IntSet (ReaderT (Conte
 --   May throw a 'GPipeException' if a combination of draw images (FBO) used by this render call is unsupported by the graphics driver    
 render :: (MonadIO m, MonadException m) => Render os f () -> ContextT w os f m ()
 render (Render m) = do c <- ContextT ask
-                       eError <- liftIO $ contextDoSync (fst c) $ runReaderT (evalStateT (runErrorT m) Set.empty) (contextDoAsync (fst c), snd c)
+                       eError <- liftIO $ contextDoSync (fst c) True $ runReaderT (evalStateT (runErrorT m) Set.empty) (contextDoAsync (fst c), snd c)
                        case eError of
                         Left s -> liftIO $ throwIO $ GPipeException s
                         _ -> return ()
@@ -176,11 +188,12 @@ getContextBuffersSize = ContextT $ do c <- asks fst
 -- | Use the context window handle, which type is specific to the window system used. This handle shouldn't be returned from this function
 withContextWindow :: MonadIO m => (w -> IO a) -> ContextT w os f m a
 withContextWindow f= ContextT $ do c <- asks fst
-                                   liftIO $ contextDoSync c $ f (contextWindow c)
+                                   liftIO $ f (contextWindow c)
 
+-- | This is only used to finalize nonShared objects such as VBOs and FBOs
 getRenderContextFinalizerAdder  :: Render os f (IORef a -> IO () -> IO ())
 getRenderContextFinalizerAdder = do f <- Render (lift $ lift $ asks fst)
-                                    return $ \k m -> void $ mkWeakIORef k (f m)  
+                                    return $ \k m -> void $ mkWeakIORef k (f True m)  
 
 -- | This kind of exception may be thrown from GPipe when a GPU hardware limit is reached (for instance, too many textures are drawn to from the same 'FragmentStream') 
 data GPipeException = GPipeException String

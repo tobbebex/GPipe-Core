@@ -25,7 +25,7 @@ module Graphics.GPipe.Expr (
     Convert(..),
     Integral'(..),
     Real'(..),
-    module Data.Boolean,
+    FloatingOrd(..),
 
     -- * Additional functions
     dFdx,

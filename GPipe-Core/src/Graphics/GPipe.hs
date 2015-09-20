@@ -14,7 +14,7 @@
 -- Includes DSL for shaders to provide type safety even when crossing into that domain.
 --  Uses OpenGl 3.3 core profile under the hood.
 --
--- This is a convenience module, combining GPipes all other modules.
+-- This is a convenience module, reexporting GPipes all other modules, plus the external Linear and Data.Boolean modules.
 -----------------------------------------------------------------------------
 
 module Graphics.GPipe (
@@ -29,7 +29,10 @@ module Graphics.GPipe (
     module Graphics.GPipe.Expr,
     module Graphics.GPipe.Uniform,
     module Graphics.GPipe.Texture,
-    module Graphics.GPipe.Sampler
+    module Graphics.GPipe.Sampler,
+    module Graphics.GPipe.Orphans,    
+    module Linear,
+    module Data.Boolean
 )
 where
 
@@ -45,3 +48,6 @@ import Graphics.GPipe.Expr
 import Graphics.GPipe.Uniform
 import Graphics.GPipe.Texture
 import Graphics.GPipe.Sampler
+import Graphics.GPipe.Orphans
+import Linear
+import Data.Boolean

@@ -41,7 +41,8 @@ library
                     Graphics.GPipe.Sampler,
                     Graphics.GPipe.Shader,
                     Graphics.GPipe.Texture,
-                    Graphics.GPipe.Uniform
+                    Graphics.GPipe.Uniform,
+                    Graphics.GPipe.Orphans
   other-modules:    
                     Data.SNMap,
                     Graphics.GPipe.Internal.Buffer,
@@ -55,5 +56,6 @@ library
                     Graphics.GPipe.Internal.PrimitiveStream,
                     Graphics.GPipe.Internal.Shader,
                     Graphics.GPipe.Internal.Texture,
-                    Graphics.GPipe.Internal.Uniform
+                    Graphics.GPipe.Internal.Uniform,
+                    Graphics.GPipe.Internal.Orphans
   

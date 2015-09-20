@@ -5,7 +5,6 @@
 module Graphics.GPipe.Internal.Expr where
 
 import Prelude hiding ((.), id, (<*))
-import Data.Word
 import Control.Category
 import Control.Monad (void, when)
 import Control.Monad.Trans.Writer
@@ -17,7 +16,7 @@ import Data.SNMap
 import qualified Data.IntMap as Map
 import Data.Boolean
 import Data.List (intercalate)
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), liftA, liftA2, liftA3)
 import Linear.V4
 import Linear.V3
 import Linear.V2
@@ -29,6 +28,8 @@ import Linear.Matrix
 import Linear.Vector
 import Linear.Conjugate
 import Data.Foldable (toList, Foldable)
+import Data.Int
+import Data.Word
 
 type NextTempVar = Int
 type NextGlobal = Int
@@ -506,7 +507,25 @@ class Integral' a where
 instance Integral' Int where
     div' = div
     mod' = mod
+instance Integral' Int32 where
+    div' = div
+    mod' = mod
+instance Integral' Int16 where
+    div' = div
+    mod' = mod
+instance Integral' Int8 where
+    div' = div
+    mod' = mod
 instance Integral' Word where
+    div' = div
+    mod' = mod
+instance Integral' Word32 where
+    div' = div
+    mod' = mod
+instance Integral' Word16 where
+    div' = div
+    mod' = mod
+instance Integral' Word8 where
     div' = div
     mod' = mod
 instance Integral' (S a Int) where
@@ -515,6 +534,21 @@ instance Integral' (S a Int) where
 instance Integral' (S a Word) where
     div' = binu "/"
     mod' = binu "%" 
+instance Integral' a => Integral' (V0 a) where
+    div' = liftA2 div'    
+    mod' = liftA2 mod'    
+instance Integral' a => Integral' (V1 a) where
+    div' = liftA2 div'    
+    mod' = liftA2 mod'    
+instance Integral' a => Integral' (V2 a) where
+    div' = liftA2 div'    
+    mod' = liftA2 mod'    
+instance Integral' a => Integral' (V3 a) where
+    div' = liftA2 div'    
+    mod' = liftA2 mod'    
+instance Integral' a => Integral' (V4 a) where
+    div' = liftA2 div'    
+    mod' = liftA2 mod'    
 
 instance Floating (S a Float) where
   pi    = S $ return $ show (pi :: Float)
@@ -543,31 +577,9 @@ instance Boolean (S a Bool) where
 
 type instance BooleanOf (S a x) = S a Bool
 
-type instance BooleanOf (V0 a) = BooleanOf a
-type instance BooleanOf (V1 a) = BooleanOf a
-type instance BooleanOf (V2 a) = BooleanOf a
-type instance BooleanOf (V3 a) = BooleanOf a
-type instance BooleanOf (V4 a) = BooleanOf a
-
 instance Eq x => EqB (S a x) where
   (==*) = bin STypeBool "=="
   (/=*) = bin STypeBool "!="
-
-instance EqB a => EqB (V0 a) where
-  V0 ==* V0 = true
-  V0 /=* V0 = false
-instance EqB a => EqB (V1 a) where
-  V1 a ==* V1 x = a ==* x
-  V1 a /=* V1 x = a /=* x
-instance EqB a => EqB (V2 a) where
-  V2 a b ==* V2 x y = a ==* x &&* b ==* y
-  V2 a b /=* V2 x y = a /=* x ||* b /=* y
-instance EqB a => EqB (V3 a) where
-  V3 a b c ==* V3 x y z = a ==* x &&* b ==* y &&* c ==* z
-  V3 a b c /=* V3 x y z = a /=* x ||* b /=* y ||* c /=* z
-instance EqB a => EqB (V4 a) where
-  V4 a b c d ==* V4 x y z w = a ==* x &&* b ==* y &&* c ==* z &&* d ==* w
-  V4 a b c d /=* V4 x y z w = a /=* x ||* b /=* y ||* c /=* z ||* d /=* w
 
 instance Ord x => OrdB (S a x) where
   (<*) = bin STypeBool "<"
@@ -581,28 +593,16 @@ instance IfB (S a x) where
                                                                   e' <- e
                                                                   return $ '(' : c' ++ '?' : t' ++ ':' : e' ++")"
 
-instance IfB a => IfB (V0 a) where
-        ifB q _ _ = V0 
-instance IfB a => IfB (V1 a) where
-        ifB q (V1 a) (V1 x) = V1 (ifB q a x) 
-instance IfB a => IfB (V2 a) where
-        ifB q (V2 a b) (V2 x y) = V2 (ifB q a x) (ifB q b y) 
-instance IfB a => IfB (V3 a) where
-        ifB q (V3 a b c) (V3 x y z) = V3 (ifB q a x) (ifB q b y) (ifB q c z) 
-instance IfB a => IfB (V4 a) where
-        ifB q (V4 a b c d) (V4 x y z w) = V4 (ifB q a x) (ifB q b y) (ifB q c z) (ifB q d w) 
-
 instance Conjugate (S a Float)
 instance Conjugate (S a Int)
 instance Conjugate (S a Word)
 instance TrivialConjugate  (S a Float)
 instance TrivialConjugate  (S a Int)
 instance TrivialConjugate  (S a Word)
-                                       
+                                      
 -- | This class provides the GPU functions either not found in Prelude's numerical classes, or that has wrong types.
 --   Instances are also provided for normal 'Float's and 'Double's.
---   Minimal complete definition: 'floor'' or 'ceiling''.
-class (IfB a, OrdB a, Floating a) => Real' a where
+class Floating a => Real' a where
   rsqrt :: a -> a
   exp2 :: a -> a
   log2 :: a -> a
@@ -610,40 +610,24 @@ class (IfB a, OrdB a, Floating a) => Real' a where
   ceiling' :: a -> a
   fract' :: a -> a
   mod'' :: a -> a -> a
-  clamp :: a -> a -> a -> a
-  saturate :: a -> a
   mix :: a -> a -> a-> a
-  step :: a -> a -> a
-  smoothstep :: a -> a -> a -> a
 
   rsqrt = (1/) . sqrt
   exp2 = (2**)
   log2 = logBase 2
-  clamp x a = minB (maxB x a)
-  saturate x = clamp x 0 1
   mix x y a = x*(1-a)+y*a
-  step a x = ifB (x <* a) 0 1
-  smoothstep a b x = let t = saturate ((x-a) / (b-a))
-                     in t*t*(3-2*t)
   fract' x = x - floor' x
   mod'' x y = x - y* floor' (x/y)
   floor' x = -ceiling' (-x)
   ceiling' x = -floor' (-x)
   
   {-# MINIMAL floor' | ceiling' #-}
-
-
+  
 instance Real' Float where
-  clamp x a = min (max x a)
-  step a x | x < a     = 0
-           | otherwise = 1
   floor' = fromIntegral . floor
   ceiling' = fromIntegral . ceiling
 
 instance Real' Double where
-  clamp x a = min (max x a)
-  step a x | x < a     = 0
-           | otherwise = 1
   floor' = fromIntegral . floor
   ceiling' = fromIntegral . ceiling
   
@@ -655,11 +639,72 @@ instance Real' (S x Float) where
   ceiling' = fun1f "ceil"
   fract' = fun1f "fract"
   mod'' = fun2f "mod"
-  clamp = fun3f "clamp"
   mix = fun3f "mix"
+
+instance (Real' a) => Real' (V0 a) where
+  rsqrt = liftA rsqrt 
+  exp2 = liftA exp2
+  log2 = liftA log2
+  floor' = liftA floor'
+  ceiling' = liftA ceiling'
+  fract' = liftA fract'
+  mod'' = liftA2 mod''
+  mix = liftA3 mix
+instance (Real' a) => Real' (V1 a) where
+  rsqrt = liftA rsqrt 
+  exp2 = liftA exp2
+  log2 = liftA log2
+  floor' = liftA floor'
+  ceiling' = liftA ceiling'
+  fract' = liftA fract'
+  mod'' = liftA2 mod''
+  mix = liftA3 mix
+instance (Real' a) => Real' (V2 a) where
+  rsqrt = liftA rsqrt 
+  exp2 = liftA exp2
+  log2 = liftA log2
+  floor' = liftA floor'
+  ceiling' = liftA ceiling'
+  fract' = liftA fract'
+  mod'' = liftA2 mod''
+  mix = liftA3 mix
+instance (Real' a) => Real' (V3 a) where
+  rsqrt = liftA rsqrt 
+  exp2 = liftA exp2
+  log2 = liftA log2
+  floor' = liftA floor'
+  ceiling' = liftA ceiling'
+  fract' = liftA fract'
+  mod'' = liftA2 mod''
+  mix = liftA3 mix
+instance (Real' a) => Real' (V4 a) where
+  rsqrt = liftA rsqrt 
+  exp2 = liftA exp2
+  log2 = liftA log2
+  floor' = liftA floor'
+  ceiling' = liftA ceiling'
+  fract' = liftA fract'
+  mod'' = liftA2 mod''
+  mix = liftA3 mix
+
+-- | This class provides various order comparing functions 
+class (IfB a, OrdB a, Floating a) => FloatingOrd a where
+  clamp :: a -> a -> a -> a
+  saturate :: a -> a  
+  step :: a -> a -> a
+  smoothstep :: a -> a -> a -> a
+  clamp x a = minB (maxB x a)
+  saturate x = clamp x 0 1
+  step a x = ifB (x <* a) 0 1
+  smoothstep a b x = let t = saturate ((x-a) / (b-a))
+                     in t*t*(3-2*t)
+
+instance FloatingOrd Float
+instance FloatingOrd Double
+instance FloatingOrd (S x Float) where
+  clamp = fun3f "clamp"
   step = fun2f "step"
   smoothstep = fun3f "smoothstep"
-
 
 -- | Provides a common way to convert numeric types to integer and floating point representations.
 class Convert a where

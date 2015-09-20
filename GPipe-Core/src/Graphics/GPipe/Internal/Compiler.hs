@@ -258,7 +258,7 @@ makeBind m iom ((n,b):xs) = (g, m'')
         (io, m'') = case Map.lookup b m' of
                             Just x | x == n -> (\_ _ -> return (), m')
                             _               -> (\s asserter -> (iom ! n) s b >>= asserter, Map.insert b n m')      
-        g s = f s >> io s
+        g s a = f s a >> io s a  
 makeBind m _ [] = (\_ _ -> return (), m)                          
 
 allocate :: Int -> [[Int]] -> [[Int]]

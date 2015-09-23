@@ -587,11 +587,15 @@ instance Ord x => OrdB (S a x) where
   (>=*) = bin STypeBool ">="
   (>*) = bin STypeBool ">"
 
-instance IfB (S a x) where
-        ifB (S c) (S t) (S e) = S $ tellAssignment STypeBool $ do c' <- c
-                                                                  t' <- t
-                                                                  e' <- e
-                                                                  return $ '(' : c' ++ '?' : t' ++ ':' : e' ++")"
+instance IfB (S a Float) where ifB = ifBs STypeFloat
+instance IfB (S a Int) where ifB = ifBs STypeInt
+instance IfB (S a Word) where ifB = ifBs STypeUInt
+instance IfB (S a Bool) where ifB = ifBs STypeBool
+
+ifBs stype (S c) (S t) (S e) = S $ tellAssignment stype $ do c' <- c
+                                                             t' <- t
+                                                             e' <- e
+                                                             return $ '(' : c' ++ '?' : t' ++ ':' : e' ++")"
 
 instance Conjugate (S a Float)
 instance Conjugate (S a Int)

@@ -17,6 +17,7 @@ description:
                 Includes DSL for shaders to provide type safety even when crossing into that domain.
                 Uses OpenGl 3.3 core profile under the hood.
 maintainer:     Tobias Bexelius
+data-files:     CHANGELOG.md
 
 library
   hs-source-dirs:   src

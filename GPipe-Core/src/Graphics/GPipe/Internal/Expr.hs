@@ -340,9 +340,13 @@ instance (ShaderType a x, ShaderType b x, ShaderType c x, ShaderType d x) => Sha
     toBase x ~(a,b,c,d) = ShaderBaseProd (toBase x a) (ShaderBaseProd (toBase x b) (ShaderBaseProd (toBase x c) (toBase x d)))
     fromBase x (ShaderBaseProd a (ShaderBaseProd b (ShaderBaseProd c d))) = (fromBase x a, fromBase x b, fromBase x c, fromBase x d)
     
+-- | Works just like 'ifB', return second argument if first is 'true' otherwise return third argument. The difference from 'ifB' is that it 
+-- might generate more efficient code when a is a compound type (e.g. a tuple or a vector). This is especially true if either of the two branch arguments
+-- contain a 'while' loop.
 ifThenElse' :: forall a x. (ShaderType a x) => S x Bool -> a -> a -> a
 ifThenElse' b t e = ifThenElse b (const t) (const e) ()
 
+-- | @ifThenElse c f g x@ will return @f x@ if @c@ evaluates to 'true' or @g x@ otherwise.
 ifThenElse :: forall a b x. (ShaderType a x, ShaderType b x) => S x Bool -> (a -> b) -> (a -> b) -> a -> b
 ifThenElse c t e i = fromBase x $ ifThenElse_ c (toBase x . t . fromBase x) (toBase x . e . fromBase x) (toBase x i)
     where
@@ -362,6 +366,7 @@ ifThenElse c t e i = fromBase x $ ifThenElse_ c (toBase x . t . fromBase x) (toB
                            return decls
             in evalState (runReaderT (shaderbaseReturn (toBase x (undefined :: b))) ifM) 0
 
+-- | @ifThen c f x@ will return @f x@ if @c@ evaluates to 'true' or @x@ otherwise.
 ifThen :: forall a x. (ShaderType a x) => S x Bool -> (a -> a) -> a -> a
 ifThen c t i = fromBase x $ ifThen_ c (toBase x . t . fromBase x) (toBase x i)
     where
@@ -381,6 +386,8 @@ ifThen c t i = fromBase x $ ifThen_ c (toBase x . t . fromBase x) (toBase x i)
 
 tellIf :: RValue -> ExprM ()
 tellIf boolStr = T.lift $ T.lift $ tell $ mconcat ["if(", boolStr, "){\n" ]
+
+-- | @while f g x@ will iteratively transform @x@ with @g@ as long as @f@ generates 'true'.
 while :: forall a x. (ShaderType a x) => (a -> S x Bool) -> (a -> a) -> a -> a
 while c f i = fromBase x $ while_ (c . fromBase x) (toBase x . f . fromBase x) (toBase x i)            
     where
@@ -587,15 +594,10 @@ instance Ord x => OrdB (S a x) where
   (>=*) = bin STypeBool ">="
   (>*) = bin STypeBool ">"
 
-instance IfB (S a Float) where ifB = ifBs STypeFloat
-instance IfB (S a Int) where ifB = ifBs STypeInt
-instance IfB (S a Word) where ifB = ifBs STypeUInt
-instance IfB (S a Bool) where ifB = ifBs STypeBool
-
-ifBs stype (S c) (S t) (S e) = S $ tellAssignment stype $ do c' <- c
-                                                             t' <- t
-                                                             e' <- e
-                                                             return $ '(' : c' ++ '?' : t' ++ ':' : e' ++")"
+instance IfB (S a Float) where ifB = ifThenElse'
+instance IfB (S a Int) where ifB = ifThenElse'
+instance IfB (S a Word) where ifB = ifThenElse'
+instance IfB (S a Bool) where ifB = ifThenElse'
 
 instance Conjugate (S a Float)
 instance Conjugate (S a Int)

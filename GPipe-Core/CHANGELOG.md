@@ -1,5 +1,6 @@
 ### 2.1.1
 
+- Made ifB use ifThenElse' instead to avoid unwanted strictness 
 - Fixed bug where ShaderBaseType for () wasn't lazy enough, causing error in ifThenElse'
 - Added missing () instances
 

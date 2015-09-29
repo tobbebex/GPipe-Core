@@ -33,12 +33,12 @@ module Graphics.GPipe.Expr (
     fwidth,
 
     -- * Shader control structures    
-    ShaderBase(),
-    ShaderType(..),   
     while,
     ifThen,
     ifThenElse,
-    ifThenElse'    
+    ifThenElse',    
+    ShaderBase(),
+    ShaderType(..)   
 )
 where
 

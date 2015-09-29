@@ -1,3 +1,8 @@
+### 2.1.1
+
+- Fixed bug where ShaderBaseType for () wasn't lazy enough, causing error in ifThenElse'
+- Added missing () instances
+
 ### 2.1
 
 - Making dangling finalizers work with shared and unshared contexts (#10) 

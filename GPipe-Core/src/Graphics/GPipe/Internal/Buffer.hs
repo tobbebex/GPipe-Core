@@ -251,7 +251,9 @@ instance BufferFormat a => BufferFormat (V4 a) where
                 (a', b', c', d') <- toBuffer -< (a, b, c, d)
                 returnA -< V4 a' b' c' d'
 
-   
+instance BufferFormat () where
+    type HostFormat () = ()
+    toBuffer = arr (const ())   
 instance (BufferFormat a, BufferFormat b) => BufferFormat (a, b) where
     type HostFormat (a,b) = (HostFormat a, HostFormat b)
     toBuffer = proc ~(a, b) -> do

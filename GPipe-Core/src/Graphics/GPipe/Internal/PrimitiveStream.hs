@@ -270,7 +270,10 @@ instance VertexInput (B4 Word8) where
     type VertexFormat (B4 Word8) = V4 VWord
     toVertex = ToVertex $ Kleisli $ makeVertexI 4 vec4S (STypeUVec 4) GL_UNSIGNED_BYTE . unB4
 
-                                             
+instance VertexInput () where
+    type VertexFormat () = ()
+    toVertex = arr (const ())
+    
 instance (VertexInput a, VertexInput b) => VertexInput (a,b) where
     type VertexFormat (a,b) = (VertexFormat a, VertexFormat b)
     toVertex = proc ~(a,b) -> do a' <- toVertex -< a

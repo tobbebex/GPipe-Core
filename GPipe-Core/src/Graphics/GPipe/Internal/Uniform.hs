@@ -162,6 +162,10 @@ instance UniformInput a => UniformInput (V4 a)  where
                                          d' <- toUniform -< d
                                          returnA -< V4 a' b' c' d'                                                   
 
+instance UniformInput () where
+    type UniformFormat () x = ()
+    toUniform = arr (const ())
+    
 instance (UniformInput a, UniformInput b) => UniformInput (a,b) where
     type UniformFormat (a,b) x = (UniformFormat a x, UniformFormat b x)
     toUniform = proc ~(a,b) -> do a' <- toUniform -< a

@@ -303,7 +303,7 @@ instance ShaderType (S x Bool) x where
     
 instance ShaderType () x where
     type ShaderBaseType () = ()
-    toBase _ () = ShaderBaseUnit
+    toBase _ _ = ShaderBaseUnit
     fromBase _ ShaderBaseUnit = ()
 
 instance ShaderType a x => ShaderType (V0 a) x where

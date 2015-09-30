@@ -1,3 +1,7 @@
+### 2.1.2
+
+- Fixed bug when nesting while, ifThen, ifThenElse or ifThenElse'. 
+
 ### 2.1.1
 
 - Made ifB use ifThenElse' instead to avoid unwanted strictness 

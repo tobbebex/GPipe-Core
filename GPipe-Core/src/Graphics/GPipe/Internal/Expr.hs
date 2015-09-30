@@ -340,13 +340,17 @@ instance (ShaderType a x, ShaderType b x, ShaderType c x, ShaderType d x) => Sha
     toBase x ~(a,b,c,d) = ShaderBaseProd (toBase x a) (ShaderBaseProd (toBase x b) (ShaderBaseProd (toBase x c) (toBase x d)))
     fromBase x (ShaderBaseProd a (ShaderBaseProd b (ShaderBaseProd c d))) = (fromBase x a, fromBase x b, fromBase x c, fromBase x d)
     
--- | Works just like 'ifB', return second argument if first is 'true' otherwise return third argument. The difference from 'ifB' is that it 
--- might generate more efficient code when a is a compound type (e.g. a tuple or a vector). This is especially true if either of the two branch arguments
--- contain a 'while' loop.
+-- | Works just like 'ifB', return second argument if first is 'true' otherwise return third argument.
+--  
+-- The difference from 'ifB' is that it in most cases generate more efficient code when @a@ is a compound type (e.g. a tuple or a vector).
+-- For simple types such as @S x Float@, @ifThenElse' == ifB@. 
 ifThenElse' :: forall a x. (ShaderType a x) => S x Bool -> a -> a -> a
 ifThenElse' b t e = ifThenElse b (const t) (const e) ()
 
--- | @ifThenElse c f g x@ will return @f x@ if @c@ evaluates to 'true' or @g x@ otherwise.
+-- | @ifThenElse c f g x@ will return @f x@ if @c@ evaluates to 'true' or @g x@ otherwise. 
+--
+--   In most cases functionally equivalent to 'ifThenElse'' but 
+--   usually generate smaller shader code since the last argument is not inlined into the two branches, which also would affect implicit derivates (e.g. 'dFdx', 'dFdy' or sampling using @SampleAuto@)
 ifThenElse :: forall a b x. (ShaderType a x, ShaderType b x) => S x Bool -> (a -> b) -> (a -> b) -> a -> b
 ifThenElse c t e i = fromBase x $ ifThenElse_ c (toBase x . t . fromBase x) (toBase x . e . fromBase x) (toBase x i)
     where
@@ -359,14 +363,17 @@ ifThenElse c t e i = fromBase x $ ifThenElse_ c (toBase x . t . fromBase x) (toB
                            void $ evalStateT (shaderbaseAssign a) aDecls
                            decls <- execWriterT $ shaderbaseDeclare (toBase x (undefined :: b))
                            tellIf boolStr                
-                           void $ evalStateT (shaderbaseAssign $ thn lifted) decls                                    
+                           scopedM $ void $ evalStateT (shaderbaseAssign $ thn lifted) decls                                    
                            T.lift $ T.lift $ tell "} else {\n"                   
-                           void $ evalStateT (shaderbaseAssign $ els lifted) decls
+                           scopedM $ void $ evalStateT (shaderbaseAssign $ els lifted) decls
                            T.lift $ T.lift $ tell "}\n"                                                 
                            return decls
             in evalState (runReaderT (shaderbaseReturn (toBase x (undefined :: b))) ifM) 0
 
--- | @ifThen c f x@ will return @f x@ if @c@ evaluates to 'true' or @x@ otherwise.
+-- | @ifThen c f x@ will return @f x@ if @c@ evaluates to 'true' or @x@ otherwise. 
+--
+--   In most cases functionally equivalent to 'ifThenElse'' but 
+--   usually generate smaller shader code since the last argument is not inlined into the two branches, which also would affect implicit derivates (e.g. 'dFdx', 'dFdy' or sampling using @SampleAuto@)
 ifThen :: forall a x. (ShaderType a x) => S x Bool -> (a -> a) -> a -> a
 ifThen c t i = fromBase x $ ifThen_ c (toBase x . t . fromBase x) (toBase x i)
     where
@@ -378,7 +385,7 @@ ifThen c t i = fromBase x $ ifThen_ c (toBase x . t . fromBase x) (toBase x i)
                            (lifted, decls) <- runWriterT $ shaderbaseDeclare (toBase x (undefined :: a))
                            void $ evalStateT (shaderbaseAssign a) decls
                            tellIf boolStr
-                           void $ evalStateT (shaderbaseAssign $ thn lifted) decls                                    
+                           scopedM $ void $ evalStateT (shaderbaseAssign $ thn lifted) decls                                    
                            T.lift $ T.lift $ tell "}\n"
                            return decls
             in evalState (runReaderT (shaderbaseReturn (toBase x (undefined :: a))) ifM) 0
@@ -397,11 +404,12 @@ while c f i = fromBase x $ while_ (c . fromBase x) (toBase x . f . fromBase x) (
                                            (lifted, decls) <- runWriterT $ shaderbaseDeclare (toBase x (undefined :: a))
                                            void $ evalStateT (shaderbaseAssign a) decls
                                            boolDecl <- tellAssignment STypeBool (unS $ bool a)
-                                           T.lift $ T.lift $ tell $ mconcat ["while(", boolDecl, "){\n" ]
-                                           let looped = loopF lifted                                
-                                           void $ evalStateT (shaderbaseAssign looped) decls 
-                                           loopedBoolStr <- unS $ bool looped
-                                           tellAssignment' boolDecl loopedBoolStr
+                                           T.lift $ T.lift $ tell $ mconcat ["while(", boolDecl, "){\n" ]                                           
+                                           let looped = loopF lifted
+                                           scopedM $ do
+                                               void $ evalStateT (shaderbaseAssign looped) decls 
+                                               loopedBoolStr <- unS $ bool looped
+                                               tellAssignment' boolDecl loopedBoolStr
                                            T.lift $ T.lift $ tell "}\n"
                                            return decls
                              in evalState (runReaderT (shaderbaseReturn (toBase x (undefined :: a))) whileM) 0

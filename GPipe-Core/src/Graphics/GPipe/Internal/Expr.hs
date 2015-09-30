@@ -220,6 +220,7 @@ tellGlobal = tell
 
 -----------------------
 
+-- | An opaque type
 data ShaderBase a x where
     ShaderBaseFloat :: S x Float -> ShaderBase (S x Float) x 
     ShaderBaseInt :: S x Int -> ShaderBase (S x Int) x 
@@ -275,10 +276,14 @@ shaderbaseReturnDef = do i <- T.lift getNext
                          m <- ask
                          return $ S $ fmap (!!i) m
 
-    
+-- | Constraint for types that may pass in and out of shader control structures. Define your own instances in terms of others and make sure to
+--   make toBase as lazy as possible.    
 class ShaderType a x where
+    -- | A base type that this type can convert into. Use the 'ShaderBaseType' function on an existing instance of 'ShaderType' to define this in your instance.  
     type ShaderBaseType a
+    -- | Convert this type to the shader base type. Make sure this is as lazy as possible (e.g. use tilde (@~@) on each pattern match).
     toBase :: x -> a -> ShaderBase (ShaderBaseType a) x
+    -- | Convert back from the shader base type to this type. 
     fromBase :: x -> ShaderBase (ShaderBaseType a) x -> a
     
 instance ShaderType (S x Float) x where
@@ -359,16 +364,16 @@ ifThenElse c t e i = fromBase x $ ifThenElse_ c (toBase x . t . fromBase x) (toB
         ifThenElse_ bool thn els a = 
             let ifM = memoizeM $ do
                            boolStr <- unS bool
-                           (lifted, aDecls) <- runWriterT $ shaderbaseDeclare (toBase x (undefined :: a))
+                           (lifted, aDecls) <- runWriterT $ shaderbaseDeclare (toBase x (errShaderType :: a))
                            void $ evalStateT (shaderbaseAssign a) aDecls
-                           decls <- execWriterT $ shaderbaseDeclare (toBase x (undefined :: b))
+                           decls <- execWriterT $ shaderbaseDeclare (toBase x (errShaderType :: b))
                            tellIf boolStr                
                            scopedM $ void $ evalStateT (shaderbaseAssign $ thn lifted) decls                                    
                            T.lift $ T.lift $ tell "} else {\n"                   
                            scopedM $ void $ evalStateT (shaderbaseAssign $ els lifted) decls
                            T.lift $ T.lift $ tell "}\n"                                                 
                            return decls
-            in evalState (runReaderT (shaderbaseReturn (toBase x (undefined :: b))) ifM) 0
+            in evalState (runReaderT (shaderbaseReturn (toBase x (errShaderType :: b))) ifM) 0
 
 -- | @ifThen c f x@ will return @f x@ if @c@ evaluates to 'true' or @x@ otherwise. 
 --
@@ -382,15 +387,14 @@ ifThen c t i = fromBase x $ ifThen_ c (toBase x . t . fromBase x) (toBase x i)
         ifThen_ bool thn a = 
             let ifM = memoizeM $ do
                            boolStr <- unS bool
-                           (lifted, decls) <- runWriterT $ shaderbaseDeclare (toBase x (undefined :: a))
+                           (lifted, decls) <- runWriterT $ shaderbaseDeclare (toBase x (errShaderType :: a))
                            void $ evalStateT (shaderbaseAssign a) decls
                            tellIf boolStr
                            scopedM $ void $ evalStateT (shaderbaseAssign $ thn lifted) decls                                    
                            T.lift $ T.lift $ tell "}\n"
                            return decls
-            in evalState (runReaderT (shaderbaseReturn (toBase x (undefined :: a))) ifM) 0
+            in evalState (runReaderT (shaderbaseReturn (toBase x (errShaderType :: a))) ifM) 0
     
-
 tellIf :: RValue -> ExprM ()
 tellIf boolStr = T.lift $ T.lift $ tell $ mconcat ["if(", boolStr, "){\n" ]
 
@@ -401,7 +405,7 @@ while c f i = fromBase x $ while_ (c . fromBase x) (toBase x . f . fromBase x) (
         x = undefined :: x
         while_ :: (ShaderBase (ShaderBaseType a) x -> S x Bool) -> (ShaderBase (ShaderBaseType a) x -> ShaderBase (ShaderBaseType a) x) -> ShaderBase (ShaderBaseType a) x -> ShaderBase (ShaderBaseType a) x                                 
         while_ bool loopF a = let whileM = memoizeM $ do
-                                           (lifted, decls) <- runWriterT $ shaderbaseDeclare (toBase x (undefined :: a))
+                                           (lifted, decls) <- runWriterT $ shaderbaseDeclare (toBase x (errShaderType :: a))
                                            void $ evalStateT (shaderbaseAssign a) decls
                                            boolDecl <- tellAssignment STypeBool (unS $ bool a)
                                            T.lift $ T.lift $ tell $ mconcat ["while(", boolDecl, "){\n" ]                                           
@@ -412,8 +416,9 @@ while c f i = fromBase x $ while_ (c . fromBase x) (toBase x . f . fromBase x) (
                                                tellAssignment' boolDecl loopedBoolStr
                                            T.lift $ T.lift $ tell "}\n"
                                            return decls
-                             in evalState (runReaderT (shaderbaseReturn (toBase x (undefined :: a))) whileM) 0
+                             in evalState (runReaderT (shaderbaseReturn (toBase x (errShaderType :: a))) whileM) 0
 
+errShaderType = error "toBase in an instance of ShaderType is not lazy enough! Make sure you use tilde (~) for each pattern match on a data constructor."
 
 --------------------------------------------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------------------------------------------

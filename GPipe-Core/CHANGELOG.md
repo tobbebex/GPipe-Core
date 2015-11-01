@@ -1,5 +1,9 @@
 ### 2.1.2
 
+- Fixed bug in clearImage
+
+### 2.1.2
+
 - Fixed bug when nesting while, ifThen, ifThenElse or ifThenElse'. 
 
 ### 2.1.1

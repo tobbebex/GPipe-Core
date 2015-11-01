@@ -333,7 +333,7 @@ data StencilOp =
 -----------
 
 -- | Fill a color image with a constant color value
-clearColorImage :: forall c os f. ColorRenderable c => Image c -> Color c (ColorElement c) -> Render os f ()
+clearColorImage :: forall c os f. ColorRenderable c => Image (Format c) -> Color c (ColorElement c) -> Render os f ()
 clearColorImage i c = do cd <- getRenderContextData
                          key <- Render $ lift $ lift $ lift $ getImageFBOKey i
                          let fbokey = FBOKeys [key] Nothing Nothing
@@ -360,7 +360,7 @@ clearColorImage i c = do cd <- getRenderContextData
                                                    glEnable GL_SCISSOR_TEST
 
 -- | Fill a depth image with a constant depth value (in the range [0,1])
-clearDepthImage :: DepthRenderable d => Image d -> Float -> Render os f ()
+clearDepthImage :: DepthRenderable d => Image (Format d) -> Float -> Render os f ()
 clearDepthImage i d = do cd <- getRenderContextData
                          key <- Render $ lift $ lift $ lift $ getImageFBOKey i
                          let fbokey = FBOKeys [] (Just key) Nothing
@@ -386,7 +386,7 @@ clearDepthImage i d = do cd <- getRenderContextData
                                                    glEnable GL_SCISSOR_TEST
 
 -- | Fill a depth image with a constant stencil value
-clearStencilImage :: StencilRenderable s => Image s -> Int -> Render os f ()
+clearStencilImage :: StencilRenderable s => Image (Format s) -> Int -> Render os f ()
 clearStencilImage i s = do cd <- getRenderContextData
                            key <- Render $ lift $ lift $ lift $ getImageFBOKey i
                            let fbokey = FBOKeys [] Nothing (Just key)
@@ -412,7 +412,7 @@ clearStencilImage i s = do cd <- getRenderContextData
                                                      glEnable GL_SCISSOR_TEST
 
 -- | Fill a combined depth stencil image with a constant depth value (in the range [0,1]) and a constant stencil value
-clearDepthStencilImage :: Image DepthStencil -> Float -> Int -> Render os f ()
+clearDepthStencilImage :: Image (Format DepthStencil) -> Float -> Int -> Render os f ()
 clearDepthStencilImage i d s = do
                            cd <- getRenderContextData
                            key <- Render $ lift $ lift $ lift $ getImageFBOKey i

@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, ScopedTypeVariables, Arrows, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, ScopedTypeVariables, Arrows, GeneralizedNewtypeDeriving, PatternSynonyms #-}
 
 module Graphics.GPipe.Internal.PrimitiveStream where
 
@@ -72,16 +72,20 @@ toPrimitiveStream sf = Shader $ do n <- getName
         drawcall (PrimitiveArraySimple p l a) binds = (attribs a binds, glDrawArrays (toGLtopology p) 0 (fromIntegral l)) 
         drawcall (PrimitiveArrayIndexed p i a) binds = (attribs a binds, do
                                                     bindIndexBuffer i
-                                                    glDrawElements (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i))
+                                                    glDrawElements (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)))
         drawcall (PrimitiveArrayInstanced p il l a) binds = (attribs a binds, glDrawArraysInstanced (toGLtopology p) 0 (fromIntegral l) (fromIntegral il))
         drawcall (PrimitiveArrayIndexedInstanced p i il a) binds = (attribs a binds, do
                                                       bindIndexBuffer i
-                                                      glDrawElementsInstanced (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i) (fromIntegral il))
+                                                      glDrawElementsInstanced (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)) (fromIntegral il))
         bindIndexBuffer i = do case restart i of Just x -> do glEnable GL_PRIMITIVE_RESTART 
                                                               glPrimitiveRestartIndex (fromIntegral x)
                                                  Nothing -> glDisable GL_PRIMITIVE_RESTART
                                bname <- readIORef (iArrName i)
-                               glBindBuffer GL_ELEMENT_ARRAY_BUFFER bname 
+                               glBindBuffer GL_ELEMENT_ARRAY_BUFFER bname
+        glSizeOf GL_UNSIGNED_INT = 4
+        glSizeOf GL_UNSIGNED_SHORT = 2
+        glSizeOf GL_UNSIGNED_BYTE = 1 
+        glSizeOf _ = error "toPrimitiveStream: Unknown indexArray type"       
 
         assignIxs :: Int -> Binding -> [Int] -> [Binding -> (IO VAOKey, IO ())] -> [(IO VAOKey, IO ())] 
         assignIxs n ix xxs@(x:xs) (f:fs) | x == n    = f ix : assignIxs (n+1) (ix+1) xs fs

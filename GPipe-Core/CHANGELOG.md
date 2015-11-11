@@ -1,3 +1,7 @@
+### 2.1.4
+
+- Fixed bug in dropVertices and dropIndices (#16)
+
 ### 2.1.3
 
 - Fixed bug in clearImage

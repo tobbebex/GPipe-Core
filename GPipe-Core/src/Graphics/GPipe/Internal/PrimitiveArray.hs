@@ -43,14 +43,14 @@ type family Combine t t' where
 
 -- | @takeVertices n a@ creates a shorter vertex array by taking the @n@ first elements of the array @a@.
 takeVertices :: Int -> VertexArray t a -> VertexArray t a
-takeVertices n (VertexArray m f) = VertexArray (min n m) f
+takeVertices n (VertexArray l f) = VertexArray (min (max n 0) l) f
 
 -- | @dropVertices n a@ creates a shorter vertex array by dropping the @n@ first elements of the array @a@. The argument array @a@ must not be
 --   constrained to only 'Instances'.
 dropVertices :: Int -> VertexArray () a -> VertexArray t a
-dropVertices n (VertexArray m f) = VertexArray n' g
+dropVertices n (VertexArray l f) = VertexArray (l - n') g
         where
-            n' = max (m - n) 0
+            n' = min (max n 0) l
             g bIn = f $ bIn { bInSkipElems = bInSkipElems bIn + n'}
 
 -- | @replicateEach n a@ will create a longer vertex array, only to be used for instances, by replicating each element of the array @a@ @n@ times. E.g.
@@ -81,11 +81,14 @@ newIndexArray buf r = let a = undefined :: b in Render $ return $ IndexArray (bu
  
 -- | @takeIndices n a@ creates a shorter index array by taking the @n@ first indices of the array @a@.
 takeIndices :: Int -> IndexArray -> IndexArray
-takeIndices n i = i { indexArrayLength = min n (indexArrayLength i) }
+takeIndices n i = i { indexArrayLength = min (max n 0) (indexArrayLength i) }
 
 -- | @dropIndices n a@ creates a shorter index array by dropping the @n@ first indices of the array @a@.
 dropIndices :: Int -> IndexArray -> IndexArray
-dropIndices n i = i { indexArrayLength = max (l - n) 0, offset = offset i + n } where l = indexArrayLength i
+dropIndices n i = i { indexArrayLength = l - n', offset = offset i + n' } 
+    where 
+        l = indexArrayLength i
+        n' = min (max n 0) l
 
 data Triangles
 data Lines

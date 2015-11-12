@@ -39,7 +39,7 @@ data PrimitiveStreamData = PrimitiveStreamData DrawCallName
 --   can operate a stream's vertex values using the 'Functor' instance (this will result in a shader running on the GPU).
 --   You may also append 'PrimitiveStream's using the 'Monoid' instance, but if possible append the origin 'PrimitiveArray's instead, as this will create more optimized
 --   draw calls. 
-newtype PrimitiveStream t a = PrimitiveStream [(a, PrimitiveStreamData)] deriving Monoid
+newtype PrimitiveStream t a = PrimitiveStream [(a, (Maybe PointSize, PrimitiveStreamData))] deriving Monoid
 
 instance Functor (PrimitiveStream t) where
         fmap f (PrimitiveStream xs) = PrimitiveStream $ map (first f) xs
@@ -66,7 +66,7 @@ toPrimitiveStream sf = Shader $ do n <- getName
                                    let sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os a
                                        x = fst $ runWriter (evalStateT (mf $ bufBElement sampleBuffer $ BInput 0 0) 0)
                                    doForInputArray n (map drawcall . getPrimitiveArray . sf)
-                                   return $ PrimitiveStream [(x, PrimitiveStreamData n)] 
+                                   return $ PrimitiveStream [(x, (Nothing, PrimitiveStreamData n))] 
     where 
         ToVertex (Kleisli mf) = toVertex :: ToVertex a (VertexFormat a)
         drawcall (PrimitiveArraySimple p l a) binds = (attribs a binds, glDrawArrays (toGLtopology p) 0 (fromIntegral l)) 
@@ -106,6 +106,13 @@ data InputIndices = InputIndices {
 -- | Like 'fmap', but where the vertex and instance IDs are provided as arguments as well. 
 withInputIndices :: (a -> InputIndices -> b) -> PrimitiveStream p a -> PrimitiveStream p b  
 withInputIndices f = fmap (\a -> f a (InputIndices (scalarS' "gl_VertexID") (scalarS' "gl_InstanceID")))
+
+type PointSize = VFloat
+-- | Like 'fmap', but where each point's size is provided as arguments as well, and a new point size is set for each point in addition to the new vertex value.
+--
+--   When a 'PrimitiveStream' of 'Points' is created, all points will have the default size of 1.
+withPointSize :: (a -> PointSize -> (b, PointSize)) -> PrimitiveStream Points a -> PrimitiveStream Points b  
+withPointSize f (PrimitiveStream xs) = PrimitiveStream $ map (\(a, (ps, d)) -> let (b, ps') = f a (maybe (scalarS' "1") id ps) in (b, (Just ps', d))) xs 
 
 makeVertexFx norm x f styp typ b = do 
                              n <- get

@@ -22,6 +22,8 @@ import Linear.Quaternion (Quaternion(..))
 import Linear.Affine (Point(..))
 
 import Graphics.GL.Core33
+import Control.Monad (when)
+import Data.Maybe (isJust)
 
 type VPos = V4 VFloat
 
@@ -63,23 +65,27 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
         return (FragmentStream $ map (f n) xs) 
     where        
         ToFragment (Kleisli m) = toFragment :: ToFragment a (FragmentFormat a)
-        f n ((p, x),s) = (evalState (m x) 0, FragmentStreamData n (makePos p) s true)
+        f n ((p, x),(ps, s)) = (evalState (m x) 0, FragmentStreamData n (makePos p >> makePointSize ps) s true)
         makePos (V4 (S x) (S y) (S z) (S w)) = do
                                        x' <- x
                                        y' <- y
                                        z' <- z
                                        w' <- w
                                        tellAssignment' "gl_Position" $ "vec4("++x'++',':y'++',':z'++',':w'++")"
+        makePointSize Nothing = return ()
+        makePointSize (Just (S ps)) = ps >>= tellAssignment' "gl_PointSize" 
         io s = let (side, ViewPort (V2 x y) (V2 w h), DepthRange dmin dmax) = sf s in if w < 0 || h < 0 
                                                                                         then error "ViewPort, negative size"
                                                                                         else do setGlCullFace side
                                                                                                 glScissor (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
                                                                                                 glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 
                                                                                                 glDepthRange (realToFrac dmin) (realToFrac dmax)
+                                                                                                setGLPointSize
 
         setGlCullFace Front = glEnable GL_CULL_FACE >> glCullFace GL_BACK -- Back is culled when front is rasterized
         setGlCullFace Back = glEnable GL_CULL_FACE >> glCullFace GL_FRONT
         setGlCullFace _ = glDisable GL_CULL_FACE
+        setGLPointSize = if any (isJust.fst.snd) xs then glEnable GL_PROGRAM_POINT_SIZE else glDisable GL_PROGRAM_POINT_SIZE
 
 -- | Defines which side to rasterize. Non triangle primitives only has a front side.
 data Side = Front | Back | FrontAndBack

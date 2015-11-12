@@ -1,6 +1,7 @@
 ### 2.1.4
 
 - Fixed bug in dropVertices and dropIndices (#16)
+- Added withPointSize (#15)
 
 ### 2.1.3
 

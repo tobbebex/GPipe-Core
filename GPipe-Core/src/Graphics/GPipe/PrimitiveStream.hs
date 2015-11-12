@@ -26,6 +26,8 @@ module Graphics.GPipe.PrimitiveStream (
     -- * Various PrimitiveStream operations   
     withInputIndices,   
     InputIndices(..),
+    withPointSize,
+    PointSize
 )
 where
 

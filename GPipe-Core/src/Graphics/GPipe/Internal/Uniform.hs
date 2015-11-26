@@ -2,7 +2,7 @@
 
 module Graphics.GPipe.Internal.Uniform where
 
-import Graphics.GPipe.Internal.Buffer 
+import Graphics.GPipe.Internal.Buffer
 import Graphics.GPipe.Internal.Shader
 import Graphics.GPipe.Internal.Compiler
 import Graphics.GPipe.Internal.Expr
@@ -26,28 +26,28 @@ import Linear.V0
 import Linear.Plucker (Plucker(..))
 import Linear.Quaternion (Quaternion(..))
 
--- | This class constraints which buffer types can be loaded as uniforms, and what type those values have.  
+-- | This class constraints which buffer types can be loaded as uniforms, and what type those values have.
 class BufferFormat a => UniformInput a where
-    -- | The type the buffer value will be turned into once it becomes a vertex or fragment value (the @x@ parameter is either 'V' or 'F'). 
+    -- | The type the buffer value will be turned into once it becomes a vertex or fragment value (the @x@ parameter is either 'V' or 'F').
     type UniformFormat a x
     -- | An arrow action that turns a value from it's buffer representation to it's vertex or fragment representation. Use 'toUniform' from
     --   the GPipe provided instances to operate in this arrow. Also note that this arrow needs to be able to return a value
     --   lazily, so ensure you use
-    -- 
-    --  @proc ~pattern -> do ...@. 
-    toUniform :: ToUniform x a (UniformFormat a x) 
+    --
+    --  @proc ~pattern -> do ...@.
+    toUniform :: ToUniform x a (UniformFormat a x)
 
--- | Load a uniform value from a 'Buffer' into a 'Shader'. The argument function is used to retrieve the buffer and the index into this buffer from the shader environment. 
+-- | Load a uniform value from a 'Buffer' into a 'Shader'. The argument function is used to retrieve the buffer and the index into this buffer from the shader environment.
 getUniform :: forall os f s b x. (UniformInput b) => (s -> (Buffer os (Uniform b), Int)) -> Shader os f s (UniformFormat b x)
 getUniform sf = Shader $ do
-                   uniAl <- askUniformAlignment 
+                   uniAl <- askUniformAlignment
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
                        sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os (Uniform b)
                        shaderGen :: (Int -> ExprM String) -> (UniformFormat b x, OffsetToSType) -- Int is name of uniform block
                        shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
-                   doForUniform blockId $ \s bind -> let (ub, i) = sf s 
-                                                     in if i < 0 || i >= bufferLength ub 
+                   doForUniform blockId $ \s bind -> let (ub, i) = sf s
+                                                     in if i < 0 || i >= bufferLength ub
                                                             then error "toUniformBlock, uniform buffer offset out of bounds"
                                                             else do
                                                                 bname <- readIORef $ bufName ub
@@ -61,7 +61,7 @@ getUniform sf = Shader $ do
             doForUniform n io = modifyRenderIO (\s -> s { uniformNameToRenderIO = insert n io (uniformNameToRenderIO s) } )
 
 buildUDecl :: OffsetToSType -> GlobDeclM ()
-buildUDecl = buildUDecl' 0 . Map.toAscList 
+buildUDecl = buildUDecl' 0 . Map.toAscList
     where buildUDecl' p xxs@((off, stype):xs) | off == p = do tellGlobal $ stypeName stype
                                                               tellGlobal " u"
                                                               tellGlobalLn $ show off
@@ -72,10 +72,10 @@ buildUDecl = buildUDecl' 0 . Map.toAscList
                                               | otherwise = error "buildUDecl: Expected all offsets to be multiple of 4"
           buildUDecl' _ [] = return ()
 
-type OffsetToSType = Map.IntMap SType  
-                    
+type OffsetToSType = Map.IntMap SType
+
 -- | The arrow type for 'toUniform'.
-newtype ToUniform x a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader (Int -> ExprM String))) a b) deriving (Category, Arrow) 
+newtype ToUniform x a b = ToUniform (Kleisli (WriterT OffsetToSType (Reader (Int -> ExprM String))) a b) deriving (Category, Arrow)
 
 makeUniform :: SType -> ToUniform x (B a) (S x b)
 makeUniform styp = ToUniform $ Kleisli $ \bIn -> do let offset = bOffset bIn
@@ -160,12 +160,12 @@ instance UniformInput a => UniformInput (V4 a)  where
                                          b' <- toUniform -< b
                                          c' <- toUniform -< c
                                          d' <- toUniform -< d
-                                         returnA -< V4 a' b' c' d'                                                   
+                                         returnA -< V4 a' b' c' d'
 
 instance UniformInput () where
     type UniformFormat () x = ()
     toUniform = arr (const ())
-    
+
 instance (UniformInput a, UniformInput b) => UniformInput (a,b) where
     type UniformFormat (a,b) x = (UniformFormat a x, UniformFormat b x)
     toUniform = proc ~(a,b) -> do a' <- toUniform -< a
@@ -179,7 +179,7 @@ instance (UniformInput a, UniformInput b, UniformInput c) => UniformInput (a,b,c
                                     c' <- toUniform -< c
                                     returnA -< (a', b', c')
 
-instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d) => UniformInput (a,b,c,d)  where
+instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d) => UniformInput (a,b,c,d) where
     type UniformFormat (a,b,c,d) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x, UniformFormat d x)
     toUniform = proc ~(a,b,c,d) -> do a' <- toUniform -< a
                                       b' <- toUniform -< b
@@ -187,14 +187,44 @@ instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d) => Uni
                                       d' <- toUniform -< d
                                       returnA -< (a', b', c', d')
 
-               
+instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d, UniformInput e) => UniformInput (a,b,c,d,e) where
+    type UniformFormat (a,b,c,d,e) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x, UniformFormat d x, UniformFormat e x)
+    toUniform = proc ~(a,b,c,d,e) -> do a' <- toUniform -< a
+                                        b' <- toUniform -< b
+                                        c' <- toUniform -< c
+                                        d' <- toUniform -< d
+                                        e' <- toUniform -< e
+                                        returnA -< (a', b', c', d', e')
+
+instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d, UniformInput e, UniformInput f) => UniformInput (a,b,c,d,e,f) where
+    type UniformFormat (a,b,c,d,e,f) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x, UniformFormat d x, UniformFormat e x, UniformFormat f x)
+    toUniform = proc ~(a,b,c,d,e,f) -> do a' <- toUniform -< a
+                                          b' <- toUniform -< b
+                                          c' <- toUniform -< c
+                                          d' <- toUniform -< d
+                                          e' <- toUniform -< e
+                                          f' <- toUniform -< f
+                                          returnA -< (a', b', c', d', e', f')
+
+instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d, UniformInput e, UniformInput f, UniformInput g) => UniformInput (a,b,c,d,e,f,g) where
+    type UniformFormat (a,b,c,d,e,f,g) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x, UniformFormat d x, UniformFormat e x, UniformFormat f x, UniformFormat g x)
+    toUniform = proc ~(a,b,c,d,e,f,g) -> do a' <- toUniform -< a
+                                            b' <- toUniform -< b
+                                            c' <- toUniform -< c
+                                            d' <- toUniform -< d
+                                            e' <- toUniform -< e
+                                            f' <- toUniform -< f
+                                            g' <- toUniform -< g
+                                            returnA -< (a', b', c', d', e', f', g')
+
+
 instance UniformInput a => UniformInput (Quaternion a) where
     type UniformFormat (Quaternion a) x = Quaternion (UniformFormat a x)
     toUniform = proc ~(Quaternion a v) -> do
                     a' <- toUniform -< a
                     v' <- toUniform -< v
                     returnA -< Quaternion a' v'
-                 
+
 instance UniformInput a => UniformInput (Plucker a) where
     type UniformFormat (Plucker a) x = Plucker (UniformFormat a x)
     toUniform = proc ~(Plucker a b c d e f) -> do

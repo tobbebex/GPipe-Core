@@ -1,3 +1,8 @@
+### 2.1.5
+
+- Fixed bug in clear where masks weren't set
+- Added up to 7-tuple instances
+
 ### 2.1.4
 
 - Fixed bug in dropVertices and dropIndices (#16)

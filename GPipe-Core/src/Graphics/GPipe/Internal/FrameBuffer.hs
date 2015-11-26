@@ -29,7 +29,7 @@ import Foreign.Marshal.Array (withArray)
 import Foreign.Ptr (nullPtr)
 import Linear.V4
 
--- | A monad in which individual color images can be drawn. 
+-- | A monad in which individual color images can be drawn.
 newtype DrawColors os s a = DrawColors (StateT Int (Writer [Int -> (ExprM (), GlobDeclM (), s -> (IO FBOKey, IO (), IO ()))]) a) deriving (Functor, Applicative, Monad)
 
 runDrawColors :: DrawColors os s a -> (ExprM (), GlobDeclM (), s -> (IO [FBOKey], IO (), IO ()))
@@ -42,7 +42,7 @@ runDrawColors (DrawColors m) = foldl sf (return (), return (), const (return [],
                                 return $ ns ++ [n]
                             , b >> y, c >> z)
 
--- | Draw color values into a color renderable texture image.                            
+-- | Draw color values into a color renderable texture image.
 drawColor :: forall c s os. ColorRenderable c => (s -> (Image (Format c), ColorMask c, UseBlending)) -> FragColor c -> DrawColors os s ()
 drawColor sf c = DrawColors $ do n <- get
                                  put $ n+1
@@ -59,13 +59,13 @@ drawColor sf c = DrawColors $ do n <- get
 
 -- | Draw all fragments in a 'FragmentStream' using the provided function that passes each fragment value into a 'DrawColors' monad. The first argument is a function
 --   that retrieves a 'Blending' setting from the shader environment, which will be used for all 'drawColor' actions in the 'DrawColors' monad where 'UseBlending' is 'True'.
---   (OpenGl 3.3 unfortunately doesn't support having different blending settings for different color targets.) 
+--   (OpenGl 3.3 unfortunately doesn't support having different blending settings for different color targets.)
 draw :: forall a os f s. (s -> Blending) -> FragmentStream a -> (a -> DrawColors os s ()) -> Shader os f s ()
--- | Like 'draw', but performs a depth test on each fragment first. The 'DrawColors' monad is then only run for fragments where the depth test passes. 
+-- | Like 'draw', but performs a depth test on each fragment first. The 'DrawColors' monad is then only run for fragments where the depth test passes.
 drawDepth :: forall a os f s d. DepthRenderable d => (s -> (Blending, Image (Format d), DepthOption)) -> FragmentStream (a, FragDepth) -> (a -> DrawColors os s ()) -> Shader os f s ()
--- | Like 'draw', but performs a stencil test on each fragment first. The 'DrawColors' monad is then only run for fragments where the stencil test passes. 
+-- | Like 'draw', but performs a stencil test on each fragment first. The 'DrawColors' monad is then only run for fragments where the stencil test passes.
 drawStencil :: forall a os f s st. StencilRenderable st => (s -> (Blending, Image (Format st), StencilOptions)) -> FragmentStream a -> (a -> DrawColors os s ()) -> Shader os f s ()
--- | Like 'draw', but performs a stencil test and a depth test (in that order) on each fragment first. The 'DrawColors' monad is then only run for fragments where the stencil and depth test passes. 
+-- | Like 'draw', but performs a stencil test and a depth test (in that order) on each fragment first. The 'DrawColors' monad is then only run for fragments where the stencil and depth test passes.
 drawDepthStencil :: forall a os f s d st. (DepthRenderable d, StencilRenderable st) => (s -> (Blending, Image (Format d), Image (Format st), DepthStencilOption)) -> FragmentStream (a, FragDepth) -> (a -> DrawColors os s ()) -> Shader os f s ()
 
 makeFBOKeys :: IO [FBOKey] -> IO (Maybe FBOKey) -> IO (Maybe FBOKey) -> IO FBOKeys
@@ -252,7 +252,7 @@ type DepthFunction = ComparisonFunction
 --   target value.
 type UseBlending = Bool
 
--- | Denotes how each fragment's color value should be blended with the target value. 
+-- | Denotes how each fragment's color value should be blended with the target value.
 data Blending =
       -- | The fragment's color will simply replace the target value.
       NoBlending
@@ -298,7 +298,7 @@ usesConstantColor ConstantColor = True
 usesConstantColor OneMinusConstantColor = True
 usesConstantColor ConstantAlpha = True
 usesConstantColor OneMinusConstantAlpha = True
-usesConstantColor _ = False 
+usesConstantColor _ = False
 
 -- | A bitwise logical operation that will be used to combine colors that has an integral internal representation.
 data LogicOp =
@@ -339,11 +339,11 @@ clearColorImage i c = do cd <- getRenderContextData
                          let fbokey = FBOKeys [key] Nothing Nothing
                          mfbo <- Render $ lift $ lift $ lift $ getFBO cd fbokey
                          case mfbo of
-                                Just fbo -> Render $ lift $ lift $ lift $ do 
+                                Just fbo -> Render $ lift $ lift $ lift $ do
                                                                       fbo' <- readIORef fbo
                                                                       glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
                                 Nothing -> do fAdd <- getRenderContextFinalizerAdder
-                                              Render $ throwFromMaybe $ lift $ lift $ lift $ do 
+                                              Render $ throwFromMaybe $ lift $ lift $ lift $ do
                                                   fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
                                                   fbo <- newIORef fbo'
                                                   void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
@@ -353,9 +353,10 @@ clearColorImage i c = do cd <- getRenderContextData
                                                   getImageBinding i GL_COLOR_ATTACHMENT0
                                                   withArray [GL_COLOR_ATTACHMENT0] $ glDrawBuffers 1
                                                   getFBOerror
-                                              
-                         Render $ lift $ lift $ lift $ do 
+
+                         Render $ lift $ lift $ lift $ do
                                                    glDisable GL_SCISSOR_TEST
+                                                   glColorMask glTrue glTrue glTrue glTrue
                                                    clearColor (undefined :: c) c
                                                    glEnable GL_SCISSOR_TEST
 
@@ -366,11 +367,11 @@ clearDepthImage i d = do cd <- getRenderContextData
                          let fbokey = FBOKeys [] (Just key) Nothing
                          mfbo <- Render $ lift $ lift $ lift $ getFBO cd fbokey
                          case mfbo of
-                                Just fbo -> Render $ lift $ lift $ lift $ do 
+                                Just fbo -> Render $ lift $ lift $ lift $ do
                                                                       fbo' <- readIORef fbo
                                                                       glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
                                 Nothing -> do fAdd <- getRenderContextFinalizerAdder
-                                              Render $ throwFromMaybe $ lift $ lift $ lift $ do 
+                                              Render $ throwFromMaybe $ lift $ lift $ lift $ do
                                                   fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
                                                   fbo <- newIORef fbo'
                                                   void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
@@ -380,8 +381,9 @@ clearDepthImage i d = do cd <- getRenderContextData
                                                   getImageBinding i GL_DEPTH_ATTACHMENT
                                                   glDrawBuffers 0 nullPtr
                                                   getFBOerror
-                         Render $ lift $ lift $ lift $ do 
+                         Render $ lift $ lift $ lift $ do
                                                    glDisable GL_SCISSOR_TEST
+                                                   glDepthMask glTrue
                                                    with (realToFrac d) $ glClearBufferfv GL_DEPTH 0
                                                    glEnable GL_SCISSOR_TEST
 
@@ -392,11 +394,11 @@ clearStencilImage i s = do cd <- getRenderContextData
                            let fbokey = FBOKeys [] Nothing (Just key)
                            mfbo <- Render $ lift $ lift $ lift $ getFBO cd fbokey
                            case mfbo of
-                                Just fbo -> Render $ lift $ lift $ lift $ do 
+                                Just fbo -> Render $ lift $ lift $ lift $ do
                                                                       fbo' <- readIORef fbo
                                                                       glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
                                 Nothing -> do fAdd <- getRenderContextFinalizerAdder
-                                              Render $ throwFromMaybe $ lift $ lift $ lift $ do 
+                                              Render $ throwFromMaybe $ lift $ lift $ lift $ do
                                                   fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
                                                   fbo <- newIORef fbo'
                                                   void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
@@ -406,8 +408,9 @@ clearStencilImage i s = do cd <- getRenderContextData
                                                   getImageBinding i GL_STENCIL_ATTACHMENT
                                                   glDrawBuffers 0 nullPtr
                                                   getFBOerror
-                           Render $ lift $ lift $ lift $ do 
-                                                     glDisable GL_SCISSOR_TEST 
+                           Render $ lift $ lift $ lift $ do
+                                                     glDisable GL_SCISSOR_TEST
+                                                     glStencilMask maxBound
                                                      with (fromIntegral s) $ glClearBufferiv GL_STENCIL 0
                                                      glEnable GL_SCISSOR_TEST
 
@@ -419,11 +422,11 @@ clearDepthStencilImage i d s = do
                            let fbokey = FBOKeys [] Nothing (Just key)
                            mfbo <- Render $ lift $ lift $ lift $ getFBO cd fbokey
                            case mfbo of
-                                Just fbo -> Render $ lift $ lift $ lift $ do 
+                                Just fbo -> Render $ lift $ lift $ lift $ do
                                                                       fbo' <- readIORef fbo
                                                                       glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
                                 Nothing -> do fAdd <- getRenderContextFinalizerAdder
-                                              Render $ throwFromMaybe $ lift $ lift $ lift $ do 
+                                              Render $ throwFromMaybe $ lift $ lift $ lift $ do
                                                   fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
                                                   fbo <- newIORef fbo'
                                                   void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
@@ -433,44 +436,53 @@ clearDepthStencilImage i d s = do
                                                   getImageBinding i GL_DEPTH_STENCIL_ATTACHMENT
                                                   glDrawBuffers 0 nullPtr
                                                   getFBOerror
-                           Render $ lift $ lift $ lift $ do 
-                                                     glDisable GL_SCISSOR_TEST 
+                           Render $ lift $ lift $ lift $ do
+                                                     glDisable GL_SCISSOR_TEST
+                                                     glDepthMask glTrue
+                                                     glStencilMask maxBound
                                                      glClearBufferfi GL_DEPTH_STENCIL 0 (realToFrac d) (fromIntegral s)
-                                                     glEnable GL_SCISSOR_TEST 
+                                                     glEnable GL_SCISSOR_TEST
 
 -- | Fill the context window's back buffer with a constant color value
 clearContextColor :: forall os c ds. ContextColorFormat c => Color c Float -> Render os (ContextFormat c ds) ()
-clearContextColor c = Render $ lift $ lift $ lift $ do 
+clearContextColor c = Render $ lift $ lift $ lift $ do
                                                 glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
-                                                glDisable GL_SCISSOR_TEST 
+                                                glDisable GL_SCISSOR_TEST
+                                                glColorMask glTrue glTrue glTrue glTrue
                                                 withArray (map realToFrac (fromColor (undefined :: c) c ++ replicate 3 0 :: [Float])) $ glClearBufferfv GL_COLOR 0
-                                                glEnable GL_SCISSOR_TEST 
+                                                glEnable GL_SCISSOR_TEST
 
--- | Fill the context window's back depth buffer with a constant depth value (in the range [0,1]) 
+-- | Fill the context window's back depth buffer with a constant depth value (in the range [0,1])
 clearContextDepth :: DepthRenderable ds => Float -> Render os (ContextFormat c ds) ()
-clearContextDepth d = Render $ lift $ lift $ lift $ do 
+clearContextDepth d = Render $ lift $ lift $ lift $ do
                                                 glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
-                                                glDisable GL_SCISSOR_TEST 
+                                                glDisable GL_SCISSOR_TEST
+                                                glDepthMask glTrue
                                                 with (realToFrac d) $ glClearBufferfv GL_DEPTH 0
-                                                glEnable GL_SCISSOR_TEST 
+                                                glEnable GL_SCISSOR_TEST
 
 -- | Fill the context window's back stencil buffer with a constant stencil value
 clearContextStencil :: StencilRenderable ds => Int -> Render os (ContextFormat c ds) ()
-clearContextStencil s = Render $ lift $ lift $ lift $ do 
+clearContextStencil s = Render $ lift $ lift $ lift $ do
                                                   glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
-                                                  glDisable GL_SCISSOR_TEST 
+                                                  glDisable GL_SCISSOR_TEST
+                                                  glStencilMask maxBound
                                                   with (fromIntegral s) $ glClearBufferiv GL_STENCIL 0
                                                   glEnable GL_SCISSOR_TEST
 
 -- | Fill the context window's back depth and stencil buffers with a constant depth value (in the range [0,1]) and a constant stencil value
 clearContextDepthStencil :: Float -> Int -> Render os (ContextFormat c DepthStencil) ()
-clearContextDepthStencil d s = Render $ lift $ lift $ lift $ do 
+clearContextDepthStencil d s = Render $ lift $ lift $ lift $ do
                                                          glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
-                                                         glDisable GL_SCISSOR_TEST 
+                                                         glDisable GL_SCISSOR_TEST
+                                                         glDepthMask glTrue
+                                                         glStencilMask maxBound
                                                          glClearBufferfi GL_DEPTH_STENCIL 0 (realToFrac d) (fromIntegral s)
                                                          glEnable GL_SCISSOR_TEST
 
 ---------------
+glTrue :: Num n => n
+glTrue = fromBool True
 
 
 getGlBlendEquation :: BlendEquation -> GLenum

@@ -8,6 +8,7 @@ module Graphics.GPipe.Internal.Context
     GPipeException(..),
     runContextT,
     runSharedContextT,
+    forkSharedContextT,
     liftContextIO,
     liftContextIOAsync,
     addContextFinalizer,
@@ -29,7 +30,7 @@ module Graphics.GPipe.Internal.Context
 where
 
 import Graphics.GPipe.Internal.Format
-import Control.Monad.Exception (MonadException, Exception, MonadAsyncException,bracket)
+import Control.Monad.Exception (MonadException, Exception, MonadAsyncException,bracket, mask, onException)
 import Control.Monad.Trans.Reader
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
@@ -49,19 +50,18 @@ import Linear.V2 (V2(V2))
 import Control.Monad.Trans.Error
 import Control.Exception (throwIO)
 import Control.Monad.Trans.State.Strict
+import Control.Concurrent (ThreadId, forkIO)
 
-type ContextFactory c ds w = ContextFormat c ds -> IO (ContextHandle w)
+type ContextFactory c ds w = ContextFormat c ds -> Maybe w -> IO (ContextHandle w)
 
 data ContextHandle w = ContextHandle {
-    -- | Like a 'ContextFactory' but creates a context that shares the object space of this handle's context. Called from same thread as created the initial context.
-    newSharedContext :: forall c ds. ContextFormat c ds -> IO (ContextHandle w),
     -- | Run an OpenGL IO action in this context, returning a value to the caller.
     --   The boolean argument will be @True@ if this call references this context's window, and @False@ if it only references shared objects
-    --   The thread calling this may not be the same creating the context.
+    --   The thread calling this may not be the same creating the context (e.g. in the case of 'forkSharedContextT').
     contextDoSync :: forall a. Bool ->IO a -> IO a,
     -- | Run an OpenGL IO action in this context, that doesn't return any value to the caller.
     --   The boolean argument will be @True@ if this call references this context's window, and @False@ if it only references shared objects
-    --   The thread calling this may not be the same creating the context (for finalizers it is most definetly not).
+    --   The thread calling this may not be the same creating the context (e.g. in the case of 'forkSharedContextT' or finalizers for buffers, textures and shaders).
     contextDoAsync :: Bool -> IO () -> IO (),
     -- | Swap the front and back buffers in the context's default frame buffer. Called from same thread as created context.
     contextSwap :: IO (),
@@ -102,7 +102,7 @@ instance MonadTrans (ContextT w os f) where
 runContextT :: (MonadIO m, MonadAsyncException m) => ContextFactory c ds w -> ContextFormat c ds -> (forall os. ContextT w os (ContextFormat c ds) m a) -> m a
 runContextT cf f (ContextT m) =
     bracket
-        (liftIO $ cf f)
+        (liftIO $ cf f Nothing)
         (liftIO . contextDelete)
         $ \ h -> do cds <- liftIO newContextDatas
                     cd <- liftIO $ addContextData cds
@@ -111,22 +111,34 @@ runContextT cf f (ContextT m) =
                     runReaderT (i >> m) rs
 
 -- | Run a 'ContextT' monad transformer inside another one, creating a window (unless the 'ContextFormat' is 'ContextFormatNone') that is later destroyed when the action returns. The inner 'ContextT' monad
--- transformer will share object space with the outer one. The 'ContextFactory' of the outer context will be used in the creation of the inner context.
-runSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFormat c ds -> ContextT w os (ContextFormat c ds) (ContextT w os f m) a -> ContextT w os f m a
-runSharedContextT f (ContextT m) =
+-- transformer will share object space with the outer one.
+runSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFactory c ds w -> ContextFormat c ds -> ContextT w os (ContextFormat c ds) (ContextT w os f m) a -> ContextT w os f m a
+runSharedContextT cf f (ContextT m) = do
+    (h',(_,cds)) <- ContextT ask
+    let w = contextWindow h'
+        ContextT i = initGlState
     bracket
-        (do (h',(_,cds)) <- ContextT ask
-            h <- liftIO $ newSharedContext h' f
-            cd <- liftIO $ addContextData cds
-            return (h,cd)
-        )
-        (\(h,cd) -> do cds <- ContextT $ asks (snd . snd)
-                       liftIO $ do removeContextData cds cd
-                                   contextDelete h)
-        $ \(h,cd) -> do cds <- ContextT $ asks (snd . snd)
-                        let ContextT i = initGlState
-                            rs = (h, (cd, cds))
-                        runReaderT (i >> m) rs
+        (do cd <- liftIO $ addContextData cds
+            h <- liftIO $ cf f (Just w)
+            return (h, cd))
+        (\(h,cd) -> liftIO $ do removeContextData cds cd
+                                contextDelete h)
+        $ \(h,cd) -> runReaderT (i >> m) (h, (cd, cds))
+
+-- | Run a 'ContextT' monad transformer on top of 'IO' in another thread, creating a window (unless the 'ContextFormat' is 'ContextFormatNone') that is later destroyed when the action returns. The newly created threads's 'ContextT' monad
+-- transformer will share object space with the current one, and thus may outlive this one. This function returns after the provided context factory has been run (but most likely before the created ContextT has finished)
+forkSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFactory c ds w -> ContextFormat c ds -> ContextT w os (ContextFormat c ds) IO () -> ContextT w os f m ThreadId
+forkSharedContextT cf f (ContextT m) = do
+    (h',(_,cds)) <- ContextT ask
+    let w = contextWindow h'
+        ContextT i = initGlState
+    liftIO $ mask $ \restore -> do
+        cd <- addContextData cds
+        h <- cf f (Just w)
+        let release = do removeContextData cds cd
+                         contextDelete h
+        forkIO $ do restore (runReaderT (i >> m) (h, (cd, cds))) `onException` release
+                    release
 
 initGlState :: MonadIO m => ContextT w os f m ()
 initGlState = liftContextIOAsyncInWin $ do glEnable GL_FRAMEBUFFER_SRGB
@@ -221,7 +233,7 @@ type FBOCache = Map.Map FBOKeys (IORef GLuint)
 getFBOKeys :: FBOKeys -> [FBOKey]
 getFBOKeys (FBOKeys xs d s) = xs ++ maybeToList d ++ maybeToList s
 
-newContextDatas :: IO (MVar [ContextData])
+newContextDatas :: IO SharedContextDatas
 newContextDatas = newMVar []
 
 addContextData :: SharedContextDatas -> IO ContextData

@@ -7,7 +7,7 @@ module Graphics.GPipe.Internal.Buffer
     BufferFormat(..),
     BufferColor,
     Buffer(),
-    ToBuffer(),
+    ToBuffer(..),
     B(..), B2(..), B3(..), B4(..),
     toB22, toB3, toB21, toB12, toB11,
     Uniform(..), Normalized(..), BPacked(),
@@ -395,7 +395,7 @@ getUniformAlignment = fromIntegral <$> alloca (\ ptr -> glGetIntegerv GL_UNIFORM
 makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignment -> Buffer os b
 makeBuffer name elementCount uniformAlignment  = do
     let ToBuffer a b m = toBuffer :: ToBuffer (HostFormat b) b
-        err = error "toBuffer, toVertex or toUniform are creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders" :: HostFormat b
+        err = error "toBuffer is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders" :: HostFormat b
         elementM = runWriterT (runStateT (runKleisli a err) 0)
         ((_,elementSize),pads) = runReader elementM ((name, undefined, undefined), uniformAlignment, m)
         elementF bIn = (fst . fst) $ runReader elementM ((name, elementSize, bIn), uniformAlignment, m)

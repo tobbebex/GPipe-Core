@@ -43,9 +43,9 @@ getUniform sf = Shader $ do
                    uniAl <- askUniformAlignment
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
-                       sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os (Uniform b)
+
                        shaderGen :: (Int -> ExprM String) -> (UniformFormat b x, OffsetToSType) -- Int is name of uniform block
-                       shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
+                       shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ error "getUniform is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders"
                    doForUniform blockId $ \s bind -> let (ub, i) = sf s
                                                      in if i < 0 || i >= bufferLength ub
                                                             then error "toUniformBlock, uniform buffer offset out of bounds"

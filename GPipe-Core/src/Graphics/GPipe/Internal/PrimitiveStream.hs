@@ -12,6 +12,7 @@ import Graphics.GPipe.Internal.Shader
 import Graphics.GPipe.Internal.Compiler
 import Graphics.GPipe.Internal.PrimitiveArray
 import Graphics.GPipe.Internal.Context
+import Graphics.GPipe.Internal.Uniform
 import Control.Category
 import Control.Arrow
 import Data.Monoid (Monoid(..))
@@ -46,7 +47,7 @@ instance Functor (PrimitiveStream t) where
         fmap f (PrimitiveStream xs) = PrimitiveStream $ map (first f) xs
 
 -- | This class constraints which buffer types can be turned into vertex values, and what type those values have.
-class BufferFormat a => VertexInput a where
+class VertexInput a where
     -- | The type the buffer value will be turned into once it becomes a vertex value.
     type VertexFormat a
     -- | An arrow action that turns a value from it's buffer representation to it's vertex representation. Use 'toVertex' from
@@ -64,8 +65,8 @@ newtype ToVertex a b = ToVertex (Kleisli (StateT Int (Writer [Binding -> (IO VAO
 toPrimitiveStream :: forall os f s a p. VertexInput a => (s -> PrimitiveArray p a) -> Shader os f s (PrimitiveStream p (VertexFormat a))
 toPrimitiveStream sf = Shader $ do n <- getName
                                    uniAl <- askUniformAlignment
-                                   let sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os a
-                                       x = fst $ runWriter (evalStateT (mf $ bufBElement sampleBuffer $ BInput 0 0) 0)
+                                   let err = error "toPrimitiveStream is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders"
+                                       x = fst $ runWriter (evalStateT (mf err) 0)
                                    doForInputArray n (map drawcall . getPrimitiveArray . sf)
                                    return $ PrimitiveStream [(x, (Nothing, PrimitiveStreamData n))]
     where
@@ -146,10 +147,17 @@ makeVertexI x f styp typ b = do
                                                       glVertexAttribIPointer ix' x typ (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset))]
                              return (f styp $ useVInput styp n)
 
+
 -- scalars
 
 unBnorm :: Normalized t -> t
 unBnorm (Normalized a) = a
+
+instance VertexInput (Float) where
+    type VertexFormat (Float) = VFloat
+    toVertex = let ToBuffer (Kleisli elementBuilderA) (Kleisli writerA) _ = toBuffer :: ToBuffer Float (B Float)
+                   ToUniform (Kleisli writerU) = toUniform :: ToUniform (B Float) VFloat
+               in ToVertex $ Kleisli $ \x -> do
 
 instance VertexInput (B Float) where
     type VertexFormat (B Float) = VFloat

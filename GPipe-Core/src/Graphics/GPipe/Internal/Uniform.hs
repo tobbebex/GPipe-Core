@@ -27,7 +27,7 @@ import Linear.Plucker (Plucker(..))
 import Linear.Quaternion (Quaternion(..))
 
 -- | This class constraints which buffer types can be loaded as uniforms, and what type those values have.
-class BufferFormat a => UniformInput a where
+class UniformInput a where
     -- | The type the buffer value will be turned into once it becomes a vertex or fragment value (the @x@ parameter is either 'V' or 'F').
     type UniformFormat a x
     -- | An arrow action that turns a value from it's buffer representation to it's vertex or fragment representation. Use 'toUniform' from

@@ -149,10 +149,10 @@ tellDrawcalls (FragmentStream xs) f = do
                                mapM_ g xs
 
 makeDrawcall :: (ExprM (), GlobDeclM (), s -> (Maybe (IO FBOKeys, IO ()), IO ())) -> FragmentStreamData -> IO (Drawcall s)
-makeDrawcall (sh, shd, io) (FragmentStreamData rastN shaderpos (PrimitiveStreamData primN) keep) =
+makeDrawcall (sh, shd, io) (FragmentStreamData rastN shaderpos (PrimitiveStreamData primN ubuff) keep) =
        do (fsource, funis, fsamps, _, prevDecls, prevS) <- runExprM shd (discard keep >> sh)
           (vsource, vunis, vsamps, vinps, _, _) <- runExprM prevDecls (prevS >> shaderpos)
-          return $ Drawcall io primN rastN vsource fsource vinps vunis vsamps funis fsamps
+          return $ Drawcall io primN rastN vsource fsource vinps vunis vsamps funis fsamps ubuff
 
 setColor :: forall c. ColorSampleable c => c -> Int -> FragColor c -> (ExprM (), GlobDeclM ())
 setColor ct n c = let    name = "out" ++ show n

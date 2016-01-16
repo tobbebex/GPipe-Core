@@ -1,3 +1,7 @@
+### 2.1.6
+
+- Adding support for normal Floats, Int32s and Word32s in PrimitiveStreams
+
 ### 2.1.5
 
 - Fixed bug in clear where masks weren't set

@@ -27,7 +27,7 @@ import Linear.Plucker (Plucker(..))
 import Linear.Quaternion (Quaternion(..))
 
 -- | This class constraints which buffer types can be loaded as uniforms, and what type those values have.
-class UniformInput a where
+class BufferFormat a => UniformInput a where
     -- | The type the buffer value will be turned into once it becomes a vertex or fragment value (the @x@ parameter is either 'V' or 'F').
     type UniformFormat a x
     -- | An arrow action that turns a value from it's buffer representation to it's vertex or fragment representation. Use 'toUniform' from
@@ -43,9 +43,9 @@ getUniform sf = Shader $ do
                    uniAl <- askUniformAlignment
                    blockId <- getName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
-
+                       sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os (Uniform b)
                        shaderGen :: (Int -> ExprM String) -> (UniformFormat b x, OffsetToSType) -- Int is name of uniform block
-                       shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ error "getUniform is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders"
+                       shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
                    doForUniform blockId $ \s bind -> let (ub, i) = sf s
                                                      in if i < 0 || i >= bufferLength ub
                                                             then error "toUniformBlock, uniform buffer offset out of bounds"

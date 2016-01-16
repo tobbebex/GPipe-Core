@@ -119,13 +119,12 @@ toPrimitiveStream sf = Shader $ do n <- getName
                               (ioVaokeys, ios) = unzip $ assignIxs 0 0 binds bindsAssoc
                           in (sequence ioVaokeys, sequence_ ios >> writeUBuffer uBname uSize a)
 
-        doForInputArray :: Int -> (s -> [([Binding], IORef GLuint, Int) -> ((IO [VAOKey], IO ()), IO ())]) -> ShaderM s ()
+        doForInputArray :: Int -> (s -> [([Binding], GLuint, Int) -> ((IO [VAOKey], IO ()), IO ())]) -> ShaderM s ()
         doForInputArray n io = modifyRenderIO (\s -> s { inputArrayToRenderIOs = insert n io (inputArrayToRenderIOs s) } )
 
         writeUBuffer _ 0 _ = return () -- If the uniform buffer is size 0 there is no buffer
         writeUBuffer bname size a = do
-                       bname' <- readIORef bname
-                       glBindBuffer GL_COPY_WRITE_BUFFER bname'
+                       glBindBuffer GL_COPY_WRITE_BUFFER bname
                        ptr <- glMapBufferRange GL_COPY_WRITE_BUFFER 0 (fromIntegral size) (GL_MAP_WRITE_BIT + GL_MAP_INVALIDATE_BUFFER_BIT)
                        void $ runStateT (uWriter a) ptr
                        void $ glUnmapBuffer GL_COPY_WRITE_BUFFER

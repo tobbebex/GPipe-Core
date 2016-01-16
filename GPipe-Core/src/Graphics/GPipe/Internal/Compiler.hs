@@ -51,7 +51,7 @@ data RenderIOState s = RenderIOState
         uniformNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()), -- TODO: Return buffer name here when we start writing to buffers during rendering (transform feedback, buffer textures)
         samplerNameToRenderIO :: Map.IntMap (s -> Binding -> IO Int), -- IO returns texturename for validating that it isnt used as render target
         rasterizationNameToRenderIO :: Map.IntMap (s -> IO ()),
-        inputArrayToRenderIOs :: Map.IntMap (s -> [([Binding], IORef GLuint, Int) -> ((IO [VAOKey], IO ()), IO ())])
+        inputArrayToRenderIOs :: Map.IntMap (s -> [([Binding], GLuint, Int) -> ((IO [VAOKey], IO ()), IO ())])
     }
 
 newRenderIOState :: RenderIOState s
@@ -95,7 +95,9 @@ compile dcs s = do
         vSampsPerDc = map usedVSamplers drawcalls
         fUnisPerDc = map usedFUniforms drawcalls
         fSampsPerDc = map usedFSamplers drawcalls
-        unisPerDc = zipWith orderedUnion vUnisPerDc fUnisPerDc
+        unisPerDc' = zipWith orderedUnion vUnisPerDc fUnisPerDc
+        hasPstrUniPerDc = map ((> 0) . primStrUBufferSize) drawcalls
+        unisPerDc = zipWith (\add0name unis -> if add0name then 0:unis else unis) hasPstrUniPerDc unisPerDc'
         sampsPerDc = zipWith orderedUnion vSampsPerDc fSampsPerDc
 
         limitErrors = concat [
@@ -122,16 +124,20 @@ compile dcs s = do
         allErrs = limitErrors ++ errs
     if null allErrs
         then do
-            forM_ pnames (\pNameRef -> do pName <- liftIO $ readIORef pNameRef
-                                          addContextFinalizer pNameRef (glDeleteProgram pName))
+            forM_ pnames (\(pNameRef,pStrUDeleter) -> do pName <- liftIO $ readIORef pNameRef
+                                                         addContextFinalizer pNameRef (glDeleteProgram pName >> pStrUDeleter))
             return fr
         else do
-            liftContextIOAsync $ mapM_ (readIORef >=> glDeleteProgram) pnames
+            liftContextIOAsync $ mapM_ (\(pNameRef, pStrUDeleter) -> readIORef pNameRef >>= glDeleteProgram >> pStrUDeleter) pnames
             liftIO $ throwIO $ GPipeException $ concat allErrs
  where
     comp (Drawcall fboSetup primN rastN vsource fsource inps _ _ _ _ pstrUSize, unis, samps, ubinds, sbinds) = do
+           let uNameToRenderIOmap = uniformNameToRenderIO s
+           pstrUBuf <- createUBuffer pstrUSize -- Create uniform buffer for primiveStream uniforms
+           let pStrUDeleter = if pstrUSize > 0 then with pstrUBuf (glDeleteBuffers 1) else return ()
+           let uNameToRenderIOmap' = addPstrUniform pstrUBuf pstrUBuf uNameToRenderIOmap
            BoundState uniState sampState boundRastN <- get
-           let (bindUni, uniState') = makeBind uniState (uniformNameToRenderIO s) (zip unis ubinds)
+           let (bindUni, uniState') = makeBind uniState uNameToRenderIOmap' (zip unis ubinds)
            let (bindSamp, sampState') = makeBind sampState (samplerNameToRenderIO s) $ zip samps sbinds
            let bindRast = if rastN == boundRastN then const $ return () else rasterizationNameToRenderIO s ! rastN
            put $ BoundState uniState' sampState' rastN
@@ -153,10 +159,12 @@ compile dcs s = do
                                         glDeleteShader fShader
                                         case mPErr of
                                             Just errP -> do glDeleteProgram pName
+                                                            pStrUDeleter
                                                             return $ Left $ "Linking a GPU progam failed:\n" ++ errP ++ "\nVertex source:\n" ++ vsource ++ "\nFragment source:\n" ++ fsource
                                             Nothing -> return $ Right pName
                                 else do glDeleteShader vShader
                                         glDeleteShader fShader
+                                        pStrUDeleter
                                         let err = maybe "" (\e -> "A vertex shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ vsource) mErrV
                                               ++ maybe "" (\e -> "A fragment shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ fsource) mErrF
                                         return $ Left err
@@ -167,15 +175,13 @@ compile dcs s = do
                                     uix <- withCString ("uBlock" ++ show name) $ glGetUniformBlockIndex pName
                                     glUniformBlockBinding pName uix (fromIntegral bind)
 
-                              pstrUBuf <- createUBuffer pstrUSize -- Create uniform buffer for primiveStream uniforms
-
                               glUseProgram pName -- For setting texture uniforms
                               forM_ (zip samps sbinds) $ \(name, bind) -> do
                                     six <- withCString ("s" ++ show name) $ glGetUniformLocation pName
                                     glUniform1i six (fromIntegral bind)
                               pNameRef <- newIORef pName
 
-                              return $ Right (pNameRef, \x asserter cd fAdd -> do
+                              return $ Right ((pNameRef, pStrUDeleter), \x asserter cd fAdd -> do
                                            -- Drawing with program --
                                            pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
                                            glUseProgram pName'
@@ -245,7 +251,14 @@ compile dcs s = do
                                                     glGetProgramInfoLog name logLen nullPtr ptr
                                                     peekCString ptr
     createUBuffer 0 = return undefined
-    createUBuffer uSize = alloca (\ptr -> glGenBuffers 1 ptr >> peek ptr) >>= newIORef
+    createUBuffer uSize = lift $ liftContextIO $ do bname <- alloca (\ptr -> glGenBuffers 1 ptr >> peek ptr)
+                                                    glBindBuffer GL_COPY_WRITE_BUFFER bname
+                                                    glBufferData GL_COPY_WRITE_BUFFER (fromIntegral uSize) nullPtr GL_STREAM_DRAW
+                                                    return bname
+
+    addPstrUniform _ 0 = id
+    addPstrUniform bname uSize = Map.insert 0 $ \_ bind -> glBindBufferRange GL_UNIFORM_BUFFER (fromIntegral bind) bname 0 (fromIntegral uSize)
+
 
 
 orderedUnion :: Ord a => [a] -> [a] -> [a]

@@ -117,7 +117,7 @@ toPrimitiveStream sf = Shader $ do n <- getName
         attribs a (binds, uBname, uSize) = let
                               (_ ,(bindsAssoc, _)) = runReader (runWriterT (runStateT (mf a) (0,0))) undefined
                               (ioVaokeys, ios) = unzip $ assignIxs 0 0 binds bindsAssoc
-                          in (sequence ioVaokeys, sequence_ ios >> writeUBuffer uBname uSize a)
+                          in (writeUBuffer uBname uSize a >> sequence ioVaokeys, sequence_ ios)
 
         doForInputArray :: Int -> (s -> [([Binding], GLuint, Int) -> ((IO [VAOKey], IO ()), IO ())]) -> ShaderM s ()
         doForInputArray n io = modifyRenderIO (\s -> s { inputArrayToRenderIOs = insert n io (inputArrayToRenderIOs s) } )

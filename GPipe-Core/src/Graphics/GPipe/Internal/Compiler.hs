@@ -95,9 +95,7 @@ compile dcs s = do
         vSampsPerDc = map usedVSamplers drawcalls
         fUnisPerDc = map usedFUniforms drawcalls
         fSampsPerDc = map usedFSamplers drawcalls
-        unisPerDc' = zipWith orderedUnion vUnisPerDc fUnisPerDc
-        hasPstrUniPerDc = map ((> 0) . primStrUBufferSize) drawcalls
-        unisPerDc = zipWith (\add0name unis -> if add0name then 0:unis else unis) hasPstrUniPerDc unisPerDc'
+        unisPerDc = zipWith orderedUnion vUnisPerDc fUnisPerDc
         sampsPerDc = zipWith orderedUnion vSampsPerDc fSampsPerDc
 
         limitErrors = concat [
@@ -131,11 +129,12 @@ compile dcs s = do
             liftContextIOAsync $ mapM_ (\(pNameRef, pStrUDeleter) -> readIORef pNameRef >>= glDeleteProgram >> pStrUDeleter) pnames
             liftIO $ throwIO $ GPipeException $ concat allErrs
  where
-    comp (Drawcall fboSetup primN rastN vsource fsource inps _ _ _ _ pstrUSize, unis, samps, ubinds, sbinds) = do
+    comp (Drawcall fboSetup primN rastN vsource fsource inps _ _ _ _ pstrUSize', unis, samps, ubinds, sbinds) = do
+           let pstrUSize = if 0 `elem` unis then pstrUSize' else 0
            let uNameToRenderIOmap = uniformNameToRenderIO s
            pstrUBuf <- createUBuffer pstrUSize -- Create uniform buffer for primiveStream uniforms
            let pStrUDeleter = if pstrUSize > 0 then with pstrUBuf (glDeleteBuffers 1) else return ()
-           let uNameToRenderIOmap' = addPstrUniform pstrUBuf pstrUBuf uNameToRenderIOmap
+           let uNameToRenderIOmap' = addPstrUniform pstrUBuf pstrUSize uNameToRenderIOmap
            BoundState uniState sampState boundRastN <- get
            let (bindUni, uniState') = makeBind uniState uNameToRenderIOmap' (zip unis ubinds)
            let (bindSamp, sampState') = makeBind sampState (samplerNameToRenderIO s) $ zip samps sbinds

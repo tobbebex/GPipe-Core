@@ -27,7 +27,6 @@ import Foreign.Marshal.Utils
 import Foreign.Marshal.Alloc
 
 import Prelude hiding ((.), id)
-import Control.Monad.Trans.State
 import Control.Category
 import Control.Arrow
 import Control.Monad (void)
@@ -36,11 +35,12 @@ import Foreign.Ptr
 import Control.Monad.IO.Class
 import Data.Word
 import Data.Int
+import Control.Monad.Trans.State.Strict
+import Control.Monad.Trans.Writer.Strict
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
 import Data.IORef
 import Control.Applicative ((<$>))
-import Control.Monad.Trans.Writer.Lazy
 import Linear.V4
 import Linear.V3
 import Linear.V2
@@ -90,21 +90,20 @@ type BufferStartPos = Int
 
 data BInput = BInput {bInSkipElems :: Int, bInInstanceDiv :: Int}
 
-type ToBufferInput = (BufferName, Stride, BInput)
-
 type UniformAlignment = Int
 
 data AlignmentMode = Align4 | AlignUniform | AlignPackedIndices | AlignUnknown deriving (Eq)
 
 -- | The arrow type for 'toBuffer'.
 data ToBuffer a b = ToBuffer
-    (Kleisli (StateT Offset (WriterT [Int] (Reader (ToBufferInput, UniformAlignment, AlignmentMode)))) a b) -- Normal = aligned to 4 bytes
-    (Kleisli (StateT (Ptr (), [Int]) IO) a b) -- Normal = aligned to 4 bytes
-    AlignmentMode
+    !(Kleisli (StateT Offset (WriterT [Int] (Reader (UniformAlignment, AlignmentMode)))) a b) -- Normal = aligned to 4 bytes
+    !(Kleisli (StateT Offset (Reader (BufferName, Stride, BInput))) a b)
+    !(Kleisli (StateT (Ptr (), [Int]) IO) a b) -- Normal = aligned to 4 bytes
+    !AlignmentMode
 
 instance Category ToBuffer where
-    id = ToBuffer id id AlignUnknown
-    ToBuffer a b m1 . ToBuffer x y m2 = ToBuffer (a.x) (b.y) (comb m1 m2)
+    id = ToBuffer id id id AlignUnknown
+    ToBuffer a b c m1 . ToBuffer x y z m2 = ToBuffer (a.x) (b.y) (c.z) (comb m1 m2)
         where
             -- If only one uniform or one PackedIndices, use that, otherwise use Align4
             comb AlignUniform AlignUnknown = AlignUniform
@@ -115,8 +114,8 @@ instance Category ToBuffer where
             comb _ _ = Align4
 
 instance Arrow ToBuffer where
-    arr f = ToBuffer (arr f) (arr f) AlignUnknown
-    first (ToBuffer a b m) = ToBuffer (first a) (first b) m
+    arr f = ToBuffer (arr f) (arr f) (arr f) AlignUnknown
+    first (ToBuffer a b c m) = ToBuffer (first a) (first b) (first c) m
 
 -- | The atomic buffer value that represents a host value of type 'a'.
 data B a = B { bName :: IORef GLuint, bOffset :: Int, bStride :: Int, bSkipElems :: Int, bInstanceDiv :: Int}
@@ -162,14 +161,18 @@ newtype BPacked a = BPacked (B a)
 toBufferBUnaligned :: forall a. Storable a => ToBuffer a (B a)
 toBufferBUnaligned = ToBuffer
                 (Kleisli $ const static)
+                (Kleisli $ const valueProd)
                 (Kleisli writer)
                 Align4
             where
                 size = sizeOf (undefined :: a)
-                static = do ((name, stride, bIn),_,_) <- lift $ lift ask
-                            offset <- get
+                static = do offset <- get
                             put $ offset + size
-                            return $ B name offset stride (bInSkipElems bIn) (bInInstanceDiv bIn)
+                            return undefined
+                valueProd = do (name, stride, bIn) <- lift ask
+                               offset <- get
+                               put $ offset + size
+                               return $ B name offset stride (bInSkipElems bIn) (bInInstanceDiv bIn)
                 writer a = do (ptr,pads) <- get
                               put (ptr `plusPtr` size, pads)
                               liftIO $ poke (castPtr ptr) a
@@ -204,15 +207,16 @@ toBufferB4 = proc ~(V4 a b c d) -> do
 instance BufferFormat a => BufferFormat (Uniform a) where
     type HostFormat (Uniform a) = HostFormat a
     toBuffer = arr Uniform . ToBuffer
+                    (Kleisli preStep)
                     (Kleisli elementBuilderA)
                     (Kleisli writerA)
                     AlignUniform
         where
-            ToBuffer (Kleisli elementBuilderA') (Kleisli writerA') _ = toBuffer :: ToBuffer (HostFormat a) a
-            elementBuilderA a = do (_,x,_) <- lift $ lift ask
-                                   a' <- elementBuilderA' a
-                                   setElemAlignM [(AlignUniform, x)] ()
-                                   return a'
+            ToBuffer (Kleisli preStep') (Kleisli elementBuilderA) (Kleisli writerA') _ = toBuffer :: ToBuffer (HostFormat a) a
+            preStep a = do (x,_) <- lift $ lift ask
+                           a' <- preStep' a
+                           setElemAlignM [(AlignUniform, x)] ()
+                           return a'
             writerA a = do a' <- writerA' a
                            setWriterAlignM ()
                            return a'
@@ -368,11 +372,11 @@ copyBuffer bFrom from bTo to len | from < 0 || from >= bufferLength bFrom = erro
 ----------------------------------------------
 
 alignWhen :: [(AlignmentMode, Int)] -> ToBuffer a a
-alignWhen x = ToBuffer (Kleisli $ setElemAlignM x) (Kleisli setWriterAlignM) AlignUniform where
+alignWhen x = ToBuffer (Kleisli $ setElemAlignM x) (Kleisli $ return) (Kleisli setWriterAlignM) AlignUniform where
 
-setElemAlignM :: [(AlignmentMode, Int)] -> b -> StateT Offset (WriterT [Int] (Reader (ToBufferInput, UniformAlignment, AlignmentMode))) b
+setElemAlignM :: [(AlignmentMode, Int)] -> b -> StateT Offset (WriterT [Int] (Reader (UniformAlignment, AlignmentMode))) b
 setElemAlignM x a = do
-                     (_,_,m) <- lift $ lift ask
+                     (_,m) <- lift $ lift ask
                      pad <- case lookup m x of
                                 Nothing -> return 0
                                 Just al -> do
@@ -394,12 +398,11 @@ getUniformAlignment = fromIntegral <$> alloca (\ ptr -> glGetIntegerv GL_UNIFORM
 
 makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignment -> Buffer os b
 makeBuffer name elementCount uniformAlignment  = do
-    let ToBuffer a b m = toBuffer :: ToBuffer (HostFormat b) b
+    let ToBuffer a b c m = toBuffer :: ToBuffer (HostFormat b) b
         err = error "toBuffer is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders" :: HostFormat b
-        elementM = runWriterT (runStateT (runKleisli a err) 0)
-        ((_,elementSize),pads) = runReader elementM ((name, undefined, undefined), uniformAlignment, m)
-        elementF bIn = (fst . fst) $ runReader elementM ((name, elementSize, bIn), uniformAlignment, m)
-        writer ptr x = void $ runStateT (runKleisli b x) (ptr,pads)
+        ((_,elementSize),pads) = runReader (runWriterT (runStateT (runKleisli a err) 0)) (uniformAlignment, m)
+        elementF bIn = fst $ runReader (runStateT (runKleisli b err) 0) (name, elementSize, bIn)
+        writer ptr x = void $ runStateT (runKleisli c x) (ptr,pads)
     Buffer name elementSize elementCount elementF writer
 
 -- | This type family restricts what host and buffer types a texture format may be converted into.
@@ -494,14 +497,14 @@ instance BufferFormat (B Word32) where
 
 instance BufferFormat (BPacked Word16) where
     type HostFormat (BPacked Word16) = Word16
-    toBuffer = let ToBuffer a b _ = toBufferB :: ToBuffer Word16 (B Word16) in arr BPacked . ToBuffer a b AlignPackedIndices
+    toBuffer = let ToBuffer a b c _ = toBufferB :: ToBuffer Word16 (B Word16) in arr BPacked . ToBuffer a b c AlignPackedIndices
     getGlType _ = GL_UNSIGNED_SHORT
     peekPixel = peekPixel1
     getGlPaddedFormat _ = GL_RED_INTEGER
 
 instance BufferFormat (BPacked Word8) where
     type HostFormat (BPacked Word8) = Word8
-    toBuffer = let ToBuffer a b _ = toBufferB :: ToBuffer Word8 (B Word8) in arr BPacked . ToBuffer a b AlignPackedIndices
+    toBuffer = let ToBuffer a b c _ = toBufferB :: ToBuffer Word8 (B Word8) in arr BPacked . ToBuffer a b c AlignPackedIndices
     getGlType _ = GL_UNSIGNED_BYTE
     peekPixel = peekPixel1
     getGlPaddedFormat _ = GL_RED_INTEGER

@@ -3,7 +3,6 @@
 module Graphics.GPipe.Internal.PrimitiveStream where
 
 import Control.Monad.Trans.Class
-import Control.Monad.Trans.Writer.Strict
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Reader
 import Prelude hiding (length, id, (.))
@@ -68,15 +67,19 @@ type UniOffset = Int
 -- | The arrow type for 'toVertex'.
 data ToVertex a b = ToVertex
     !(Kleisli (StateT (Ptr ()) IO) a b)
-    !(Kleisli (StateT (Int, UniOffset) (WriterT OffsetToSType (Reader (Int -> ExprM String)))) a b)
-    !(Kleisli (Writer ([Binding -> (IO VAOKey, IO ())])) a b)
+    !(Kleisli (StateT (Int, UniOffset, OffsetToSType) (Reader (Int -> ExprM String))) a b)
+    !(Kleisli (State [Binding -> (IO VAOKey, IO ())]) a b)
 
 instance Category ToVertex where
+    {-# INLINE id #-}
     id = ToVertex id id id
+    {-# INLINE (.) #-}
     ToVertex a b c . ToVertex x y z = ToVertex (a.x) (b.y) (c.z)
 
 instance Arrow ToVertex where
+    {-# INLINE arr #-}
     arr f = ToVertex (arr f) (arr f) (arr f)
+    {-# INLINE first #-}
     first (ToVertex a b c) = ToVertex (first a) (first b) (first c)
 
 
@@ -85,7 +88,7 @@ toPrimitiveStream :: forall os f s a p. VertexInput a => (s -> PrimitiveArray p 
 toPrimitiveStream sf = Shader $ do n <- getName
                                    uniAl <- askUniformAlignment
                                    let err = error "toPrimitiveStream is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders"
-                                       ((x,(_,uSize)), offToStype) = runReader (runWriterT (runStateT (mf err) (0,0))) (useUniform (buildUDecl offToStype) 0) -- 0 is special blockname for the one used by primitive stream
+                                       (x,(_,uSize, offToStype)) = runReader (runStateT (mf err) (0,0,mempty)) (useUniform (buildUDecl offToStype) 0) -- 0 is special blockname for the one used by primitive stream
                                    doForInputArray n (map drawcall . getPrimitiveArray . sf)
 
                                    return $ PrimitiveStream [(x, (Nothing, PrimitiveStreamData n uSize))]
@@ -116,8 +119,8 @@ toPrimitiveStream sf = Shader $ do n <- getName
         assignIxs _ _ _ _ = error "Too few attributes generated in toPrimitiveStream"
 
         attribs a (binds, uBname, uSize) = let
-                              (_,bindsAssoc) = runWriter (bindingm a)
-                              (ioVaokeys, ios) = unzip $ assignIxs 0 0 binds bindsAssoc
+                              (_,bindsAssoc) = runState (bindingm a) []
+                              (ioVaokeys, ios) = unzip $ assignIxs 0 0 binds $ reverse bindsAssoc
                           in (writeUBuffer uBname uSize a >> sequence ioVaokeys, sequence_ ios)
 
         doForInputArray :: Int -> (s -> [([Binding], GLuint, Int) -> ((IO [VAOKey], IO ()), IO ())]) -> ShaderM s ()
@@ -147,39 +150,41 @@ withPointSize :: (a -> PointSize -> (b, PointSize)) -> PrimitiveStream Points a 
 withPointSize f (PrimitiveStream xs) = PrimitiveStream $ map (\(a, (ps, d)) -> let (b, ps') = f a (fromMaybe (scalarS' "1") ps) in (b, (Just ps', d))) xs
 
 makeVertexF x f styp _ = do
-                     (n,uoffset) <- get
-                     put (n + 1, uoffset)
+                     (n,uoffset,m) <- get
+                     put (n + 1, uoffset,m)
                      return (f styp $ useVInput styp n)
+
+append x = modify (x:)
 
 makeBindVertexFx norm x typ b = do
                         let combOffset = bStride b * bSkipElems b + bOffset b
-                        tell [\ix -> ( do bn <- readIORef $ bName b
-                                          return $ VAOKey bn combOffset x norm (bInstanceDiv b)
+                        append (\ix -> ( do bn <- readIORef $ bName b
+                                            return $ VAOKey bn combOffset x norm (bInstanceDiv b)
                                      , do bn <- readIORef $ bName b
                                           let ix' = fromIntegral ix
                                           glEnableVertexAttribArray ix'
                                           glBindBuffer GL_ARRAY_BUFFER bn
                                           glVertexAttribDivisor ix' (fromIntegral $ bInstanceDiv b)
-                                          glVertexAttribPointer ix' x typ (fromBool norm) (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset))]
+                                          glVertexAttribPointer ix' x typ (fromBool norm) (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset)))
                         return undefined
 
 makeBindVertexFnorm = makeBindVertexFx True
 makeBindVertexF = makeBindVertexFx False
 
 makeVertexI x f styp _ = do
-                     (n, uoffset) <- get
-                     put (n + 1, uoffset)
+                     (n, uoffset,m) <- get
+                     put (n + 1, uoffset,m)
                      return (f styp $ useVInput styp n)
 makeBindVertexI x typ b = do
                      let combOffset = bStride b * bSkipElems b + bOffset b
-                     tell [\ix -> ( do bn <- readIORef $ bName b
-                                       return $ VAOKey bn combOffset x False (bInstanceDiv b)
+                     append (\ix -> ( do bn <- readIORef $ bName b
+                                         return $ VAOKey bn combOffset x False (bInstanceDiv b)
                                   , do bn <- readIORef $ bName b
                                        let ix' = fromIntegral ix
                                        glEnableVertexAttribArray ix'
                                        glBindBuffer GL_ARRAY_BUFFER bn
                                        glVertexAttribDivisor ix' (fromIntegral $ bInstanceDiv b)
-                                       glVertexAttribIPointer ix' x typ (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset))]
+                                       glVertexAttribIPointer ix' x typ (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset)))
                      return undefined
 noWriter = Kleisli (const $ return undefined)
 
@@ -193,10 +198,9 @@ toUniformVertex styp = ToVertex (Kleisli uWriter) (Kleisli makeV) (Kleisli makeB
                        put (ptr `plusPtr` size)
                        lift $ poke (castPtr ptr) a
                        return undefined
-        makeV a = do (n, uoffset) <- get
-                     put (n, uoffset + size)
-                     lift $ tell (Map.singleton uoffset styp)
-                     useF <- lift $ lift ask
+        makeV a = do (n, uoffset,m) <- get
+                     put (n, uoffset + size, Map.insert uoffset styp m)
+                     useF <- lift ask
                      return $ S $ useF uoffset
         makeBind a = return undefined
 

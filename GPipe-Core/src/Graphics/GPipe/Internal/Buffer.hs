@@ -102,7 +102,9 @@ data ToBuffer a b = ToBuffer
     !AlignmentMode
 
 instance Category ToBuffer where
+    {-# INLINE id #-}
     id = ToBuffer id id id AlignUnknown
+    {-# INLINE (.) #-}
     ToBuffer a b c m1 . ToBuffer x y z m2 = ToBuffer (a.x) (b.y) (c.z) (comb m1 m2)
         where
             -- If only one uniform or one PackedIndices, use that, otherwise use Align4
@@ -114,7 +116,9 @@ instance Category ToBuffer where
             comb _ _ = Align4
 
 instance Arrow ToBuffer where
+    {-# INLINE arr #-}
     arr f = ToBuffer (arr f) (arr f) (arr f) AlignUnknown
+    {-# INLINE first #-}
     first (ToBuffer a b c m) = ToBuffer (first a) (first b) (first c) m
 
 -- | The atomic buffer value that represents a host value of type 'a'.

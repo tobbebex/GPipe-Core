@@ -1,6 +1,7 @@
 ### 2.1.6
 
 - Adding support for normal Floats, Int32s and Word32s in PrimitiveStreams
+- Runtime optimizations
 
 ### 2.1.5
 

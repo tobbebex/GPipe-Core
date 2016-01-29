@@ -1,5 +1,9 @@
 ### 2.1.6
 
+- Runtime optimizations (Use BaseVertex for glDraw* instead of offsetting each attribute)
+
+### 2.1.6
+
 - Adding support for normal Floats, Int32s and Word32s in PrimitiveStreams
 - Runtime optimizations
 

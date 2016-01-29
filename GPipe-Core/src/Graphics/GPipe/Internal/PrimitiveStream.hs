@@ -94,14 +94,14 @@ toPrimitiveStream sf = Shader $ do n <- getName
                                    return $ PrimitiveStream [(x, (Nothing, PrimitiveStreamData n uSize))]
     where
         ToVertex (Kleisli uWriter) (Kleisli mf) (Kleisli bindingm) = toVertex :: ToVertex a (VertexFormat a)
-        drawcall (PrimitiveArraySimple p l a) binds = (attribs a binds, glDrawArrays (toGLtopology p) 0 (fromIntegral l))
-        drawcall (PrimitiveArrayIndexed p i a) binds = (attribs a binds, do
+        drawcall (PrimitiveArraySimple p l s a) binds = (attribs a binds, glDrawArrays (toGLtopology p) (fromIntegral s) (fromIntegral l))
+        drawcall (PrimitiveArrayIndexed p i s a) binds = (attribs a binds, do
                                                     bindIndexBuffer i
-                                                    glDrawElements (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)))
-        drawcall (PrimitiveArrayInstanced p il l a) binds = (attribs a binds, glDrawArraysInstanced (toGLtopology p) 0 (fromIntegral l) (fromIntegral il))
-        drawcall (PrimitiveArrayIndexedInstanced p i il a) binds = (attribs a binds, do
+                                                    glDrawElementsBaseVertex (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)) (fromIntegral s))
+        drawcall (PrimitiveArrayInstanced p il l s a) binds = (attribs a binds, glDrawArraysInstanced (toGLtopology p) (fromIntegral s) (fromIntegral l) (fromIntegral il))
+        drawcall (PrimitiveArrayIndexedInstanced p i il s a) binds = (attribs a binds, do
                                                       bindIndexBuffer i
-                                                      glDrawElementsInstanced (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)) (fromIntegral il))
+                                                      glDrawElementsInstancedBaseVertex (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)) (fromIntegral il) (fromIntegral s))
         bindIndexBuffer i = do case restart i of Just x -> do glEnable GL_PRIMITIVE_RESTART
                                                               glPrimitiveRestartIndex (fromIntegral x)
                                                  Nothing -> glDisable GL_PRIMITIVE_RESTART

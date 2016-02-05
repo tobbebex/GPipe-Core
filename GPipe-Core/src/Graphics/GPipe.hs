@@ -9,12 +9,22 @@
 -- Portability :  Portable
 --
 -- |
--- A typesafe API based on the conceptual model of OpenGl, but without the imperative state machine. 
--- Aims to be as close to the raw OpenGl performance as possible, without compromising type safety or functional style. 
--- Includes DSL for shaders to provide type safety even when crossing into that domain.
---  Uses OpenGl 3.3 core profile under the hood.
+-- A typesafe API based on the conceptual model of OpenGl, but without the imperative state machine.
+-- GPipe aims to be as close to raw OpenGl performance as possible, without compromising type safety or functional style.
+-- Includes an embedded domain specific language for GLSL shaders which provides type safety even when crossing into that domain.
+-- Uses the OpenGl 3.3 core profile under the hood.
 --
--- This is a convenience module, reexporting GPipes all other modules, plus the external Linear and Data.Boolean modules.
+-- To learn GPipe, start with the <https://github.com/tobbebex/GPipe-Core#readme readme>
+-- at the <https://github.com/tobbebex/GPipe-Core source repository>.
+-- You could also go directly to <https://github.com/plredmond/GPipe-Test a working example>
+-- or the tutorials:
+-- <http://tobbebex.blogspot.se/2015/09/gpu-programming-in-haskell-using-gpipe.html    Part 1>,
+-- <http://tobbebex.blogspot.se/2015/09/gpu-programming-in-haskell-using-gpipe_11.html Part 2>,
+-- <http://tobbebex.blogspot.se/2015/10/gpu-programming-in-haskell-using-gpipe.html    Part 3>,
+-- <http://tobbebex.blogspot.se/2015/10/gpu-programming-in-haskell-using-gpipe_21.html Part 4>,
+-- <http://tobbebex.blogspot.se/2015/11/gpu-programming-in-haskell-using-gpipe.html    Part 5>.
+--
+-- This module reexports relevant GPipe modules and the external "Linear" and "Data.Boolean" modules.
 -----------------------------------------------------------------------------
 
 module Graphics.GPipe (

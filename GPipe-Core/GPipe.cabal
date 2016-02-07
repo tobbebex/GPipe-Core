@@ -9,7 +9,7 @@ copyright:      Tobias Bexelius
 category:       Graphics
 stability:      Experimental
 synopsis:       Typesafe functional GPU graphics programming
-homepage:       http://tobbebex.blogspot.se/
+homepage:       https://github.com/tobbebex/GPipe-Core#readme
 bug-reports:    https://github.com/tobbebex/GPipe-Core/issues
 description:    
                 A typesafe API based on the conceptual model of OpenGl, but without the imperative state machine. 
@@ -59,4 +59,4 @@ library
                     Graphics.GPipe.Internal.Texture,
                     Graphics.GPipe.Internal.Uniform,
                     Graphics.GPipe.Internal.Orphans
-  
+

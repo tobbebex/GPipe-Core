@@ -1,4 +1,8 @@
-### 2.1.6
+### 2.1.8
+
+- Update dependencies to make it build with stack resolver nightly-2016-09-24
+
+### 2.1.7
 
 - Runtime optimizations (Use BaseVertex for glDraw* instead of offsetting each attribute)
 
@@ -41,7 +45,7 @@
 ### 2.0.2
 
 - Linear bumped to 1.20
-- Running contextSwap and contextFrameBufferSize on righjt thread (#7)
+- Running contextSwap and contextFrameBufferSize on right thread (#7)
 - render now throws if rendering to an image from a texture thats used for sampling (#8)
 - Added GPipe class instances for all linear types (#9)
 

@@ -1,3 +1,7 @@
+### 2.2.0
+
+- Re-work interface with context provider libraries to follow `bracket` pattern
+
 ### 2.1.8
 
 - Update dependencies to make it build with stack resolver nightly-2016-09-24

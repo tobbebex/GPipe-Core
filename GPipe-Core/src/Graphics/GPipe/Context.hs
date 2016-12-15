@@ -13,7 +13,7 @@
 -- You may create a context without a window (for example for rendering to textures that are saved as pngs instead of showed), and you can create a 
 -- context that shares the object space with another context. 
 --
--- Context creation is abstracted away from GPipe, and you need a package that provides a 'ContextFactory', such as @GPipe-GLFW@.
+-- Context creation is abstracted away from GPipe, and you need a package that provides a 'ContextManager', such as @GPipe-GLFW@.
 -----------------------------------------------------------------------------
 
 module Graphics.GPipe.Context (
@@ -25,10 +25,10 @@ module Graphics.GPipe.Context (
     swapContextBuffers,
     -- * External interfaces
     -- | Users of GPipe shouldn't bother with these functions, instead use a separate window manager package such as GPipe-GLFW that will provide you with
-    --   a function of type 'ContextFactory'.
+    --   a function of type 'ContextManager'.
     --
-    --   To create a window manager package, create a 'ContextFactory' function that provides a 'ContextHandle' with all functionality needed.
-    ContextFactory,
+    --   To create a window manager package, create a 'ContextManager' function that provides a 'ContextHandle' with all functionality needed.
+    ContextManager,
     ContextHandle(..),
     withContextWindow,
     -- * Hardware exceptions

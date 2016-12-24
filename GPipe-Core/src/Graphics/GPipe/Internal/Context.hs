@@ -2,7 +2,7 @@
 
 module Graphics.GPipe.Internal.Context
 (
-    ContextFactory,
+    ContextManager,
     ContextHandle(..),
     ContextT(),
     GPipeException(..),
@@ -50,11 +50,11 @@ import Control.Monad.Trans.Error
 import Control.Exception (throwIO)
 import Control.Monad.Trans.State.Strict
 
-type ContextFactory c ds w = ContextFormat c ds -> IO (ContextHandle w)
+type ContextManager c ds w m a = ContextFormat c ds -> (ContextHandle w -> m a) -> m a
 
 data ContextHandle w = ContextHandle {
-    -- | Like a 'ContextFactory' but creates a context that shares the object space of this handle's context. Called from same thread as created the initial context.
-    newSharedContext :: forall c ds. ContextFormat c ds -> IO (ContextHandle w),
+    -- | Like a 'ContextManager' but creates a context that shares the object space of this handle's context. Called from same thread as created the initial context.
+    withSharedContext :: forall c ds m a. ContextFormat c ds -> (ContextHandle w -> m a) -> m a,
     -- | Run an OpenGL IO action in this context, returning a value to the caller.
     --   The boolean argument will be @True@ if this call references this context's window, and @False@ if it only references shared objects
     --   The thread calling this may not be the same creating the context.
@@ -67,8 +67,6 @@ data ContextHandle w = ContextHandle {
     contextSwap :: IO (),
     -- | Get the current size of the context's default framebuffer (which may change if the window is resized). Called from same thread as created context.
     contextFrameBufferSize :: IO (Int, Int),
-    -- | Delete this context and close any associated window. Called from same thread as created context.
-    contextDelete :: IO (),
     -- | A value representing the context's window. It is recommended that this is an opaque type that doesn't have any exported functions. Instead, provide 'ContextT' actions
     --   that are implemented in terms of 'withContextWindow' to expose any functionality to the user that need a reference the context's window.
     contextWindow :: w
@@ -98,12 +96,10 @@ instance MonadTrans (ContextT w os f) where
 
 -- | Run a 'ContextT' monad transformer, creating a window (unless the 'ContextFormat' is 'ContextFormatNone') that is later destroyed when the action returns. This function will
 --   also create a new object space.
---   You need a 'ContextFactory', which is provided by an auxillary package, such as @GPipe-GLFW@.
-runContextT :: (MonadIO m, MonadAsyncException m) => ContextFactory c ds w -> ContextFormat c ds -> (forall os. ContextT w os (ContextFormat c ds) m a) -> m a
-runContextT cf f (ContextT m) =
-    bracket
-        (liftIO $ cf f)
-        (liftIO . contextDelete)
+--   You need a 'ContextManager', which is provided by an auxillary package, such as @GPipe-GLFW@.
+runContextT :: (MonadIO m, MonadAsyncException m) => ContextManager c ds w m a -> ContextFormat c ds -> (forall os. ContextT w os (ContextFormat c ds) m a) -> m a
+runContextT withContext f (ContextT m) =
+    withContext f
         $ \ h -> do cds <- liftIO newContextDatas
                     cd <- liftIO $ addContextData cds
                     let ContextT i = initGlState
@@ -111,18 +107,19 @@ runContextT cf f (ContextT m) =
                     runReaderT (i >> m) rs
 
 -- | Run a 'ContextT' monad transformer inside another one, creating a window (unless the 'ContextFormat' is 'ContextFormatNone') that is later destroyed when the action returns. The inner 'ContextT' monad
--- transformer will share object space with the outer one. The 'ContextFactory' of the outer context will be used in the creation of the inner context.
+-- transformer will share object space with the outer one. The 'ContextManager' of the outer context will be used in the creation of the inner context.
 runSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFormat c ds -> ContextT w os (ContextFormat c ds) (ContextT w os f m) a -> ContextT w os f m a
-runSharedContextT f (ContextT m) =
-    bracket
-        (do (h',(_,cds)) <- ContextT ask
-            h <- liftIO $ newSharedContext h' f
+runSharedContextT f (ContextT m) = do
+    h' <- ContextT $ asks fst
+    withSharedContext h' f $ \h -> do
+      bracket
+        (do cds <- ContextT $ asks (snd . snd)
             cd <- liftIO $ addContextData cds
             return (h,cd)
         )
         (\(h,cd) -> do cds <- ContextT $ asks (snd . snd)
                        liftIO $ do removeContextData cds cd
-                                   contextDelete h)
+                       )
         $ \(h,cd) -> do cds <- ContextT $ asks (snd . snd)
                         let ContextT i = initGlState
                             rs = (h, (cd, cds))

@@ -1,30 +1,32 @@
-{-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, FlexibleContexts, FlexibleInstances, GADTs, DeriveDataTypeable #-}
+{-# LANGUAGE TypeFamilies, RankNTypes, GeneralizedNewtypeDeriving, FlexibleContexts, FlexibleInstances, GADTs, DeriveDataTypeable #-}
 
 module Graphics.GPipe.Internal.Context
 (
-    ContextFactory,
-    ContextHandle(..),
+    ContextHandler(..),
     ContextT(),
     GPipeException(..),
     runContextT,
-    runSharedContextT,
-    liftContextIO,
-    liftContextIOAsync,
-    addContextFinalizer,
-    getContextFinalizerAdder,
-    getRenderContextFinalizerAdder ,
-    swapContextBuffers,
+    newWindow,
+    deleteWindow,
+    swapWindowBuffers,
+    getWindowSize,
     withContextWindow,
+    WindowState(..),
+    RenderState(..),
+    liftNonWinContextIO,
+    liftNonWinContextAsyncIO,
+    addContextFinalizer,
+    Window(..),
     addVAOBufferFinalizer,
     addFBOTextureFinalizer,
-    getContextData,
-    getRenderContextData,
     getVAO, setVAO,
     getFBO, setFBO,
     ContextData,
     VAOKey(..), FBOKey(..), FBOKeys(..),
-    Render(..), render, getContextBuffersSize,
-    registerRenderWriteTexture
+    Render(..), render,
+    registerRenderWriteTexture,
+    getLastRenderWin,
+    asSync
 )
 where
 
@@ -34,8 +36,10 @@ import Control.Monad.Trans.Reader
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Applicative (Applicative, (<$>))
-import Data.Typeable (Typeable)
+import Data.Typeable
 import qualified Data.IntSet as Set
+import qualified Data.IntMap.Strict as IMap
+import Data.IntMap ((!))
 import qualified Data.Map.Strict as Map
 import Graphics.GL.Core33
 import Graphics.GL.Types
@@ -44,156 +48,256 @@ import Data.IORef
 import Control.Monad
 import Data.List (delete)
 import Foreign.C.Types
-import Data.Maybe (maybeToList)
+import Data.Maybe
 import Linear.V2 (V2(V2))
-import Control.Monad.Trans.Error
+import Control.Monad.Trans.Except
 import Control.Exception (throwIO)
+import Control.Arrow
 import Control.Monad.Trans.State.Strict
 
-type ContextFactory c ds w = ContextFormat c ds -> IO (ContextHandle w)
 
-data ContextHandle w = ContextHandle {
-    -- | Like a 'ContextFactory' but creates a context that shares the object space of this handle's context. Called from same thread as created the initial context.
-    newSharedContext :: forall c ds. ContextFormat c ds -> IO (ContextHandle w),
-    -- | Run an OpenGL IO action in this context, returning a value to the caller.
-    --   The boolean argument will be @True@ if this call references this context's window, and @False@ if it only references shared objects
-    --   The thread calling this may not be the same creating the context.
-    contextDoSync :: forall a. Bool ->IO a -> IO a,
-    -- | Run an OpenGL IO action in this context, that doesn't return any value to the caller.
-    --   The boolean argument will be @True@ if this call references this context's window, and @False@ if it only references shared objects
-    --   The thread calling this may not be the same creating the context (for finalizers it is most definetly not).
-    contextDoAsync :: Bool -> IO () -> IO (),
-    -- | Swap the front and back buffers in the context's default frame buffer. Called from same thread as created context.
-    contextSwap :: IO (),
-    -- | Get the current size of the context's default framebuffer (which may change if the window is resized). Called from same thread as created context.
-    contextFrameBufferSize :: IO (Int, Int),
-    -- | Delete this context and close any associated window. Called from same thread as created context.
-    contextDelete :: IO (),
-    -- | A value representing the context's window. It is recommended that this is an opaque type that doesn't have any exported functions. Instead, provide 'ContextT' actions
-    --   that are implemented in terms of 'withContextWindow' to expose any functionality to the user that need a reference the context's window.
-    contextWindow :: w
-}
+class ContextHandler ctx where
+  -- | Implementation specific window type
+  type ContextWindow ctx
+  -- | Implementation specific window parameters, eg initial size and border decoration
+  type WindowParameters ctx
+  -- | Create a new context sharing all other contexts created by this ContextHandler. If the parameter is Nothing,
+  --   a hidden off-screen context is created, otherwise creates a window with the provided window bits and implementation specific parameters
+  createContext :: ctx -> Maybe (WindowBits, WindowParameters ctx) -> IO (ContextWindow ctx)
+  -- | Run an OpenGL IO action in this context, that doesn't return any value to the caller. This may be run after contextDelete or contextHandlerDelete has been called.
+  --   The thread calling this may not be the same creating the context (for finalizers it is most definetly not).
+  contextDoAsync :: ctx -> Maybe (ContextWindow ctx) -> IO () -> IO ()
+  -- | Swap the front and back buffers in the context's default frame buffer. Called from same thread as created context.
+  contextSwap :: ctx -> ContextWindow ctx -> IO ()
+  -- | Get the current size of the context's default framebuffer (which may change if the window is resized). Called from same thread as created context.
+  contextFrameBufferSize :: ctx -> ContextWindow ctx -> IO (Int, Int)
+  -- | Delete a context and close any associated window. Called from same thread as created the context.
+  contextDelete :: ctx -> ContextWindow ctx -> IO ()
+  -- | Create a context handler. Called from main thread
+  contextHandlerCreate :: IO ctx
+  -- | Delete the context handler. All contexts created from this handler will be deleted using contextDelete prior to calling this.
+  contextHandlerDelete :: ctx -> IO ()
+
 
 -- | The monad transformer that encapsulates a GPipe context (which wraps an OpenGl context).
 --
---   A value of type @ContextT w os f m a@ is an action on a context with these parameters:
+--   A value of type @ContextT ctx os m a@ is an action on a context with these parameters:
 --
---   [@w@] The type of the window that is bound to this context. It is defined by the window manager package and is probably an opaque type.
+--   [@ctx@] The context handler.
 --
 --   [@os@] An abstract type that is used to denote the object space. This is an forall type defined by the 'runContextT' call which will restrict any objects created inside this context
 --          to be returned from it or used by another context (the same trick as the 'ST' monad uses).
---
---   [@f@] The format of the context's default frame buffer, always an instance of 'ContextFormat'.
 --
 --   [@m@] The monad this monad transformer wraps. Need to have 'IO' in the bottom for this 'ContextT' to be runnable.
 --
 --   [@a@] The value returned from this monad action.
 --
-newtype ContextT w os f m a =
-    ContextT (ReaderT (ContextHandle w, (ContextData, SharedContextDatas)) m a)
+newtype ContextT ctx os m a =
+    ContextT (ReaderT (ContextEnv ctx) (StateT (ContextState ctx) m) a)
     deriving (Functor, Applicative, Monad, MonadIO, MonadException, MonadAsyncException)
 
-instance MonadTrans (ContextT w os f) where
-    lift = ContextT . lift
+data ContextEnv ctx = ContextEnv {
+    context :: ctx,
+    sharedContextData :: SharedContextDatas
+  }
 
--- | Run a 'ContextT' monad transformer, creating a window (unless the 'ContextFormat' is 'ContextFormatNone') that is later destroyed when the action returns. This function will
---   also create a new object space.
---   You need a 'ContextFactory', which is provided by an auxillary package, such as @GPipe-GLFW@.
-runContextT :: (MonadIO m, MonadAsyncException m) => ContextFactory c ds w -> ContextFormat c ds -> (forall os. ContextT w os (ContextFormat c ds) m a) -> m a
-runContextT cf f (ContextT m) =
+data ContextState ctx = ContextState {
+    nextName :: Name,
+    perWindowState :: PerWindowState ctx,
+    lastUsedWin :: Name
+  }
+
+-- | A monad in which shaders are run.
+newtype Render os a = Render { unRender :: ExceptT String (ReaderT RenderEnv (StateT RenderState IO)) a } deriving (Monad, Applicative, Functor)
+
+data RenderEnv = RenderEnv {
+    renderSharedContextData :: SharedContextDatas,
+    nonWindowDoAsync :: ContextDoAsync
+  }
+
+data RenderState = RenderState {
+    perWindowRenderState :: PerWindowRenderState,
+    renderWriteTextures :: Set.IntSet,
+    renderLastUsedWin :: Name
+  }
+
+type Name = Int
+
+type ContextDoAsync = IO () -> IO ()
+
+type PerWindowState ctx = IMap.IntMap (WindowState, ContextWindow ctx)
+type PerWindowRenderState = IMap.IntMap (WindowState, ContextDoAsync)
+data WindowState = WindowState {
+    windowContextData :: !ContextData,
+    boundUniforms :: !(IMap.IntMap Int),
+    boundSamplers :: !(IMap.IntMap Int),
+    boundRasterizerN :: !Int
+  }
+
+-- | Run a 'Render' monad, that may have the effect of windows or textures being drawn to.
+--
+--   May throw a 'GPipeException' if a combination of draw images (FBO) used by this render call is unsupported by the graphics driver
+render :: (ContextHandler ctx, MonadIO m, MonadException m) => Render os () -> ContextT ctx os m ()
+render (Render m) = do
+  void getLastContextWin -- To create hidden window if needed
+  ContextT $ do
+    ContextEnv ctx cds <- ask
+    cs <- lift get
+    let wmap' = IMap.map (\(ws,w) -> (ws, contextDoAsync ctx (Just w))) $ perWindowState cs
+    (eError, rs) <- liftIO $ runStateT (runReaderT (runExceptT m) (RenderEnv cds (contextDoAsync ctx Nothing))) (RenderState wmap' Set.empty (lastUsedWin cs))
+    lift $ put $ cs { lastUsedWin = renderLastUsedWin rs}
+    case eError of
+      Left s -> liftIO $ throwIO $ GPipeException s
+      _ -> return ()
+
+registerRenderWriteTexture :: Int -> Render os ()
+registerRenderWriteTexture n = Render $ lift $ lift $ modify $ \ rs -> rs { renderWriteTextures = Set.insert n $ renderWriteTextures rs }
+
+
+--newBoundState = BoundState Map.empty Map.empty (-1)
+
+
+instance MonadTrans (ContextT ctx os) where
+    lift = ContextT . lift . lift
+
+-- | Run a 'ContextT' monad transformer that encapsulates an object space.
+--   You need an implementation of a 'ContextHandler', which is provided by an auxillary package, such as @GPipe-GLFW@.
+runContextT :: (MonadIO m, MonadAsyncException m, ContextHandler ctx) => Proxy ctx -> (forall os. ContextT ctx os m a) -> m a
+runContextT Proxy (ContextT m) = do
+    cds <- liftIO newContextDatas
     bracket
-        (liftIO $ cf f)
-        (liftIO . contextDelete)
-        $ \ h -> do cds <- liftIO newContextDatas
-                    cd <- liftIO $ addContextData cds
-                    let ContextT i = initGlState
-                        rs = (h, (cd, cds))
-                    runReaderT (i >> m) rs
+     (liftIO contextHandlerCreate)
+     (\ctx -> liftIO $ do
+       cds' <- readMVar cds
+       mapM_ snd cds' -- Delete all windows not explicitly deleted
+       contextHandlerDelete ctx
+     )
+     (\ctx -> evalStateT (runReaderT m (ContextEnv ctx cds)) (ContextState 1 IMap.empty 0))
 
--- | Run a 'ContextT' monad transformer inside another one, creating a window (unless the 'ContextFormat' is 'ContextFormatNone') that is later destroyed when the action returns. The inner 'ContextT' monad
--- transformer will share object space with the outer one. The 'ContextFactory' of the outer context will be used in the creation of the inner context.
-runSharedContextT :: (MonadIO m, MonadAsyncException m) => ContextFormat c ds -> ContextT w os (ContextFormat c ds) (ContextT w os f m) a -> ContextT w os f m a
-runSharedContextT f (ContextT m) =
-    bracket
-        (do (h',(_,cds)) <- ContextT ask
-            h <- liftIO $ newSharedContext h' f
-            cd <- liftIO $ addContextData cds
-            return (h,cd)
-        )
-        (\(h,cd) -> do cds <- ContextT $ asks (snd . snd)
-                       liftIO $ do removeContextData cds cd
-                                   contextDelete h)
-        $ \(h,cd) -> do cds <- ContextT $ asks (snd . snd)
-                        let ContextT i = initGlState
-                            rs = (h, (cd, cds))
-                        runReaderT (i >> m) rs
 
-initGlState :: MonadIO m => ContextT w os f m ()
-initGlState = liftContextIOAsyncInWin $ do glEnable GL_FRAMEBUFFER_SRGB
-                                           glEnable GL_SCISSOR_TEST
-                                           glPixelStorei GL_PACK_ALIGNMENT 1
-                                           glPixelStorei GL_UNPACK_ALIGNMENT 1
+data Window os c ds = Window { getWinName :: Name }
 
-liftContextIO :: MonadIO m => IO a -> ContextT w os f m a
-liftContextIO m = do h <- ContextT (asks fst)
-                     liftIO $ contextDoSync h False m
+instance Eq (Window os c ds) where
+  (Window a) == (Window b) = a == b
 
-addContextFinalizer :: MonadIO m => IORef a -> IO () -> ContextT w os f m ()
-addContextFinalizer k m = do h <- ContextT (asks fst)
-                             liftIO $ void $ mkWeakIORef k $ contextDoAsync h False m
+-- | Creates a window
+newWindow :: (ContextHandler ctx, MonadIO m) => WindowFormat c ds -> WindowParameters ctx -> ContextT ctx os m (Window os c ds)
+newWindow wf wp = ContextT $ do
+  ContextEnv ctx cds <-  ask
+  ContextState wid wmap _ <- lift get
+  w <- liftIO $ createContext ctx (Just (windowBits wf, wp))
+  cd <- liftIO $ addContextData (contextDelete ctx w) cds
+  let wid' = wid+1
+  let ws = WindowState cd IMap.empty IMap.empty (-1)
+  lift $ put $ ContextState wid' (IMap.insert wid (ws,w) wmap) wid
+  liftIO $ contextDoAsync ctx (Just w) initGlState
+  return $ Window wid
 
--- | This is only used to finalize nonShared objects such as VBOs and FBOs
-getContextFinalizerAdder  :: MonadIO m =>  ContextT w os f m (IORef a -> IO () -> IO ())
-getContextFinalizerAdder = do h <- ContextT (asks fst)
-                              return $ \k m -> void $ mkWeakIORef k $ contextDoAsync h True m
+-- | Deletes a window. Any rendering to this window will become a noop.
+deleteWindow :: (ContextHandler ctx, MonadIO m) => Window os c ds -> ContextT ctx os m ()
+deleteWindow (Window wid) = ContextT $ do
+  ContextState nid wmap n <- lift get
+  case IMap.lookup wid wmap of
+    Nothing -> return ()
+    Just (ws, w) -> do
+      ContextEnv ctx cds <-  ask
+      let wmap' = IMap.delete wid wmap
+      let n' = if n /= wid then n else case IMap.toList wmap' of
+                                            [] -> -1 --No windows left
+                                            x:_ -> fst x
+      liftIO $ do removeContextData cds (windowContextData ws)
+                  contextDelete ctx w
+      lift $ put $ ContextState nid wmap' n'
 
-liftContextIOAsync :: MonadIO m => IO () -> ContextT w os f m ()
-liftContextIOAsync m = do h <- ContextT (asks fst)
-                          liftIO $ contextDoAsync h False m
+initGlState :: IO ()
+initGlState = do
+  glEnable GL_FRAMEBUFFER_SRGB
+  glEnable GL_SCISSOR_TEST
+  glPixelStorei GL_PACK_ALIGNMENT 1
+  glPixelStorei GL_UNPACK_ALIGNMENT 1
 
-liftContextIOAsyncInWin :: MonadIO m => IO () -> ContextT w os f m ()
-liftContextIOAsyncInWin m = do h <- ContextT (asks fst)
-                               liftIO $ contextDoAsync h True m
+asSync :: (IO () -> IO ()) -> IO x -> IO x
+asSync f m = do mutVar <- newEmptyMVar
+                f (m >>= putMVar mutVar)
+                takeMVar mutVar
+
+getLastContextWin :: (ContextHandler ctx, MonadIO m) => ContextT ctx os m (ContextWindow ctx)
+getLastContextWin = ContextT $ do
+  cs <- lift get
+  let wid = lastUsedWin cs
+  if wid >= 0
+    then return (snd $ perWindowState cs ! wid)
+    else do --Create hidden window
+      ContextEnv ctx cds <- ask
+      w <- liftIO $ createContext ctx Nothing
+      cd <- liftIO $ addContextData (contextDelete ctx w) cds
+      let ws = WindowState cd IMap.empty IMap.empty (-1)
+      lift $ put $ ContextState 1 (IMap.singleton wid (ws,w)) 0
+      liftIO $ contextDoAsync ctx (Just w) initGlState
+      return w
+
+liftNonWinContextIO :: (ContextHandler ctx, MonadIO m) => IO a -> ContextT ctx os m a
+liftNonWinContextIO m = do
+  ContextEnv ctx _ <- ContextT ask
+  w <- getLastContextWin
+  ContextT $ liftIO $ asSync (contextDoAsync ctx (Just w)) m
+
+liftNonWinContextAsyncIO :: (ContextHandler ctx, MonadIO m) => IO () -> ContextT ctx os m ()
+liftNonWinContextAsyncIO m = do
+  ContextEnv ctx _ <- ContextT ask
+  w <- getLastContextWin
+  ContextT $ liftIO $ contextDoAsync ctx (Just w) m
+
+
+addContextFinalizer :: (ContextHandler ctx, MonadIO m) => IORef a -> IO () -> ContextT ctx os m ()
+addContextFinalizer k m = ContextT $ do
+  ContextEnv ctx _ <- ask
+  liftIO $ void $ mkWeakIORef k $ contextDoAsync ctx Nothing m
+
+
+getLastRenderWin = Render $ do
+  rs <- lift $ lift get
+  let cwid = renderLastUsedWin rs -- There is always a window available since render calls getLastContextWin
+  let (ws, doAsync) = perWindowRenderState rs ! cwid
+      cd = windowContextData ws
+  return (cwid, cd, doAsync)
 
 -- | Run this action after a 'render' call to swap out the context windows back buffer with the front buffer, effectively showing the result.
 --   This call may block if vsync is enabled in the system and/or too many frames are outstanding.
 --   After this call, the context window content is undefined and should be cleared at earliest convenience using 'clearContextColor' and friends.
-swapContextBuffers :: MonadIO m => ContextT w os f m ()
-swapContextBuffers = ContextT (asks fst) >>= (liftIO . contextSwap)
+swapWindowBuffers :: (ContextHandler ctx, MonadIO m) => Window os c ds -> ContextT ctx os m ()
+swapWindowBuffers (Window wid) = ContextT $ do
+  wmap <- lift $ gets perWindowState
+  case IMap.lookup wid wmap of
+    Nothing -> return ()
+    Just (_, w) -> do
+      ctx <- asks context
+      liftIO $ contextSwap ctx w
 
-type ContextDoAsync = Bool -> IO () -> IO ()
-
--- | A monad in which shaders are run.
-newtype Render os f a = Render (ErrorT String (StateT Set.IntSet (ReaderT (ContextDoAsync, (ContextData, SharedContextDatas)) IO)) a) deriving (Monad, Applicative, Functor)
-
--- | Run a 'Render' monad, that may have the effect of the context window or textures being drawn to.
---
---   May throw a 'GPipeException' if a combination of draw images (FBO) used by this render call is unsupported by the graphics driver
-render :: (MonadIO m, MonadException m) => Render os f () -> ContextT w os f m ()
-render (Render m) = do c <- ContextT ask
-                       eError <- liftIO $ contextDoSync (fst c) True $ runReaderT (evalStateT (runErrorT m) Set.empty) (contextDoAsync (fst c), snd c)
-                       case eError of
-                        Left s -> liftIO $ throwIO $ GPipeException s
-                        _ -> return ()
-
-registerRenderWriteTexture :: Int -> Render os f ()
-registerRenderWriteTexture x = Render $ lift $ modify $ Set.insert x
 
 -- | Return the current size of the context frame buffer. This is needed to set viewport size and to get the aspect ratio to calculate projection matrices.
-getContextBuffersSize :: MonadIO m => ContextT w os f m (V2 Int)
-getContextBuffersSize = ContextT $ do c <- asks fst
-                                      (x,y) <- liftIO $ contextFrameBufferSize c
-                                      return $ V2 x y
+getWindowSize :: (ContextHandler ctx, MonadIO m) => Window os c ds -> ContextT ctx os m (V2 Int)
+getWindowSize (Window wid) = ContextT $ do
+  wmap <- lift $ gets perWindowState
+  case IMap.lookup wid wmap of
+    Nothing -> return $ V2 0 0
+    Just (_, w) -> do
+      ctx <- asks context
+      (x,y) <- liftIO $ contextFrameBufferSize ctx w
+      return $ V2 x y
 
 -- | Use the context window handle, which type is specific to the window system used. This handle shouldn't be returned from this function
-withContextWindow :: MonadIO m => (w -> IO a) -> ContextT w os f m a
-withContextWindow f= ContextT $ do c <- asks fst
-                                   liftIO $ f (contextWindow c)
+withContextWindow :: MonadIO m => Window os c ds -> (Maybe (ContextWindow ctx) -> IO a) -> ContextT ctx os m a
+withContextWindow (Window wid) m = ContextT $ do
+  wmap <- lift $ gets perWindowState
+  liftIO $ m (snd <$> IMap.lookup wid wmap)
 
+{-}
 -- | This is only used to finalize nonShared objects such as VBOs and FBOs
-getRenderContextFinalizerAdder  :: Render os f (IORef a -> IO () -> IO ())
+getRenderContextFinalizerAdder  :: Render os (IORef a -> IO () -> IO ())
 getRenderContextFinalizerAdder = do f <- Render (lift $ lift $ asks fst)
                                     return $ \k m -> void $ mkWeakIORef k (f True m)
+-}
 
 -- | This kind of exception may be thrown from GPipe when a GPU hardware limit is reached (for instance, too many textures are drawn to from the same 'FragmentStream')
 data GPipeException = GPipeException String
@@ -201,16 +305,18 @@ data GPipeException = GPipeException String
 
 instance Exception GPipeException
 
-
+{-
 -- TODO Add async rules
 {-# RULES
 "liftContextIO >>= liftContextIO >>= x"    forall m1 m2 x.  liftContextIO m1 >>= (\_ -> liftContextIO m2 >>= x) = liftContextIO (m1 >> m2) >>= x
 "liftContextIO >>= liftContextIO"          forall m1 m2.    liftContextIO m1 >>= (\_ -> liftContextIO m2) = liftContextIO (m1 >> m2)
   #-}
-
+-}
 --------------------------
 
-type SharedContextDatas = MVar [ContextData]
+-- | The reason we need this is that we need to bind a finalizer to a buffer or texture that removes all references VAOs or FBOs from all
+--   known ContextData at a future point, where more Contexts may have been created.
+type SharedContextDatas = MVar [(ContextData, IO ())] -- IO to delete windows
 type ContextData = MVar (VAOCache, FBOCache)
 data VAOKey = VAOKey { vaoBname :: !GLuint, vaoCombBufferOffset :: !Int, vaoComponents :: !GLint, vaoNorm :: !Bool, vaoDiv :: !Int } deriving (Eq, Ord)
 data FBOKey = FBOKey { fboTname :: !GLuint, fboTlayerOrNegIfRendBuff :: !Int, fboTlevel :: !Int } deriving (Eq, Ord)
@@ -221,29 +327,34 @@ type FBOCache = Map.Map FBOKeys (IORef GLuint)
 getFBOKeys :: FBOKeys -> [FBOKey]
 getFBOKeys (FBOKeys xs d s) = xs ++ maybeToList d ++ maybeToList s
 
-newContextDatas :: IO (MVar [ContextData])
+newContextDatas :: IO SharedContextDatas
 newContextDatas = newMVar []
 
-addContextData :: SharedContextDatas -> IO ContextData
-addContextData r = do cd <- newMVar (Map.empty, Map.empty)
-                      modifyMVar_ r $ return . (cd:)
-                      return cd
+addContextData :: IO () -> SharedContextDatas -> IO ContextData
+addContextData io r = do cd <- newMVar (Map.empty, Map.empty)
+                         modifyMVar_ r $ return . ((cd,io):)
+                         return cd
 
 removeContextData :: SharedContextDatas -> ContextData -> IO ()
-removeContextData r cd = modifyMVar_ r $ return . delete cd
+removeContextData r cd = modifyMVar_ r $ return . remove cd
+  where remove x ((k,v):xs) | x == k = xs
+        remove x (kv:xs)             = kv : remove x xs
+        remove _ []                  = []
 
-addCacheFinalizer :: MonadIO m => (GLuint -> (VAOCache, FBOCache) -> (VAOCache, FBOCache)) -> IORef GLuint -> ContextT w os f m ()
-addCacheFinalizer f r =  ContextT $ do cds <- asks (snd . snd)
+addCacheFinalizer :: MonadIO m => (GLuint -> (VAOCache, FBOCache) -> (VAOCache, FBOCache)) -> IORef GLuint -> ContextT ctx os m ()
+addCacheFinalizer f r =  ContextT $ do cds <- asks sharedContextData
                                        liftIO $ do n <- readIORef r
                                                    void $ mkWeakIORef r $ do cs' <- readMVar cds
-                                                                             mapM_ (`modifyMVar_` (return . f n)) cs'
+                                                                             mapM_ (\(cd,_) -> modifyMVar_ cd (return . f n)) cs'
 
-addVAOBufferFinalizer :: MonadIO m => IORef GLuint -> ContextT w os f m ()
+-- | Removes a VAO entry from all SharedContextDatas when one of the buffers are deleted. This will in turn make the VAO finalizer to be run.
+addVAOBufferFinalizer :: MonadIO m => IORef GLuint -> ContextT ctx os m ()
 addVAOBufferFinalizer = addCacheFinalizer deleteVAOBuf
     where deleteVAOBuf n (vao, fbo) = (Map.filterWithKey (\k _ -> all ((/=n) . vaoBname) k) vao, fbo)
 
 
-addFBOTextureFinalizer :: MonadIO m => Bool -> IORef GLuint -> ContextT w os f m ()
+-- | Removes a FBO entry from all SharedContextDatas when one of the textures are deleted. This will in turn make the FBO finalizer to be run.
+addFBOTextureFinalizer :: MonadIO m => Bool -> IORef GLuint -> ContextT ctx os m ()
 addFBOTextureFinalizer isRB = addCacheFinalizer deleteVBOBuf
     where deleteVBOBuf n (vao, fbo) = (vao, Map.filterWithKey
                                           (\ k _ ->
@@ -253,12 +364,6 @@ addFBOTextureFinalizer isRB = addCacheFinalizer deleteVBOBuf
                                                $ getFBOKeys k)
                                           fbo)
 
-
-getContextData :: MonadIO m => ContextT w os f m ContextData
-getContextData = ContextT $ asks (fst . snd)
-
-getRenderContextData :: Render os f ContextData
-getRenderContextData = Render $ lift $ lift $ asks (fst . snd)
 
 getVAO :: ContextData -> [VAOKey] -> IO (Maybe (IORef GLuint))
 getVAO cd k = do (vaos, _) <- readMVar cd

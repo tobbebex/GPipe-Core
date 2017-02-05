@@ -38,7 +38,7 @@ class BufferFormat a => UniformInput a where
     toUniform :: ToUniform x a (UniformFormat a x)
 
 -- | Load a uniform value from a 'Buffer' into a 'Shader'. The argument function is used to retrieve the buffer and the index into this buffer from the shader environment.
-getUniform :: forall os f s b x. (UniformInput b) => (s -> (Buffer os (Uniform b), Int)) -> Shader os f s (UniformFormat b x)
+getUniform :: forall os f s b x. (UniformInput b) => (s -> (Buffer os (Uniform b), Int)) -> Shader os s (UniformFormat b x)
 getUniform sf = Shader $ do
                    uniAl <- askUniformAlignment
                    blockId <- getName
@@ -149,16 +149,13 @@ instance UniformInput a => UniformInput (V2 a) where
 
 instance UniformInput a => UniformInput (V3 a) where
     type UniformFormat (V3 a) x = V3 (UniformFormat a x)
-    toUniform = proc ~(V3 a b c) -> do a' <- toUniform -< a
-                                       b' <- toUniform -< b
+    toUniform = proc ~(V3 a b c) -> do V2 a' b' <- toUniform -< V2 a b
                                        c' <- toUniform -< c
                                        returnA -< V3 a' b' c'
 
 instance UniformInput a => UniformInput (V4 a)  where
     type UniformFormat (V4 a) x = V4 (UniformFormat a x)
-    toUniform = proc ~(V4 a b c d) -> do a' <- toUniform -< a
-                                         b' <- toUniform -< b
-                                         c' <- toUniform -< c
+    toUniform = proc ~(V4 a b c d) -> do V3 a' b' c' <- toUniform -< V3 a b c
                                          d' <- toUniform -< d
                                          returnA -< V4 a' b' c' d'
 
@@ -174,46 +171,31 @@ instance (UniformInput a, UniformInput b) => UniformInput (a,b) where
 
 instance (UniformInput a, UniformInput b, UniformInput c) => UniformInput (a,b,c) where
     type UniformFormat (a,b,c) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x)
-    toUniform = proc ~(a,b,c) -> do a' <- toUniform -< a
-                                    b' <- toUniform -< b
+    toUniform = proc ~(a,b,c) -> do (a', b') <- toUniform -< (a, b)
                                     c' <- toUniform -< c
                                     returnA -< (a', b', c')
 
 instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d) => UniformInput (a,b,c,d) where
     type UniformFormat (a,b,c,d) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x, UniformFormat d x)
-    toUniform = proc ~(a,b,c,d) -> do a' <- toUniform -< a
-                                      b' <- toUniform -< b
-                                      c' <- toUniform -< c
+    toUniform = proc ~(a,b,c,d) -> do (a', b', c') <- toUniform -< (a, b, c)
                                       d' <- toUniform -< d
                                       returnA -< (a', b', c', d')
 
 instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d, UniformInput e) => UniformInput (a,b,c,d,e) where
     type UniformFormat (a,b,c,d,e) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x, UniformFormat d x, UniformFormat e x)
-    toUniform = proc ~(a,b,c,d,e) -> do a' <- toUniform -< a
-                                        b' <- toUniform -< b
-                                        c' <- toUniform -< c
-                                        d' <- toUniform -< d
+    toUniform = proc ~(a,b,c,d,e) -> do (a',b',c',d') <- toUniform -< (a,b,c,d)
                                         e' <- toUniform -< e
                                         returnA -< (a', b', c', d', e')
 
 instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d, UniformInput e, UniformInput f) => UniformInput (a,b,c,d,e,f) where
     type UniformFormat (a,b,c,d,e,f) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x, UniformFormat d x, UniformFormat e x, UniformFormat f x)
-    toUniform = proc ~(a,b,c,d,e,f) -> do a' <- toUniform -< a
-                                          b' <- toUniform -< b
-                                          c' <- toUniform -< c
-                                          d' <- toUniform -< d
-                                          e' <- toUniform -< e
+    toUniform = proc ~(a,b,c,d,e,f) -> do (a',b',c',d',e') <- toUniform -< (a,b,c,d,e)
                                           f' <- toUniform -< f
                                           returnA -< (a', b', c', d', e', f')
 
 instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d, UniformInput e, UniformInput f, UniformInput g) => UniformInput (a,b,c,d,e,f,g) where
     type UniformFormat (a,b,c,d,e,f,g) x = (UniformFormat a x, UniformFormat b x, UniformFormat c x, UniformFormat d x, UniformFormat e x, UniformFormat f x, UniformFormat g x)
-    toUniform = proc ~(a,b,c,d,e,f,g) -> do a' <- toUniform -< a
-                                            b' <- toUniform -< b
-                                            c' <- toUniform -< c
-                                            d' <- toUniform -< d
-                                            e' <- toUniform -< e
-                                            f' <- toUniform -< f
+    toUniform = proc ~(a,b,c,d,e,f,g) -> do (a',b',c',d',e',f') <- toUniform -< (a,b,c,d,e,f)
                                             g' <- toUniform -< g
                                             returnA -< (a', b', c', d', e', f', g')
 
@@ -221,19 +203,11 @@ instance (UniformInput a, UniformInput b, UniformInput c, UniformInput d, Unifor
 instance UniformInput a => UniformInput (Quaternion a) where
     type UniformFormat (Quaternion a) x = Quaternion (UniformFormat a x)
     toUniform = proc ~(Quaternion a v) -> do
-                    a' <- toUniform -< a
-                    v' <- toUniform -< v
+                    (a',v') <- toUniform -< (a,v)
                     returnA -< Quaternion a' v'
 
 instance UniformInput a => UniformInput (Plucker a) where
     type UniformFormat (Plucker a) x = Plucker (UniformFormat a x)
     toUniform = proc ~(Plucker a b c d e f) -> do
-                    a' <- toUniform -< a
-                    b' <- toUniform -< b
-                    c' <- toUniform -< c
-                    d' <- toUniform -< d
-                    e' <- toUniform -< e
-                    f' <- toUniform -< f
+                    (a',b',c',d',e',f') <- toUniform -< (a,b,c,d,e,f)
                     returnA -< Plucker a' b' c' d' e' f'
-
-

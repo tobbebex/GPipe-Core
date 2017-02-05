@@ -15,24 +15,24 @@ import Linear.V4
 import Linear.V3
 import Linear.V2
 
-data RFloat 
+data RFloat
 data RInt
-data RWord 
-data RGFloat 
-data RGInt 
-data RGWord 
-data RGBFloat 
-data RGBInt 
-data RGBWord 
-data RGBAFloat 
-data RGBAInt 
-data RGBAWord 
-data Depth 
-data Stencil 
-data DepthStencil 
- 
+data RWord
+data RGFloat
+data RGInt
+data RGWord
+data RGBFloat
+data RGBInt
+data RGBWord
+data RGBAFloat
+data RGBAInt
+data RGBAWord
+data Depth
+data Stencil
+data DepthStencil
+
 data Format a where
-    R8 :: Format RFloat 
+    R8 :: Format RFloat
     R8S :: Format RFloat
     R16 :: Format RFloat
     R16S :: Format RFloat
@@ -45,11 +45,11 @@ data Format a where
     R16UI :: Format RWord
     R32UI :: Format RWord
     RG8 :: Format RGFloat
-    RG8S :: Format RGFloat 
-    RG16 :: Format RGFloat 
-    RG16S :: Format RGFloat 
-    RG16F :: Format RGFloat 
-    RG32F :: Format RGFloat 
+    RG8S :: Format RGFloat
+    RG16 :: Format RGFloat
+    RG16S :: Format RGFloat
+    RG16F :: Format RGFloat
+    RG32F :: Format RGFloat
     RG8I :: Format RGInt
     RG16I :: Format RGInt
     RG32I :: Format RGInt
@@ -108,29 +108,29 @@ data Format a where
     Depth32FStencil8 :: Format DepthStencil
 
 getGlInternalFormat :: Format f -> GLenum
-getGlInternalFormat R8 = GL_R8 
+getGlInternalFormat R8 = GL_R8
 getGlInternalFormat R8S = GL_R8_SNORM
 getGlInternalFormat R16 = GL_R16
 getGlInternalFormat R16S = GL_R16_SNORM
 getGlInternalFormat R16F = GL_R16F
 getGlInternalFormat R32F = GL_R32F
-getGlInternalFormat R8I = GL_R8I 
+getGlInternalFormat R8I = GL_R8I
 getGlInternalFormat R16I = GL_R16I
 getGlInternalFormat R32I = GL_R32I
-getGlInternalFormat R8UI = GL_R8UI 
+getGlInternalFormat R8UI = GL_R8UI
 getGlInternalFormat R16UI = GL_R16UI
 getGlInternalFormat R32UI = GL_R32UI
-getGlInternalFormat RG8 = GL_RG8 
+getGlInternalFormat RG8 = GL_RG8
 getGlInternalFormat RG8S = GL_RG8_SNORM
 getGlInternalFormat RG16 = GL_RG16
 getGlInternalFormat RG16S = GL_RG16_SNORM
 getGlInternalFormat RG16F = GL_RG16F
 getGlInternalFormat RG32F = GL_RG32F
-getGlInternalFormat RG8I = GL_RG8I 
+getGlInternalFormat RG8I = GL_RG8I
 getGlInternalFormat RG16I = GL_RG16I
 getGlInternalFormat RG32I = GL_RG32I
 getGlInternalFormat RG8UI = GL_RG8UI
-getGlInternalFormat RG16UI = GL_RG16UI    
+getGlInternalFormat RG16UI = GL_RG16UI
 getGlInternalFormat RG32UI = GL_RG32UI
 getGlInternalFormat R3G3B2 = GL_R3_G3_B2
 getGlInternalFormat RGB4 = GL_RGB4
@@ -152,23 +152,23 @@ getGlInternalFormat RGB32I = GL_RGB32I
 getGlInternalFormat RGB8UI = GL_RGB8UI
 getGlInternalFormat RGB16UI = GL_RGB16UI
 getGlInternalFormat RGB32UI = GL_RGB32UI
-getGlInternalFormat RGBA2 = GL_RGBA2 
-getGlInternalFormat RGBA4 = GL_RGBA4 
-getGlInternalFormat RGB5A1 = GL_RGB5_A1 
-getGlInternalFormat RGBA8 = GL_RGBA8 
-getGlInternalFormat RGBA8S = GL_RGBA8_SNORM 
-getGlInternalFormat RGB10A2 = GL_RGB10_A2 
-getGlInternalFormat RGBA12 = GL_RGBA12 
-getGlInternalFormat RGBA16 = GL_RGBA16 
-getGlInternalFormat RGBA16S = GL_RGBA16_SNORM 
-getGlInternalFormat RGBA16F = GL_RGBA16F 
-getGlInternalFormat RGBA32F = GL_RGBA32F 
-getGlInternalFormat SRGB8A8 = GL_SRGB8_ALPHA8 
-getGlInternalFormat RGBA8I = GL_RGBA8I 
-getGlInternalFormat RGBA16I = GL_RGBA16I 
+getGlInternalFormat RGBA2 = GL_RGBA2
+getGlInternalFormat RGBA4 = GL_RGBA4
+getGlInternalFormat RGB5A1 = GL_RGB5_A1
+getGlInternalFormat RGBA8 = GL_RGBA8
+getGlInternalFormat RGBA8S = GL_RGBA8_SNORM
+getGlInternalFormat RGB10A2 = GL_RGB10_A2
+getGlInternalFormat RGBA12 = GL_RGBA12
+getGlInternalFormat RGBA16 = GL_RGBA16
+getGlInternalFormat RGBA16S = GL_RGBA16_SNORM
+getGlInternalFormat RGBA16F = GL_RGBA16F
+getGlInternalFormat RGBA32F = GL_RGBA32F
+getGlInternalFormat SRGB8A8 = GL_SRGB8_ALPHA8
+getGlInternalFormat RGBA8I = GL_RGBA8I
+getGlInternalFormat RGBA16I = GL_RGBA16I
 getGlInternalFormat RGBA32I = GL_RGBA32I
-getGlInternalFormat RGBA8UI = GL_RGBA8UI 
-getGlInternalFormat RGBA16UI = GL_RGBA16UI 
+getGlInternalFormat RGBA8UI = GL_RGBA8UI
+getGlInternalFormat RGBA16UI = GL_RGBA16UI
 getGlInternalFormat RGBA32UI = GL_RGBA32UI
 getGlInternalFormat Depth16 = GL_DEPTH_COMPONENT16
 getGlInternalFormat Depth24 = GL_DEPTH_COMPONENT24
@@ -243,7 +243,7 @@ instance ColorSampleable RFloat where
     typeStr4 _ = "vec4"
     toColor _ (V4 r _ _ _) = r
     fromColor _ r = [r]
-    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)      
+    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)
 instance ColorSampleable RInt where
     type Color RInt a = a
     type ColorElement RInt = Int
@@ -289,7 +289,7 @@ instance ColorSampleable RGWord where
     fromColor _ (V2 r g) = [r,g]
     setBorderColor _ t (V2 r g) = withArray [fromIntegral r, fromIntegral g,0,0] (glTexParameterIuiv t GL_TEXTURE_BORDER_COLOR)
     samplerPrefix _ = "u"
-    
+
 instance ColorSampleable RGBFloat where
     type Color RGBFloat a = V3 a
     type ColorElement RGBFloat = Float
@@ -351,7 +351,7 @@ instance ColorSampleable Depth where
     typeStr4 _ = "vec4"
     toColor _ (V4 r _ _ _) = r
     fromColor _ r = [r]
-    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)      
+    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)
 instance ColorSampleable DepthStencil where
     type Color DepthStencil a = a
     type ColorElement DepthStencil = Float
@@ -359,7 +359,7 @@ instance ColorSampleable DepthStencil where
     typeStr4 _ = "vec4"
     toColor _ (V4 r _ _ _) = r
     fromColor _ r = [r]
-    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)      
+    setBorderColor _ t r = withArray [realToFrac r, 0,0,0] (glTexParameterfv t GL_TEXTURE_BORDER_COLOR)
 
 class ColorSampleable c => ColorRenderable c where
     isSrgb :: Format c -> Bool
@@ -470,13 +470,13 @@ instance ContextColorFormat RGBAFloat where
     redBits RGBA16S = 16
     redBits RGBA16F = 16
     redBits RGBA32F = 32
-    redBits SRGB8A8 = 8   
+    redBits SRGB8A8 = 8
     greenBits = redBits
     blueBits = redBits
     alphaBits RGB5A1 = 1
     alphaBits RGB10A2 = 2
     alphaBits x = redBits x
-    
+
 --------------------------------------------------------------------------
 
 colorBits :: ContextColorFormat c => Format c -> (Int, Int, Int, Int, Bool)
@@ -498,26 +498,26 @@ depthStencilBits :: Format DepthStencil -> (Int, Int)
 depthStencilBits Depth32FStencil8 = (32, 8)
 depthStencilBits Depth24Stencil8 = (24, 8)
 
-data ContextFormat c ds where
-    ContextFormatNone :: ContextFormat () ()
-    ContextFormatColor :: ContextColorFormat c => Format c -> ContextFormat c ()
-    ContextFormatColorDepth :: ContextColorFormat c => Format c -> Format Depth -> ContextFormat c Depth
-    ContextFormatColorStencil :: ContextColorFormat c => Format c -> Format Stencil -> ContextFormat c Stencil
-    ContextFormatColorDepthStencilSeparate :: ContextColorFormat c => Format c -> Format Depth -> Format Stencil -> ContextFormat c DepthStencil
-    ContextFormatColorDepthStencilCombined :: ContextColorFormat c => Format c -> Format DepthStencil -> ContextFormat c DepthStencil
-    ContextFormatDepth :: Format Depth -> ContextFormat () Depth
-    ContextFormatStencil :: Format Stencil -> ContextFormat () Stencil
-    ContextFormatDepthStencilSeparate :: Format Depth -> Format Stencil -> ContextFormat () DepthStencil
-    ContextFormatDepthStencilCombined :: Format DepthStencil -> ContextFormat () DepthStencil
+data WindowFormat c ds where
+    WindowFormatColor :: ContextColorFormat c => Format c -> WindowFormat c ()
+    WindowFormatColorDepth :: ContextColorFormat c => Format c -> Format Depth -> WindowFormat c Depth
+    WindowFormatColorStencil :: ContextColorFormat c => Format c -> Format Stencil -> WindowFormat c Stencil
+    WindowFormatColorDepthStencilSeparate :: ContextColorFormat c => Format c -> Format Depth -> Format Stencil -> WindowFormat c DepthStencil
+    WindowFormatColorDepthStencilCombined :: ContextColorFormat c => Format c -> Format DepthStencil -> WindowFormat c DepthStencil
+    WindowFormatDepth :: Format Depth -> WindowFormat () Depth
+    WindowFormatStencil :: Format Stencil -> WindowFormat () Stencil
+    WindowFormatDepthStencilSeparate :: Format Depth -> Format Stencil -> WindowFormat () DepthStencil
+    WindowFormatDepthStencilCombined :: Format DepthStencil -> WindowFormat () DepthStencil
 
-contextBits :: ContextFormat c ds -> ((Int,Int,Int,Int,Bool),Int,Int)
-contextBits ContextFormatNone = ((0,0,0,0, False),0,0)
-contextBits (ContextFormatColor c) = (colorBits c, 0, 0)
-contextBits (ContextFormatColorDepth c d) = (colorBits c, depthBits d, 0)
-contextBits (ContextFormatColorStencil c s) = (colorBits c, 0, stencilBits s)
-contextBits (ContextFormatColorDepthStencilSeparate c d s) = (colorBits c, depthBits d, stencilBits s)
-contextBits (ContextFormatColorDepthStencilCombined c ds) = let (d,s) = depthStencilBits ds in (colorBits c, d, s)
-contextBits (ContextFormatDepth d) = ((0,0,0,0, False), depthBits d, 0)
-contextBits (ContextFormatStencil s) = ((0,0,0,0, False), 0, stencilBits s)
-contextBits (ContextFormatDepthStencilSeparate d s) = ((0,0,0,0, False), depthBits d, stencilBits s)
-contextBits (ContextFormatDepthStencilCombined ds) = let (d,s) = depthStencilBits ds in ((0,0,0,0, False), d, s)
+type WindowBits = ((Int,Int,Int,Int,Bool),Int,Int)
+
+windowBits :: WindowFormat c ds -> WindowBits
+windowBits (WindowFormatColor c) = (colorBits c, 0, 0)
+windowBits (WindowFormatColorDepth c d) = (colorBits c, depthBits d, 0)
+windowBits (WindowFormatColorStencil c s) = (colorBits c, 0, stencilBits s)
+windowBits (WindowFormatColorDepthStencilSeparate c d s) = (colorBits c, depthBits d, stencilBits s)
+windowBits (WindowFormatColorDepthStencilCombined c ds) = let (d,s) = depthStencilBits ds in (colorBits c, d, s)
+windowBits (WindowFormatDepth d) = ((0,0,0,0, False), depthBits d, 0)
+windowBits (WindowFormatStencil s) = ((0,0,0,0, False), 0, stencilBits s)
+windowBits (WindowFormatDepthStencilSeparate d s) = ((0,0,0,0, False), depthBits d, stencilBits s)
+windowBits (WindowFormatDepthStencilCombined ds) = let (d,s) = depthStencilBits ds in ((0,0,0,0, False), d, s)

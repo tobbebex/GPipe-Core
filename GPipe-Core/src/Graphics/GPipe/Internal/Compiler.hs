@@ -5,11 +5,14 @@ import Graphics.GPipe.Internal.Context
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Exception (MonadException)
 import qualified Data.IntMap as Map
+import qualified Data.IntSet as Set
 import Data.IntMap ((!))
 import Data.Maybe
 import Control.Monad
-import Control.Monad.Trans.State.Lazy (evalStateT, get, put)
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.State.Strict
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Except
+import Control.Monad.Trans.Class
 
 import Graphics.GL.Core33
 import Graphics.GL.Types
@@ -23,10 +26,13 @@ import Data.Either
 import Control.Exception (throwIO)
 import Data.IORef
 import Data.List (zip5)
+import Data.Word
 import Data.Monoid ((<>))
 
+
+type WinId = Int
 data Drawcall s = Drawcall {
-                    drawcallFBO :: s -> (Maybe (IO FBOKeys, IO ()), IO ()),
+                    drawcallFBO :: s -> (Either WinId (IO FBOKeys, IO ()), IO ()),
                     drawcallName :: Int,
                     rasterizationName :: Int,
                     vertexsSource :: String,
@@ -40,7 +46,7 @@ data Drawcall s = Drawcall {
                     }
 
 -- index/binding refers to what is used in the final shader. Index space is limited, usually 16
--- attribname is what was declared, but all might not be used. Attribname share namespace with uniforms and textures and is unlimited(TM)
+-- attribname is what was declared, but all might not be used. Attribname share namespace with uniforms and textures (in all shaders) and is unlimited(TM)
 type Binding = Int
 
 -- TODO: Add usedBuffers to RenderIOState, ie Map.IntMap (s -> (Binding -> IO (), Int)) and the like
@@ -60,15 +66,10 @@ newRenderIOState = RenderIOState Map.empty Map.empty Map.empty Map.empty
 mapRenderIOState :: (s -> s') -> RenderIOState s' -> RenderIOState s -> RenderIOState s
 mapRenderIOState f (RenderIOState a b c d) (RenderIOState i j k l) = let g x = x . f in RenderIOState (Map.union i $ Map.map g a) (Map.union j $ Map.map g b) (Map.union k $ Map.map g c) (Map.union l $ Map.map g d)
 
-data BoundState = BoundState {
-                        boundUniforms :: Map.IntMap Int,
-                        boundSamplers :: Map.IntMap Int,
-                        boundRasterizerN :: Int
-                        }
 
 
 -- | May throw a GPipeException
-compile :: (Monad m, MonadIO m, MonadException m) => [IO (Drawcall s)] -> RenderIOState s -> ContextT w os f m (ContextData -> s -> Asserter Int -> IO (Maybe String))
+compile :: (Monad m, MonadIO m, MonadException m, ContextHandler ctx) => [IO (Drawcall s)] -> RenderIOState s -> ContextT ctx os m (s -> Render os ())
 compile dcs s = do
     drawcalls <- liftIO $ sequence dcs -- IO only for SNMap
     (maxUnis,
@@ -76,7 +77,7 @@ compile dcs s = do
      maxVUnis,
      maxVSamplers,
      maxFUnis,
-     maxFSamplers) <- liftContextIO $ do
+     maxFSamplers) <- liftNonWinContextIO $ do
                        maxUnis <- alloca (\ptr -> glGetIntegerv GL_MAX_COMBINED_UNIFORM_BLOCKS ptr >> peek ptr)
                        maxSamplers <- alloca (\ptr -> glGetIntegerv GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS ptr >> peek ptr)
                        maxVUnis <- alloca (\ptr -> glGetIntegerv GL_MAX_VERTEX_UNIFORM_BLOCKS ptr >> peek ptr)
@@ -109,16 +110,10 @@ compile dcs s = do
 
         allocatedUniforms = allocate maxUnis unisPerDc
         allocatedSamplers = allocate maxSamplers sampsPerDc
-    compRet <- evalStateT (mapM comp  (zip5 drawcalls unisPerDc sampsPerDc allocatedUniforms allocatedSamplers)) (BoundState Map.empty Map.empty (-1))
-    fAdd <- getContextFinalizerAdder
+    compRet <- mapM comp (zip5 drawcalls unisPerDc sampsPerDc allocatedUniforms allocatedSamplers)
     let (errs, ret) = partitionEithers compRet
         (pnames, fs) = unzip ret
-        fr cd x asserter = foldl (\ io f -> do
-                                      mErr <- io
-                                      mErr2 <- f x asserter cd fAdd
-                                      return $ mErr <> mErr2)
-                        (return Nothing)
-                        fs
+        fr x = mapM_ ($ x) fs
         allErrs = limitErrors ++ errs
     if null allErrs
         then do
@@ -126,105 +121,122 @@ compile dcs s = do
                                                          addContextFinalizer pNameRef (glDeleteProgram pName >> pStrUDeleter))
             return fr
         else do
-            liftContextIOAsync $ mapM_ (\(pNameRef, pStrUDeleter) -> readIORef pNameRef >>= glDeleteProgram >> pStrUDeleter) pnames
+            liftNonWinContextAsyncIO $ mapM_ (\(pNameRef, pStrUDeleter) -> readIORef pNameRef >>= glDeleteProgram >> pStrUDeleter) pnames
             liftIO $ throwIO $ GPipeException $ concat allErrs
  where
     comp (Drawcall fboSetup primN rastN vsource fsource inps _ _ _ _ pstrUSize', unis, samps, ubinds, sbinds) = do
            let pstrUSize = if 0 `elem` unis then pstrUSize' else 0
            let uNameToRenderIOmap = uniformNameToRenderIO s
            pstrUBuf <- createUBuffer pstrUSize -- Create uniform buffer for primiveStream uniforms
-           let pStrUDeleter = if pstrUSize > 0 then with pstrUBuf (glDeleteBuffers 1) else return ()
+           let pStrUDeleter = when (pstrUSize > 0) $ with pstrUBuf (glDeleteBuffers 1)
            let uNameToRenderIOmap' = addPstrUniform pstrUBuf pstrUSize uNameToRenderIOmap
-           BoundState uniState sampState boundRastN <- get
-           let (bindUni, uniState') = makeBind uniState uNameToRenderIOmap' (zip unis ubinds)
-           let (bindSamp, sampState') = makeBind sampState (samplerNameToRenderIO s) $ zip samps sbinds
-           let bindRast = if rastN == boundRastN then const $ return () else rasterizationNameToRenderIO s ! rastN
-           put $ BoundState uniState' sampState' rastN
+           ePname <- liftNonWinContextIO $ do
+              vShader <- glCreateShader GL_VERTEX_SHADER
+              mErrV <- compileShader vShader vsource
+              fShader <- glCreateShader GL_FRAGMENT_SHADER
+              mErrF <- compileShader fShader fsource
+              if isNothing mErrV && isNothing mErrV
+                then do pName <- glCreateProgram
+                        glAttachShader pName vShader
+                        glAttachShader pName fShader
+                        mapM_ (\(name, ix) -> withCString ("in"++ show name) $ glBindAttribLocation pName ix) $ zip inps [0..]
+                        mPErr <- linkProgram pName
+                        glDetachShader pName vShader
+                        glDetachShader pName fShader
+                        glDeleteShader vShader
+                        glDeleteShader fShader
+                        case mPErr of
+                            Just errP -> do glDeleteProgram pName
+                                            pStrUDeleter
+                                            return $ Left $ "Linking a GPU progam failed:\n" ++ errP ++ "\nVertex source:\n" ++ vsource ++ "\nFragment source:\n" ++ fsource
+                            Nothing -> return $ Right pName
+                else do glDeleteShader vShader
+                        glDeleteShader fShader
+                        pStrUDeleter
+                        let err = maybe "" (\e -> "A vertex shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ vsource) mErrV
+                              ++ maybe "" (\e -> "A fragment shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ fsource) mErrF
+                        return $ Left err
+           case ePname of
+              Left err -> return $ Left err
+              Right pName -> liftNonWinContextIO $ do
+                  forM_ (zip unis ubinds) $ \(name, bind) -> do
+                        uix <- withCString ("uBlock" ++ show name) $ glGetUniformBlockIndex pName
+                        glUniformBlockBinding pName uix (fromIntegral bind)
 
-           lift $ do ePname <- liftContextIO $ do
-                              vShader <- glCreateShader GL_VERTEX_SHADER
-                              mErrV <- compileShader vShader vsource
-                              fShader <- glCreateShader GL_FRAGMENT_SHADER
-                              mErrF <- compileShader fShader fsource
-                              if isNothing mErrV && isNothing mErrV
-                                then do pName <- glCreateProgram
-                                        glAttachShader pName vShader
-                                        glAttachShader pName fShader
-                                        mapM_ (\(name, ix) -> withCString ("in"++ show name) $ glBindAttribLocation pName ix) $ zip inps [0..]
-                                        mPErr <- linkProgram pName
-                                        glDetachShader pName vShader
-                                        glDetachShader pName fShader
-                                        glDeleteShader vShader
-                                        glDeleteShader fShader
-                                        case mPErr of
-                                            Just errP -> do glDeleteProgram pName
-                                                            pStrUDeleter
-                                                            return $ Left $ "Linking a GPU progam failed:\n" ++ errP ++ "\nVertex source:\n" ++ vsource ++ "\nFragment source:\n" ++ fsource
-                                            Nothing -> return $ Right pName
-                                else do glDeleteShader vShader
-                                        glDeleteShader fShader
-                                        pStrUDeleter
-                                        let err = maybe "" (\e -> "A vertex shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ vsource) mErrV
-                                              ++ maybe "" (\e -> "A fragment shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ fsource) mErrF
-                                        return $ Left err
-                     case ePname of
-                          Left err -> return $ Left err
-                          Right pName -> liftContextIO $ do
-                              forM_ (zip unis ubinds) $ \(name, bind) -> do
-                                    uix <- withCString ("uBlock" ++ show name) $ glGetUniformBlockIndex pName
-                                    glUniformBlockBinding pName uix (fromIntegral bind)
-
-                              glUseProgram pName -- For setting texture uniforms
-                              forM_ (zip samps sbinds) $ \(name, bind) -> do
-                                    six <- withCString ("s" ++ show name) $ glGetUniformLocation pName
-                                    glUniform1i six (fromIntegral bind)
-                              pNameRef <- newIORef pName
-
-                              return $ Right ((pNameRef, pStrUDeleter), \x asserter cd fAdd -> do
-                                           -- Drawing with program --
-                                           pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
-                                           glUseProgram pName'
-                                           bindUni x return
-                                           bindSamp x asserter
-                                           bindRast x
-                                           let (mfbokeyio, blendio) = fboSetup x
-                                           blendio
-                                           mError <- case mfbokeyio of
-                                                Nothing -> do glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
-                                                              return Nothing
-                                                Just (fbokeyio, fboio) -> do
-                                                   fbokey <- fbokeyio
-                                                   mfbo <- getFBO cd fbokey
-                                                   case mfbo of
-                                                        Just fbo -> do fbo' <- readIORef fbo
-                                                                       glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
-                                                                       return Nothing
-                                                        Nothing -> do fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
-                                                                      fbo <- newIORef fbo'
-                                                                      void $ fAdd fbo $ with fbo' (glDeleteFramebuffers 1)
-                                                                      setFBO cd fbokey fbo
-                                                                      glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
-                                                                      glEnable GL_FRAMEBUFFER_SRGB
-                                                                      fboio
-                                                                      let numColors = length $ fboColors fbokey
-                                                                      withArray [GL_COLOR_ATTACHMENT0 .. (GL_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $ glDrawBuffers (fromIntegral numColors)
-                                                                      getFBOerror
-                                           when (isNothing mError) $
-                                               -- Draw each Vertex Array --
-                                               forM_ (map ($ (inps, pstrUBuf, pstrUSize)) ((inputArrayToRenderIOs s ! primN) x)) $ \ ((keyio, vaoio), drawio) -> do
-                                                    key <- keyio
-                                                    mvao <- getVAO cd key
-                                                    case mvao of
-                                                        Just vao -> do vao' <- readIORef vao
-                                                                       glBindVertexArray vao'
-                                                        Nothing -> do vao' <- alloca (\ptr -> glGenVertexArrays 1 ptr >> peek ptr)
-                                                                      vao <- newIORef vao'
-                                                                      void $ fAdd vao $ with vao' (glDeleteVertexArrays 1)
-                                                                      setVAO cd key vao
-                                                                      glBindVertexArray vao'
-                                                                      vaoio
-                                                    drawio
-                                           return mError)
+                  glUseProgram pName -- For setting texture uniforms
+                  forM_ (zip samps sbinds) $ \(name, bind) -> do
+                        six <- withCString ("s" ++ show name) $ glGetUniformLocation pName
+                        glUniform1i six (fromIntegral bind)
+                  pNameRef <- newIORef pName
+                  return $ Right ((pNameRef, pStrUDeleter), \x -> Render $ do
+                                                               -- Drawing with program --
+                                                               rs <- lift $ lift get
+                                                               renv <- lift ask
+                                                               let (mfbokeyio, blendio) = fboSetup x
+                                                               let inwin wid m = do
+                                                                     let (ws, doAsync) = perWindowRenderState rs ! wid
+                                                                     let (bindUni, uniState') = makeBind (boundUniforms ws :: Map.IntMap Int) uNameToRenderIOmap' (zip unis ubinds)
+                                                                     let (bindSamp, sampState') = makeBind (boundSamplers ws :: Map.IntMap Int) (samplerNameToRenderIO s) $ zip samps sbinds
+                                                                     let bindRast = if rastN == boundRasterizerN ws then const $ return () else rasterizationNameToRenderIO s ! rastN
+                                                                         wmap' = Map.insert wid (ws { boundUniforms = uniState', boundSamplers = sampState', boundRasterizerN = rastN }, doAsync) (perWindowRenderState rs)
+                                                                     lift $ lift $ put (rs {perWindowRenderState = wmap', renderLastUsedWin = wid })
+                                                                     mErr <- liftIO $ asSync doAsync $ do
+                                                                         pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
+                                                                         glUseProgram pName'
+                                                                         _ <- bindUni x (const $ return True :: () -> IO Bool)
+                                                                         isOk <- bindSamp x (return . not . (`Set.member` renderWriteTextures rs)  :: Int -> IO Bool)
+                                                                         bindRast x
+                                                                         blendio
+                                                                         mErr2 <- m
+                                                                         let mErr = if isOk then Nothing else Just "Running shader that samples from texture that currently has an image borrowed from it. Try run this shader from a separate render call where no images from the same texture are drawn to or cleared.\n"
+                                                                         return $ mErr <> mErr2
+                                                                     case mErr of
+                                                                         Just e -> throwE e
+                                                                         Nothing -> return ()
+                                                               wid <- case mfbokeyio of
+                                                                    Left wid -> do -- Bind correct context
+                                                                                inwin wid $ do
+                                                                                     glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
+                                                                                     return Nothing
+                                                                                return wid
+                                                                    Right (fbokeyio, fboio) -> do
+                                                                       -- Off-screen draw call, continue with last context
+                                                                       (cwid, cd, doAsync) <- unRender getLastRenderWin
+                                                                       inwin cwid $ do
+                                                                         fbokey <- fbokeyio
+                                                                         mfbo <- getFBO cd fbokey
+                                                                         case mfbo of
+                                                                            Just fbo -> do fbo' <- readIORef fbo
+                                                                                           glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
+                                                                                           return Nothing
+                                                                            Nothing -> do fbo' <- alloca (\ptr -> glGenFramebuffers 1 ptr >> peek ptr)
+                                                                                          fbo <- newIORef fbo'
+                                                                                          void $ mkWeakIORef fbo (doAsync $ with fbo' $ glDeleteFramebuffers 1)
+                                                                                          setFBO cd fbokey fbo
+                                                                                          glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
+                                                                                          glEnable GL_FRAMEBUFFER_SRGB
+                                                                                          fboio
+                                                                                          let numColors = length $ fboColors fbokey
+                                                                                          withArray [GL_COLOR_ATTACHMENT0 .. (GL_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $ glDrawBuffers (fromIntegral numColors)
+                                                                                          getFBOerror
+                                                                       return cwid
+                                                               -- Draw each Vertex Array --
+                                                               forM_ (map ($ (inps, pstrUBuf, pstrUSize)) ((inputArrayToRenderIOs s ! primN) x)) $ \ ((keyio, vaoio), drawio) -> do
+                                                                 let (ws, doAsync) = perWindowRenderState rs ! wid
+                                                                     cd = windowContextData ws
+                                                                 liftIO $ do
+                                                                        key <- keyio
+                                                                        mvao <- getVAO cd key
+                                                                        case mvao of
+                                                                            Just vao -> do vao' <- readIORef vao
+                                                                                           glBindVertexArray vao'
+                                                                            Nothing -> do vao' <- alloca (\ptr -> glGenVertexArrays 1 ptr >> peek ptr)
+                                                                                          vao <- newIORef vao'
+                                                                                          void $ mkWeakIORef vao (doAsync $ with vao' $ glDeleteVertexArrays 1)
+                                                                                          setVAO cd key vao
+                                                                                          glBindVertexArray vao'
+                                                                                          vaoio
+                                                                        drawio)
 
     compileShader name source = do
         withCStringLen source $ \ (ptr, len) ->
@@ -237,7 +249,7 @@ compile dcs s = do
             then return Nothing
             else do logLen <- alloca $ \ ptr -> glGetShaderiv name GL_INFO_LOG_LENGTH ptr >> peek ptr
                     let logLen' = fromIntegral logLen
-                    liftM Just $ allocaArray logLen' $ \ ptr -> do
+                    fmap Just $ allocaArray logLen' $ \ ptr -> do
                                     glGetShaderInfoLog name logLen nullPtr ptr
                                     peekCString ptr
     linkProgram name = do glLinkProgram name
@@ -246,19 +258,33 @@ compile dcs s = do
                             then return Nothing
                             else do logLen <- alloca $ \ ptr -> glGetProgramiv name GL_INFO_LOG_LENGTH ptr >> peek ptr
                                     let logLen' = fromIntegral logLen
-                                    liftM Just $ allocaArray logLen' $ \ ptr -> do
+                                    fmap Just $ allocaArray logLen' $ \ ptr -> do
                                                     glGetProgramInfoLog name logLen nullPtr ptr
                                                     peekCString ptr
     createUBuffer 0 = return undefined
-    createUBuffer uSize = lift $ liftContextIO $ do bname <- alloca (\ptr -> glGenBuffers 1 ptr >> peek ptr)
-                                                    glBindBuffer GL_COPY_WRITE_BUFFER bname
-                                                    glBufferData GL_COPY_WRITE_BUFFER (fromIntegral uSize) nullPtr GL_STREAM_DRAW
-                                                    return bname
+    createUBuffer uSize = liftNonWinContextIO $ do
+      bname <- alloca (\ptr -> glGenBuffers 1 ptr >> peek ptr)
+      glBindBuffer GL_COPY_WRITE_BUFFER bname
+      glBufferData GL_COPY_WRITE_BUFFER (fromIntegral uSize) nullPtr GL_STREAM_DRAW
+      return bname
 
+    addPstrUniform :: Word32 -> Int -> Map.IntMap (s -> Binding -> IO ()) -> Map.IntMap (s -> Binding -> IO ())
     addPstrUniform _ 0 = id
     addPstrUniform bname uSize = Map.insert 0 $ \_ bind -> glBindBufferRange GL_UNIFORM_BUFFER (fromIntegral bind) bname 0 (fromIntegral uSize)
 
 
+
+makeBind :: Map.IntMap Int -> Map.IntMap (s -> Binding -> IO x) -> [(Int, Int)] -> (s -> Asserter x -> IO Bool, Map.IntMap Int)
+makeBind m iom ((n,b):xs) = (g, m'')
+   where
+       (f, m') = makeBind m iom xs
+       (io, m'') = case Map.lookup b m' of
+                           Just x | x == n -> (\_ _ -> return True, m') -- Optimization, save gl calls to already bound buffers/samplers
+                           _               -> (\s asserter -> (iom ! n) s b >>= asserter, Map.insert b n m')
+       g s a = do ok1 <- f s a
+                  ok2 <- io s a
+                  return $ ok1 && ok2
+makeBind m _ [] = (\_ _ -> return True, m)
 
 orderedUnion :: Ord a => [a] -> [a] -> [a]
 orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys
@@ -267,18 +293,7 @@ orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys
 orderedUnion xs [] = xs
 orderedUnion [] ys = ys
 
-type Asserter x = x -> IO () -- Used to assert we may use textures
-
--- Optimization, save gl calls to already bound buffers/samplers
-makeBind :: Map.IntMap Int -> Map.IntMap (s -> Binding -> IO x) -> [(Int, Int)] -> (s -> Asserter x -> IO (), Map.IntMap Int)
-makeBind m iom ((n,b):xs) = (g, m'')
-    where
-        (f, m') = makeBind m iom xs
-        (io, m'') = case Map.lookup b m' of
-                            Just x | x == n -> (\_ _ -> return (), m')
-                            _               -> (\s asserter -> (iom ! n) s b >>= asserter, Map.insert b n m')
-        g s a = f s a >> io s a
-makeBind m _ [] = (\_ _ -> return (), m)
+type Asserter x = x -> IO Bool -- Used to assert we may use textures bound as render targets
 
 allocate :: Int -> [[Int]] -> [[Int]]
 allocate mx = allocate' Map.empty []

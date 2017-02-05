@@ -25,7 +25,7 @@ data VertexArray t a = VertexArray  {
 data Instances
 
 -- | Create a 'VertexArray' from a 'Buffer'. The vertex array will have the same number of elements as the buffer, use 'takeVertices' and 'dropVertices' to make it smaller.
-newVertexArray :: Buffer os a -> Render os f (VertexArray t a)
+newVertexArray :: Buffer os a -> Render os (VertexArray t a)
 newVertexArray buffer = Render $ return $ VertexArray (bufferLength buffer) 0 $ bufBElement buffer
 
 instance Functor (VertexArray t) where
@@ -78,7 +78,7 @@ data IndexArray = IndexArray {
 
 -- | Create an 'IndexArray' from a 'Buffer' of unsigned integers (as constrained by the closed 'IndexFormat' type family instances). The index array will have the same number of elements as the buffer, use 'takeIndices' and 'dropIndices' to make it smaller.
 --   The @Maybe a@ argument is used to optionally denote a primitive restart index.
-newIndexArray :: forall os f b a. (BufferFormat b, Integral a, IndexFormat b ~ a) => Buffer os b -> Maybe a -> Render os f IndexArray
+newIndexArray :: forall os f b a. (BufferFormat b, Integral a, IndexFormat b ~ a) => Buffer os b -> Maybe a -> Render os IndexArray
 newIndexArray buf r = let a = undefined :: b in Render $ return $ IndexArray (bufName buf) (bufferLength buf) 0 (fmap fromIntegral r) (getGlType a)
 
 -- | @takeIndices n a@ creates a shorter index array by taking the @n@ first indices of the array @a@.

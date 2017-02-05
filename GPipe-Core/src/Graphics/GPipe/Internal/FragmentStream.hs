@@ -58,7 +58,7 @@ class FragmentInput a where
 rasterize:: forall p a s os f. FragmentInput a
           => (s -> (Side, ViewPort, DepthRange))
           -> PrimitiveStream p (VPos, a)
-          -> Shader os f s (FragmentStream (FragmentFormat a))
+          -> Shader os s (FragmentStream (FragmentFormat a))
 rasterize sf (PrimitiveStream xs) = Shader $ do
         n <- getName
         modifyRenderIO (\s -> s { rasterizationNameToRenderIO = insert n io (rasterizationNameToRenderIO s) } )

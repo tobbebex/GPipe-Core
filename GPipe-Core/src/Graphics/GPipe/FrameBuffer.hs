@@ -8,18 +8,18 @@
 -- Stability   :  Experimental
 -- Portability :  Portable
 --
--- | This module defines all functions and types for drawing into a context window 
+-- | This module defines all functions and types for drawing into a context window
 --   or texture from a 'Graphics.GPipe.Shader.Shader'.
 -----------------------------------------------------------------------------
 module Graphics.GPipe.FrameBuffer (
     -- * Draw into the context window
-    drawContextColor,
-    drawContextDepth,
-    drawContextColorDepth,
-    drawContextStencil,
-    drawContextColorStencil,
-    drawContextDepthStencil,
-    drawContextColorDepthStencil,
+    drawWindowColor,
+    drawWindowDepth,
+    drawWindowColorDepth,
+    drawWindowStencil,
+    drawWindowColorStencil,
+    drawWindowDepthStencil,
+    drawWindowColorDepthStencil,
 
     -- * Draw into one or more texture images
     draw,
@@ -34,28 +34,28 @@ module Graphics.GPipe.FrameBuffer (
     imageEquals,
     imageSize,
     getTexture1DImage,
-    getTexture1DArrayImage, 
-    getTexture2DImage, 
-    getTexture2DArrayImage, 
-    getTexture3DImage, 
-    getTextureCubeImage,    
-    
+    getTexture1DArrayImage,
+    getTexture2DImage,
+    getTexture2DArrayImage,
+    getTexture3DImage,
+    getTextureCubeImage,
+
     -- * Clearing the context window
-    -- | Use these functions to clear the color, depth or stencil values in the context's window 
-    clearContextColor,
-    clearContextDepth,
-    clearContextStencil, 
-    clearContextDepthStencil, 
+    -- | Use these functions to clear the color, depth or stencil values in the context's window
+    clearWindowColor,
+    clearWindowDepth,
+    clearWindowStencil,
+    clearWindowDepthStencil,
 
     -- * Clearing texture images
-    -- | Use these functions to clear the color, depth or stencil values in texture images. 
-    clearColorImage,
-    clearDepthImage,
-    clearStencilImage,
-    clearDepthStencilImage,
-        
+    -- | Use these functions to clear the color, depth or stencil values in texture images.
+    clearImageColor,
+    clearImageDepth,
+    clearImageStencil,
+    clearImageDepthStencil,
+
     -- * Color drawing types
-    FragColor, 
+    FragColor,
     ContextColorOption(..),
     ColorMask,
     UseBlending,
@@ -66,20 +66,20 @@ module Graphics.GPipe.FrameBuffer (
     BlendingFactor(..),
     LogicOp(..),
 
-    -- * Depth drawing types        
-    FragDepth,      
+    -- * Depth drawing types
+    FragDepth,
     DepthOption(..),
     DepthMask,
     DepthFunction,
-    
+
     -- * Stencil drawing types
     StencilOptions,
     StencilOption(..),
-    DepthStencilOption(..),   
-    FrontBack(..),    
+    DepthStencilOption(..),
+    FrontBack(..),
     StencilOp(..),
 )
 where
 
 import Graphics.GPipe.Internal.Texture
-import Graphics.GPipe.Internal.FrameBuffer 
+import Graphics.GPipe.Internal.FrameBuffer

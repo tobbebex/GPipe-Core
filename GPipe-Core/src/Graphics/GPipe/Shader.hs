@@ -9,7 +9,7 @@
 -- Portability :  Portable
 --
 -- |
--- A 'Shader' is a monad in which 'PrimitiveStream's and 'FragmentStream's live, together with samplers and uniform values. Any computations made on the streams and values in 
+-- A 'Shader' is a monad in which 'PrimitiveStream's and 'FragmentStream's live, together with samplers and uniform values. Any computations made on the streams and values in
 -- the 'Shader' monad will be performed on the GPU. A 'Shader' needs to be compiled before it can be used. In order to make it work over different environments after it
 -- has been compiled, it closes over an environment value just like a 'Reader' monad, with the distinction that there is no 'ask' action, since we cannot make the
 -- actual monad operation depend on the environment.
@@ -22,13 +22,12 @@ module Graphics.GPipe.Shader (
     -- * The Shader monad
     Shader(),
     compileShader,
-    withoutContext,
     CompiledShader,
 
     -- * The Render monad
-    Render(), 
+    Render(),
     render,
-        
+
     -- * Shader monad combinators
     guard',
     mapShader,
@@ -39,4 +38,4 @@ module Graphics.GPipe.Shader (
 where
 
 import Graphics.GPipe.Internal.Context
-import Graphics.GPipe.Internal.Shader 
+import Graphics.GPipe.Internal.Shader

@@ -84,7 +84,7 @@ instance Arrow ToVertex where
 
 
 -- | Create a primitive stream from a primitive array provided from the shader environment.
-toPrimitiveStream :: forall os f s a p. VertexInput a => (s -> PrimitiveArray p a) -> Shader os f s (PrimitiveStream p (VertexFormat a))
+toPrimitiveStream :: forall os f s a p. VertexInput a => (s -> PrimitiveArray p a) -> Shader os s (PrimitiveStream p (VertexFormat a))
 toPrimitiveStream sf = Shader $ do n <- getName
                                    uniAl <- askUniformAlignment
                                    let err = error "toPrimitiveStream is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders"

@@ -1,5 +1,5 @@
 name:           GPipe
-version:        2.1.8
+version:        2.2
 cabal-version:  >= 1.8
 build-type:     Simple
 author:         Tobias Bexelius
@@ -11,9 +11,9 @@ stability:      Experimental
 synopsis:       Typesafe functional GPU graphics programming
 homepage:       https://github.com/tobbebex/GPipe-Core#readme
 bug-reports:    https://github.com/tobbebex/GPipe-Core/issues
-description:    
-                A typesafe API based on the conceptual model of OpenGl, but without the imperative state machine. 
-                Aims to be as close to the raw OpenGl performance as possible, without compromising type safety or functional style. 
+description:
+                A typesafe API based on the conceptual model of OpenGl, but without the imperative state machine.
+                Aims to be as close to the raw OpenGl performance as possible, without compromising type safety or functional style.
                 Includes DSL for shaders to provide type safety even when crossing into that domain.
                 Uses OpenGl 3.3 core profile under the hood.
 maintainer:     Tobias Bexelius
@@ -29,7 +29,7 @@ library
                     hashtables >= 1.2 && < 1.3,
                     gl >= 0.7 && < 0.8,
                     linear >= 1.18 && < 1.21
-  exposed-modules:  
+  exposed-modules:
                     Graphics.GPipe,
                     Graphics.GPipe.Buffer,
                     Graphics.GPipe.Context,
@@ -44,7 +44,7 @@ library
                     Graphics.GPipe.Texture,
                     Graphics.GPipe.Uniform,
                     Graphics.GPipe.Orphans
-  other-modules:    
+  other-modules:
                     Data.SNMap,
                     Graphics.GPipe.Internal.Buffer,
                     Graphics.GPipe.Internal.Compiler,
@@ -59,4 +59,3 @@ library
                     Graphics.GPipe.Internal.Texture,
                     Graphics.GPipe.Internal.Uniform,
                     Graphics.GPipe.Internal.Orphans
-

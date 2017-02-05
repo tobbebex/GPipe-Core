@@ -897,9 +897,9 @@ crossS a b = vec3S'' $ fun2 (STypeVec 3) "cross" (fromVec3 a) (fromVec3 b)
 {-# RULES "minB/S" minB = minS #-}
 {-# RULES "maxB/S" maxB = maxS #-}
 minS :: S x Float -> S x Float -> S x Float
-minS = binf "min"
+minS = fun2f "min"
 maxS :: S x Float -> S x Float -> S x Float
-maxS = binf "max"
+maxS = fun2f "max"
 
 --------------------------------------------------------------
 

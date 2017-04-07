@@ -57,6 +57,8 @@ import Control.Monad.Trans.State.Strict
 
 
 class ContextHandler ctx where
+  -- | Implementation specific context handler parameters, eg error handling and event processing policies
+  type ContextHandlerParameters ctx
   -- | Implementation specific window type
   type ContextWindow ctx
   -- | Implementation specific window parameters, eg initial size and border decoration
@@ -74,7 +76,7 @@ class ContextHandler ctx where
   -- | Delete a context and close any associated window. Called from same thread as created the context.
   contextDelete :: ctx -> ContextWindow ctx -> IO ()
   -- | Create a context handler. Called from main thread
-  contextHandlerCreate :: IO ctx
+  contextHandlerCreate :: ContextHandlerParameters ctx -> IO ctx
   -- | Delete the context handler. All contexts created from this handler will be deleted using contextDelete prior to calling this.
   contextHandlerDelete :: ctx -> IO ()
 
@@ -162,11 +164,11 @@ instance MonadTrans (ContextT ctx os) where
 
 -- | Run a 'ContextT' monad transformer that encapsulates an object space.
 --   You need an implementation of a 'ContextHandler', which is provided by an auxillary package, such as @GPipe-GLFW@.
-runContextT :: (MonadIO m, MonadAsyncException m, ContextHandler ctx) => Proxy ctx -> (forall os. ContextT ctx os m a) -> m a
-runContextT Proxy (ContextT m) = do
+runContextT :: (MonadIO m, MonadAsyncException m, ContextHandler ctx) => ContextHandlerParameters ctx -> (forall os. ContextT ctx os m a) -> m a
+runContextT chp (ContextT m) = do
     cds <- liftIO newContextDatas
     bracket
-     (liftIO contextHandlerCreate)
+     (liftIO $ contextHandlerCreate chp)
      (\ctx -> liftIO $ do
        cds' <- readMVar cds
        mapM_ snd cds' -- Delete all windows not explicitly deleted

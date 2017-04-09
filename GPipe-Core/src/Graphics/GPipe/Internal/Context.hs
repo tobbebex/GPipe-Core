@@ -288,11 +288,12 @@ getWindowSize (Window wid) = ContextT $ do
       (x,y) <- liftIO $ contextFrameBufferSize ctx w
       return $ V2 x y
 
--- | Use the context window handle, which type is specific to the window system used. This handle shouldn't be returned from this function
-withContextWindow :: MonadIO m => Window os c ds -> (Maybe (ContextWindow ctx) -> IO a) -> ContextT ctx os m a
+-- | Use the context window handle, which type is specific to the window system used. This handle shouldn't be returned from this function.
+-- If there is no window with the given id, the given function is not called and 'Nothing' is returned.
+withContextWindow :: MonadIO m => Window os c ds -> (ContextWindow ctx -> IO a) -> ContextT ctx os m (Maybe a)
 withContextWindow (Window wid) m = ContextT $ do
   wmap <- lift $ gets perWindowState
-  liftIO $ m (snd <$> IMap.lookup wid wmap)
+  liftIO $ mapM m (snd <$> IMap.lookup wid wmap)
 
 {-}
 -- | This is only used to finalize nonShared objects such as VBOs and FBOs

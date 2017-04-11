@@ -164,8 +164,8 @@ instance MonadTrans (ContextT ctx os) where
 
 -- | Run a 'ContextT' monad transformer that encapsulates an object space.
 --   You need an implementation of a 'ContextHandler', which is provided by an auxillary package, such as @GPipe-GLFW@.
-runContextT :: (MonadIO m, MonadAsyncException m, ContextHandler ctx) => ContextHandlerParameters ctx -> (forall os. ContextT ctx os m a) -> m a
-runContextT chp (ContextT m) = do
+runContextT :: (MonadIO m, MonadAsyncException m, ContextHandler ctx) => Proxy ctx -> ContextHandlerParameters ctx -> (forall os. ContextT ctx os m a) -> m a
+runContextT Proxy chp (ContextT m) = do
     cds <- liftIO newContextDatas
     bracket
      (liftIO $ contextHandlerCreate chp)
@@ -227,7 +227,7 @@ getLastContextWin :: (ContextHandler ctx, MonadIO m) => ContextT ctx os m (Conte
 getLastContextWin = ContextT $ do
   cs <- lift get
   let wid = lastUsedWin cs
-  if wid >= 0
+  if wid > 0
     then return (snd $ perWindowState cs ! wid)
     else do --Create hidden window
       ContextEnv ctx cds <- ask

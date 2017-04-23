@@ -27,6 +27,7 @@ module Graphics.GPipe.Format (
     StencilRenderable(),
     -- * Context formats
     WindowFormat(..),
+    ContextColorFormat(), -- XXX: Maybe this needs to be renamed?
     windowBits,
     WindowBits
 )

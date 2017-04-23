@@ -58,7 +58,7 @@ import Control.Monad.Trans.State.Strict
 
 class ContextHandler ctx where
   -- | Implementation specific context handler parameters, eg error handling and event processing policies
-  type ContextHandlerParameters ctx
+  data ContextHandlerParameters ctx
   -- | Implementation specific window type
   type ContextWindow ctx
   -- | Implementation specific window parameters, eg initial size and border decoration
@@ -164,8 +164,8 @@ instance MonadTrans (ContextT ctx os) where
 
 -- | Run a 'ContextT' monad transformer that encapsulates an object space.
 --   You need an implementation of a 'ContextHandler', which is provided by an auxillary package, such as @GPipe-GLFW@.
-runContextT :: (MonadIO m, MonadAsyncException m, ContextHandler ctx) => Proxy ctx -> ContextHandlerParameters ctx -> (forall os. ContextT ctx os m a) -> m a
-runContextT Proxy chp (ContextT m) = do
+runContextT :: (MonadIO m, MonadAsyncException m, ContextHandler ctx) => ContextHandlerParameters ctx -> (forall os. ContextT ctx os m a) -> m a
+runContextT chp (ContextT m) = do
     cds <- liftIO newContextDatas
     bracket
      (liftIO $ contextHandlerCreate chp)

@@ -6,6 +6,7 @@ module Graphics.GPipe.Internal.Context
     ContextT(),
     GPipeException(..),
     runContextT,
+    withThread,
     newWindow,
     deleteWindow,
     swapWindowBuffers,
@@ -44,6 +45,7 @@ import qualified Data.Map.Strict as Map
 import Graphics.GL.Core33
 import Graphics.GL.Types
 import Control.Concurrent.MVar
+import Control.Concurrent (forkOS, killThread)
 import Data.IORef
 import Control.Monad
 import Data.List (delete)
@@ -176,6 +178,26 @@ runContextT chp (ContextT m) = do
      )
      (\ctx -> evalStateT (runReaderT m (ContextEnv ctx cds)) (ContextState 1 IMap.empty 0))
 
+-- | Run a 'ContextT' monad transformer on top of 'IO' in a bracketed thread.
+--
+-- * Buffers created in each thread are be accessible in the other.
+-- * Windows created in each thread are not accessible in the other thread.
+-- * Windows created in the thread's 'ContextT' monad transformer will share
+-- object space with windows created in the current thread.
+withThread
+    :: ContextT ctx os IO () -- ^ The action to run on a new thread, concurrent with this one.
+    -> ContextT ctx os IO a -- ^ The action to continue the current thread.
+    -> ContextT ctx os IO a
+withThread (ContextT threadAction) (ContextT localAction) = ContextT $ do
+    ctxEnv <- ask
+    oldState <- lift get
+    -- the bracketed resource is the subthread, the action is the local activity concurrent with the subthread
+    (result, newState) <- liftIO $ bracket
+        (forkOS $ evalStateT (runReaderT threadAction ctxEnv) (ContextState 1 IMap.empty 0))
+        killThread
+        (const $ runStateT (runReaderT localAction ctxEnv) oldState)
+    lift $ put newState
+    return result
 
 data Window os c ds = Window { getWinName :: Name }
 

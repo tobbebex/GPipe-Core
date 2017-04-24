@@ -20,6 +20,7 @@ module Graphics.GPipe.Context (
     -- * Contexts
     ContextT(),
     runContextT,
+    withThread,
     
     -- * Windows
     Window(),

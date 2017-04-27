@@ -20,12 +20,12 @@ module Graphics.GPipe.Context (
     -- * Contexts
     ContextT(),
     runContextT,
-    
+
     -- * Windows
     Window(),
     newWindow,
     deleteWindow,
-    getWindowSize,
+    getFrameBufferSize,
     swapWindowBuffers,
     withContextWindow,
 

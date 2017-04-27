@@ -9,7 +9,7 @@ module Graphics.GPipe.Internal.Context
     newWindow,
     deleteWindow,
     swapWindowBuffers,
-    getWindowSize,
+    getFrameBufferSize,
     withContextWindow,
     WindowState(..),
     RenderState(..),
@@ -282,8 +282,8 @@ swapWindowBuffers (Window wid) = ContextT $ do
 
 
 -- | Return the current size of the context frame buffer. This is needed to set viewport size and to get the aspect ratio to calculate projection matrices.
-getWindowSize :: (ContextHandler ctx, MonadIO m) => Window os c ds -> ContextT ctx os m (V2 Int)
-getWindowSize (Window wid) = ContextT $ do
+getFrameBufferSize :: (ContextHandler ctx, MonadIO m) => Window os c ds -> ContextT ctx os m (V2 Int)
+getFrameBufferSize (Window wid) = ContextT $ do
   wmap <- lift $ gets perWindowState
   case IMap.lookup wid wmap of
     Nothing -> return $ V2 0 0

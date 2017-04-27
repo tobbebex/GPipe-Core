@@ -55,7 +55,7 @@ import Control.Exception (throwIO)
 import Control.Arrow
 import Control.Monad.Trans.State.Strict
 
-
+-- | Class implementing a window handler that can create openGL contexts, such as GLFW or GLUT
 class ContextHandler ctx where
   -- | Implementation specific context handler parameters, eg error handling and event processing policies
   data ContextHandlerParameters ctx
@@ -63,22 +63,26 @@ class ContextHandler ctx where
   type ContextWindow ctx
   -- | Implementation specific window parameters, eg initial size and border decoration
   type WindowParameters ctx
+  -- | Create a context handler. Called from the main thread
+  contextHandlerCreate :: ContextHandlerParameters ctx -> IO ctx
+  -- | Delete the context handler. All contexts created from this handler will be deleted using contextDelete prior to calling this.
+  contextHandlerDelete :: ctx -> IO ()
   -- | Create a new context sharing all other contexts created by this ContextHandler. If the parameter is Nothing,
-  --   a hidden off-screen context is created, otherwise creates a window with the provided window bits and implementation specific parameters
+  --   a hidden off-screen context is created, otherwise creates a window with the provided window bits and implementation specific parameters.
+  --   Only ever called from the mainthread (i.e. the thread that called contextHandlerCreate)
   createContext :: ctx -> Maybe (WindowBits, WindowParameters ctx) -> IO (ContextWindow ctx)
   -- | Run an OpenGL IO action in this context, that doesn't return any value to the caller. This may be run after contextDelete or contextHandlerDelete has been called.
   --   The thread calling this may not be the same creating the context (for finalizers it is most definetly not).
   contextDoAsync :: ctx -> Maybe (ContextWindow ctx) -> IO () -> IO ()
-  -- | Swap the front and back buffers in the context's default frame buffer. Called from same thread as created context.
+  -- | Swap the front and back buffers in the context's default frame buffer.
+  --   Only ever called from the mainthread (i.e. the thread that called contextHandlerCreate)
   contextSwap :: ctx -> ContextWindow ctx -> IO ()
-  -- | Get the current size of the context's default framebuffer (which may change if the window is resized). Called from same thread as created context.
+  -- | Get the current size of the context's default framebuffer (which may change if the window is resized).
+  --   Only ever called from the mainthread (i.e. the thread that called contextHandlerCreate)
   contextFrameBufferSize :: ctx -> ContextWindow ctx -> IO (Int, Int)
-  -- | Delete a context and close any associated window. Called from same thread as created the context.
+  -- | Delete a context and close any associated window.
+  --   Only ever called from the mainthread (i.e. the thread that called contextHandlerCreate)
   contextDelete :: ctx -> ContextWindow ctx -> IO ()
-  -- | Create a context handler. Called from main thread
-  contextHandlerCreate :: ContextHandlerParameters ctx -> IO ctx
-  -- | Delete the context handler. All contexts created from this handler will be deleted using contextDelete prior to calling this.
-  contextHandlerDelete :: ctx -> IO ()
 
 
 -- | The monad transformer that encapsulates a GPipe context (which wraps an OpenGl context).

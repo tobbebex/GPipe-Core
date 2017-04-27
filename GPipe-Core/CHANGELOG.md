@@ -1,3 +1,9 @@
+### 2.2
+
+- Windows are now explicit objects dynamically created and deleted with newWindow and deleteWindow, and are sent as parameter to drawWindowColor et al. (#18)
+- Each window created can now take their own window manager specific parameters (#19)
+- Update to GHC 8.0.2 and gl-0.8.0 (#38)
+
 ### 2.1.8
 
 - Update dependencies to make it build with stack resolver nightly-2016-09-24

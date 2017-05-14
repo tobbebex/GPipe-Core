@@ -181,8 +181,7 @@ runContextT chp (ContextT m) = do
        mapM_ snd cds' -- Delete all windows not explicitly deleted
        contextHandlerDelete ctx
      )
-     (\ctx -> evalStateT (runReaderT m (ContextEnv ctx cds)) (ContextState 1 IMap.empty 0)
-
+     (\ctx -> evalStateT (runReaderT m (ContextEnv ctx cds)) (ContextState 1 IMap.empty 0))
 
 data Window os c ds = Window { getWinName :: Name }
 
@@ -224,7 +223,7 @@ deleteWindow (Window wid) = ContextT $ do
       let wmap' = IMap.delete wid wmap
       n' <- if (IMap.null wmap')
               then do
-                void $ createHiddenWin -- Create a hidden window before we delete last window
+                void $ let ContextT m = createHiddenWin in m -- Create a hidden window before we delete last window
                 return 0 -- The hidden window is now Concurrent
               else if n /= wid then return n
                                else return (fst (head (IMap.toList wmap'))) -- always at least one elem
@@ -250,7 +249,7 @@ getLastContextWin = ContextT $ do
   let wid = lastUsedWin cs
   if wid >= 0
     then return (snd $ perWindowState cs ! wid) -- always exists, since delete context will change lastUsedWin for us
-    else createHiddenWin
+    else let ContextT m = createHiddenWin in m
 
 liftNonWinContextIO :: (ContextHandler ctx, MonadIO m) => IO a -> ContextT ctx os m a
 liftNonWinContextIO m = do

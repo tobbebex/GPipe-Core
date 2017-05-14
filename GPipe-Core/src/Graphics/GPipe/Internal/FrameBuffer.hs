@@ -31,7 +31,7 @@ import Foreign.Ptr (nullPtr)
 import Linear.V4
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Except
-import Data.IntMap ((!))
+import qualified Data.IntMap as IMap
 
 -- | A monad in which individual color images can be drawn.
 newtype DrawColors os s a = DrawColors (StateT Int (Writer [Int -> (ExprM (), GlobDeclM (), s -> (IO FBOKey, IO (), IO ()))]) a) deriving (Functor, Applicative, Monad)
@@ -445,7 +445,7 @@ clearImageDepthStencil i d s = do
 
 inWin w m = Render $ do
   rs <- lift $ lift StrictState.get
-    case IMap.lookup (getWinName w) (perWindowRenderState rs) of
+  case IMap.lookup (getWinName w) (perWindowRenderState rs) of
     Nothing -> return () -- Window deleted, do nothing
     Just (_, doAsync) -> liftIO $ doAsync m
 

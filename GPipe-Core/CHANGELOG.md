@@ -1,3 +1,8 @@
+### 2.2.1
+
+- Render monad would crash if using deleted windows, when that should be a no-op. (#41).
+- Manually deleting last visible window causes objects to be deleted (#42).
+
 ### 2.2
 
 - Windows are now explicit objects dynamically created and deleted with newWindow and deleteWindow, and are sent as parameter to drawWindowColor et al. (#18)
@@ -33,19 +38,19 @@
 
 ### 2.1.2
 
-- Fixed bug when nesting while, ifThen, ifThenElse or ifThenElse'. 
+- Fixed bug when nesting while, ifThen, ifThenElse or ifThenElse'.
 
 ### 2.1.1
 
-- Made ifB use ifThenElse' instead to avoid unwanted strictness 
+- Made ifB use ifThenElse' instead to avoid unwanted strictness
 - Fixed bug where ShaderBaseType for () wasn't lazy enough, causing error in ifThenElse'
 - Added missing () instances
 
 ### 2.1
 
-- Making dangling finalizers work with shared and unshared contexts (#10) 
+- Making dangling finalizers work with shared and unshared contexts (#10)
 - Moved orphan instances to separate module (#11)
-- Fixing a bug introduced in 2.0.2 when using multiple uniforms 
+- Fixing a bug introduced in 2.0.2 when using multiple uniforms
 - Fixing exception when using conditionals in the shader (#12)
 
 ### 2.0.2

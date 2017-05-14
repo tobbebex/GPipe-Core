@@ -69,19 +69,22 @@ class ContextHandler ctx where
   contextHandlerDelete :: ctx -> IO ()
   -- | Create a new context sharing all other contexts created by this ContextHandler. If the parameter is Nothing,
   --   a hidden off-screen context is created, otherwise creates a window with the provided window bits and implementation specific parameters.
-  --   Only ever called from the mainthread (i.e. the thread that called contextHandlerCreate)
+  --   Only ever called from the mainthread (i.e. the thread that called contextHandlerCreate).
   createContext :: ctx -> Maybe (WindowBits, WindowParameters ctx) -> IO (ContextWindow ctx)
   -- | Run an OpenGL IO action in this context, that doesn't return any value to the caller. This may be run after contextDelete or contextHandlerDelete has been called.
   --   The thread calling this may not be the same creating the context (for finalizers it is most definetly not).
+  --   May also be called on previously deleted windows in the case of finalizers.
   contextDoAsync :: ctx -> Maybe (ContextWindow ctx) -> IO () -> IO ()
   -- | Swap the front and back buffers in the context's default frame buffer.
-  --   Only ever called from the mainthread (i.e. the thread that called contextHandlerCreate)
+  --   Only ever called from the mainthread (i.e. the thread that called 'contextHandlerCreate').
+  --   Never called on deleted windows.
   contextSwap :: ctx -> ContextWindow ctx -> IO ()
   -- | Get the current size of the context's default framebuffer (which may change if the window is resized).
-  --   Only ever called from the mainthread (i.e. the thread that called contextHandlerCreate)
+  --   Only ever called from the mainthread (i.e. the thread that called 'contextHandlerCreate')
   contextFrameBufferSize :: ctx -> ContextWindow ctx -> IO (Int, Int)
   -- | Delete a context and close any associated window.
-  --   Only ever called from the mainthread (i.e. the thread that called contextHandlerCreate)
+  --   Only ever called from the mainthread (i.e. the thread that called 'contextHandlerCreate'). Only ever called once per window,
+  --   and will always be called for each window before the context is deleted with 'contextHandlerDelete'.
   contextDelete :: ctx -> ContextWindow ctx -> IO ()
 
 
@@ -110,7 +113,7 @@ data ContextEnv ctx = ContextEnv {
 data ContextState ctx = ContextState {
     nextName :: Name,
     perWindowState :: PerWindowState ctx,
-    lastUsedWin :: Name
+    lastUsedWin :: Name -- -1 is no window. 0 is the hidden window. 1.. are visible windows
   }
 
 -- | A monad in which shaders are run.
@@ -131,7 +134,7 @@ type Name = Int
 
 type ContextDoAsync = IO () -> IO ()
 
-type PerWindowState ctx = IMap.IntMap (WindowState, ContextWindow ctx)
+type PerWindowState ctx = IMap.IntMap (WindowState, ContextWindow ctx) -- -1 is no window. 0 is the hidden window. 1.. are visible windows
 type PerWindowRenderState = IMap.IntMap (WindowState, ContextDoAsync)
 data WindowState = WindowState {
     windowContextData :: !ContextData,
@@ -178,13 +181,24 @@ runContextT chp (ContextT m) = do
        mapM_ snd cds' -- Delete all windows not explicitly deleted
        contextHandlerDelete ctx
      )
-     (\ctx -> evalStateT (runReaderT m (ContextEnv ctx cds)) (ContextState 1 IMap.empty 0))
+     (\ctx -> evalStateT (runReaderT m (ContextEnv ctx cds)) (ContextState 1 IMap.empty 0)
 
 
 data Window os c ds = Window { getWinName :: Name }
 
 instance Eq (Window os c ds) where
   (Window a) == (Window b) = a == b
+
+createHiddenWin :: (ContextHandler ctx, MonadIO m) => ContextT ctx os m (ContextWindow ctx)
+createHiddenWin = ContextT $ do
+  ContextEnv ctx cds <- ask
+  ContextState wid _ _ <- lift get -- We need to keep next window id and not start over at 1
+  w <- liftIO $ createContext ctx Nothing
+  cd <- liftIO $ addContextData (contextDelete ctx w) cds
+  let ws = WindowState cd IMap.empty IMap.empty (-1)
+  lift $ put $ ContextState wid (IMap.singleton wid (ws,w)) 0
+  liftIO $ contextDoAsync ctx (Just w) initGlState
+  return w
 
 -- | Creates a window
 newWindow :: (ContextHandler ctx, MonadIO m) => WindowFormat c ds -> WindowParameters ctx -> ContextT ctx os m (Window os c ds)
@@ -208,9 +222,12 @@ deleteWindow (Window wid) = ContextT $ do
     Just (ws, w) -> do
       ContextEnv ctx cds <-  ask
       let wmap' = IMap.delete wid wmap
-      let n' = if n /= wid then n else case IMap.toList wmap' of
-                                            [] -> -1 --No windows left
-                                            x:_ -> fst x
+      n' <- if (IMap.null wmap')
+              then do
+                void $ createHiddenWin -- Create a hidden window before we delete last window
+                return 0 -- The hidden window is now Concurrent
+              else if n /= wid then return n
+                               else return (fst (head (IMap.toList wmap'))) -- always at least one elem
       liftIO $ do removeContextData cds (windowContextData ws)
                   contextDelete ctx w
       lift $ put $ ContextState nid wmap' n'
@@ -231,16 +248,9 @@ getLastContextWin :: (ContextHandler ctx, MonadIO m) => ContextT ctx os m (Conte
 getLastContextWin = ContextT $ do
   cs <- lift get
   let wid = lastUsedWin cs
-  if wid > 0
-    then return (snd $ perWindowState cs ! wid)
-    else do --Create hidden window
-      ContextEnv ctx cds <- ask
-      w <- liftIO $ createContext ctx Nothing
-      cd <- liftIO $ addContextData (contextDelete ctx w) cds
-      let ws = WindowState cd IMap.empty IMap.empty (-1)
-      lift $ put $ ContextState 1 (IMap.singleton wid (ws,w)) 0
-      liftIO $ contextDoAsync ctx (Just w) initGlState
-      return w
+  if wid >= 0
+    then return (snd $ perWindowState cs ! wid) -- always exists, since delete context will change lastUsedWin for us
+    else createHiddenWin
 
 liftNonWinContextIO :: (ContextHandler ctx, MonadIO m) => IO a -> ContextT ctx os m a
 liftNonWinContextIO m = do

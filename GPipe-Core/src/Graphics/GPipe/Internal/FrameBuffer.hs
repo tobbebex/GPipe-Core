@@ -445,8 +445,9 @@ clearImageDepthStencil i d s = do
 
 inWin w m = Render $ do
   rs <- lift $ lift StrictState.get
-  let (_, doAsync) = perWindowRenderState rs ! getWinName w
-  liftIO $ doAsync m
+    case IMap.lookup (getWinName w) (perWindowRenderState rs) of
+    Nothing -> return () -- Window deleted, do nothing
+    Just (_, doAsync) -> liftIO $ doAsync m
 
 -- | Fill the window's back buffer with a constant color value
 clearWindowColor :: forall os c ds. ContextColorFormat c => Window os c ds -> Color c Float -> Render os ()

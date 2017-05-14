@@ -174,25 +174,27 @@ compile dcs s = do
                                                                renv <- lift ask
                                                                let (mfbokeyio, blendio) = fboSetup x
                                                                let inwin wid m = do
-                                                                     let (ws, doAsync) = perWindowRenderState rs ! wid
-                                                                     let (bindUni, uniState') = makeBind (boundUniforms ws :: Map.IntMap Int) uNameToRenderIOmap' (zip unis ubinds)
-                                                                     let (bindSamp, sampState') = makeBind (boundSamplers ws :: Map.IntMap Int) (samplerNameToRenderIO s) $ zip samps sbinds
-                                                                     let bindRast = if rastN == boundRasterizerN ws then const $ return () else rasterizationNameToRenderIO s ! rastN
-                                                                         wmap' = Map.insert wid (ws { boundUniforms = uniState', boundSamplers = sampState', boundRasterizerN = rastN }, doAsync) (perWindowRenderState rs)
-                                                                     lift $ lift $ put (rs {perWindowRenderState = wmap', renderLastUsedWin = wid })
-                                                                     mErr <- liftIO $ asSync doAsync $ do
-                                                                         pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
-                                                                         glUseProgram pName'
-                                                                         _ <- bindUni x (const $ return True :: () -> IO Bool)
-                                                                         isOk <- bindSamp x (return . not . (`Set.member` renderWriteTextures rs)  :: Int -> IO Bool)
-                                                                         bindRast x
-                                                                         blendio
-                                                                         mErr2 <- m
-                                                                         let mErr = if isOk then Nothing else Just "Running shader that samples from texture that currently has an image borrowed from it. Try run this shader from a separate render call where no images from the same texture are drawn to or cleared.\n"
-                                                                         return $ mErr <> mErr2
-                                                                     case mErr of
-                                                                         Just e -> throwE e
-                                                                         Nothing -> return ()
+                                                                     case Map.lookup wid (perWindowRenderState rs) of
+                                                                       Nothing -> return () -- Window deleted
+                                                                       Just (ws, doAsync) -> do
+                                                                         let (bindUni, uniState') = makeBind (boundUniforms ws :: Map.IntMap Int) uNameToRenderIOmap' (zip unis ubinds)
+                                                                         let (bindSamp, sampState') = makeBind (boundSamplers ws :: Map.IntMap Int) (samplerNameToRenderIO s) $ zip samps sbinds
+                                                                         let bindRast = if rastN == boundRasterizerN ws then const $ return () else rasterizationNameToRenderIO s ! rastN
+                                                                             wmap' = Map.insert wid (ws { boundUniforms = uniState', boundSamplers = sampState', boundRasterizerN = rastN }, doAsync) (perWindowRenderState rs)
+                                                                         lift $ lift $ put (rs {perWindowRenderState = wmap', renderLastUsedWin = wid })
+                                                                         mErr <- liftIO $ asSync doAsync $ do
+                                                                             pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
+                                                                             glUseProgram pName'
+                                                                             _ <- bindUni x (const $ return True :: () -> IO Bool)
+                                                                             isOk <- bindSamp x (return . not . (`Set.member` renderWriteTextures rs)  :: Int -> IO Bool)
+                                                                             bindRast x
+                                                                             blendio
+                                                                             mErr2 <- m
+                                                                             let mErr = if isOk then Nothing else Just "Running shader that samples from texture that currently has an image borrowed from it. Try run this shader from a separate render call where no images from the same texture are drawn to or cleared.\n"
+                                                                             return $ mErr <> mErr2
+                                                                         case mErr of
+                                                                             Just e -> throwE e
+                                                                             Nothing -> return ()
                                                                wid <- case mfbokeyio of
                                                                     Left wid -> do -- Bind correct context
                                                                                 inwin wid $ do
@@ -222,21 +224,23 @@ compile dcs s = do
                                                                        return cwid
                                                                -- Draw each Vertex Array --
                                                                forM_ (map ($ (inps, pstrUBuf, pstrUSize)) ((inputArrayToRenderIOs s ! primN) x)) $ \ ((keyio, vaoio), drawio) -> do
-                                                                 let (ws, doAsync) = perWindowRenderState rs ! wid
-                                                                     cd = windowContextData ws
-                                                                 liftIO $ do
-                                                                        key <- keyio
-                                                                        mvao <- getVAO cd key
-                                                                        case mvao of
-                                                                            Just vao -> do vao' <- readIORef vao
-                                                                                           glBindVertexArray vao'
-                                                                            Nothing -> do vao' <- alloca (\ptr -> glGenVertexArrays 1 ptr >> peek ptr)
-                                                                                          vao <- newIORef vao'
-                                                                                          void $ mkWeakIORef vao (doAsync $ with vao' $ glDeleteVertexArrays 1)
-                                                                                          setVAO cd key vao
-                                                                                          glBindVertexArray vao'
-                                                                                          vaoio
-                                                                        drawio)
+                                                                 case Map.lookup wid (perWindowRenderState rs) of
+                                                                  Nothing -> return () -- Window deleted
+                                                                  Just (ws, doAsync) ->
+                                                                     liftIO $ do
+                                                                            let cd = windowContextData ws
+                                                                            key <- keyio
+                                                                            mvao <- getVAO cd key
+                                                                            case mvao of
+                                                                                Just vao -> do vao' <- readIORef vao
+                                                                                               glBindVertexArray vao'
+                                                                                Nothing -> do vao' <- alloca (\ptr -> glGenVertexArrays 1 ptr >> peek ptr)
+                                                                                              vao <- newIORef vao'
+                                                                                              void $ mkWeakIORef vao (doAsync $ with vao' $ glDeleteVertexArrays 1)
+                                                                                              setVAO cd key vao
+                                                                                              glBindVertexArray vao'
+                                                                                              vaoio
+                                                                            drawio)
 
     compileShader name source = do
         withCStringLen source $ \ (ptr, len) ->

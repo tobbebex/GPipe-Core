@@ -215,8 +215,6 @@ instance TextureFormat RGBAWord where
 
 instance TextureFormat Depth where
     getGlFormat _ = GL_DEPTH_COMPONENT
-instance TextureFormat Stencil where
-    getGlFormat _ = GL_STENCIL_INDEX
 instance TextureFormat DepthStencil where
     getGlFormat _ = GL_DEPTH_STENCIL
 

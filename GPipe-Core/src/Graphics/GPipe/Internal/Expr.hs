@@ -530,7 +530,7 @@ instance Num (S a Word) where
 
 instance Fractional (S a Float) where
   (/)          = binf "/"
-  fromRational = S . return . show . (`asTypeOf` (undefined :: Float)) . fromRational
+  fromRational = S . return . ("float(" ++) . (++ ")") . show . (`asTypeOf` (undefined :: Float)) . fromRational
 
 class Integral' a where
     div' :: a -> a -> a
@@ -642,6 +642,7 @@ class Floating a => Real' a where
   fract' :: a -> a
   mod'' :: a -> a -> a
   mix :: a -> a -> a-> a
+  atan2' :: a -> a -> a
 
   rsqrt = (1/) . sqrt
   exp2 = (2**)
@@ -652,15 +653,17 @@ class Floating a => Real' a where
   floor' x = -ceiling' (-x)
   ceiling' x = -floor' (-x)
 
-  {-# MINIMAL floor' | ceiling' #-}
+  {-# MINIMAL (floor' | ceiling') , atan2' #-}
 
 instance Real' Float where
   floor' = fromIntegral . floor
   ceiling' = fromIntegral . ceiling
+  atan2' = atan2
 
 instance Real' Double where
   floor' = fromIntegral . floor
   ceiling' = fromIntegral . ceiling
+  atan2' = atan2
 
 instance Real' (S x Float) where
   rsqrt = fun1f "inversesqrt"
@@ -671,6 +674,7 @@ instance Real' (S x Float) where
   fract' = fun1f "fract"
   mod'' = fun2f "mod"
   mix = fun3f "mix"
+  atan2' = fun2f "atan"
 
 instance (Real' a) => Real' (V0 a) where
   rsqrt = liftA rsqrt
@@ -681,6 +685,7 @@ instance (Real' a) => Real' (V0 a) where
   fract' = liftA fract'
   mod'' = liftA2 mod''
   mix = liftA3 mix
+  atan2' = liftA2 atan2'
 instance (Real' a) => Real' (V1 a) where
   rsqrt = liftA rsqrt
   exp2 = liftA exp2
@@ -690,6 +695,7 @@ instance (Real' a) => Real' (V1 a) where
   fract' = liftA fract'
   mod'' = liftA2 mod''
   mix = liftA3 mix
+  atan2' = liftA2 atan2'
 instance (Real' a) => Real' (V2 a) where
   rsqrt = liftA rsqrt
   exp2 = liftA exp2
@@ -699,6 +705,7 @@ instance (Real' a) => Real' (V2 a) where
   fract' = liftA fract'
   mod'' = liftA2 mod''
   mix = liftA3 mix
+  atan2' = liftA2 atan2'
 instance (Real' a) => Real' (V3 a) where
   rsqrt = liftA rsqrt
   exp2 = liftA exp2
@@ -708,6 +715,7 @@ instance (Real' a) => Real' (V3 a) where
   fract' = liftA fract'
   mod'' = liftA2 mod''
   mix = liftA3 mix
+  atan2' = liftA2 atan2'
 instance (Real' a) => Real' (V4 a) where
   rsqrt = liftA rsqrt
   exp2 = liftA exp2
@@ -717,6 +725,7 @@ instance (Real' a) => Real' (V4 a) where
   fract' = liftA fract'
   mod'' = liftA2 mod''
   mix = liftA3 mix
+  atan2' = liftA2 atan2'
 
 -- | This class provides various order comparing functions
 class (IfB a, OrdB a, Floating a) => FloatingOrd a where

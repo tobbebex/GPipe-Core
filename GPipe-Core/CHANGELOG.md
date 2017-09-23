@@ -1,3 +1,11 @@
+### 2.2.2
+
+- Support for GHC 8.2.1 (#52)
+- Fixing errors with hidden contexts
+- Fixing GLSL link error on subtracting a negative constant (#55)
+- Fixing GLSL ambiguous overload with "clamp" (#51)
+- Adding atan2' (#44)
+
 ### 2.2.1
 
 - Render monad would crash if using deleted windows, when that should be a no-op. (#41).

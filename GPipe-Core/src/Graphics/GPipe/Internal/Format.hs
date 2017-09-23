@@ -365,7 +365,7 @@ class ColorSampleable c => ColorRenderable c where
     clearColor :: c -> Color c (ColorElement c) -> IO ()
     clearColor = error "You cannot create your own instances of ColorRenderable"
 class ColorSampleable f => DepthRenderable f
-class TextureFormat f => StencilRenderable f
+class StencilRenderable f
 
 instance ColorRenderable RFloat where
     clearColor _ r = withArray [realToFrac r, 0,0,0] (glClearBufferfv GL_COLOR 0)

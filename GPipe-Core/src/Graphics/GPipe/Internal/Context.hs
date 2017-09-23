@@ -162,10 +162,6 @@ render (Render m) = do
 registerRenderWriteTexture :: Int -> Render os ()
 registerRenderWriteTexture n = Render $ lift $ lift $ modify $ \ rs -> rs { renderWriteTextures = Set.insert n $ renderWriteTextures rs }
 
-
---newBoundState = BoundState Map.empty Map.empty (-1)
-
-
 instance MonadTrans (ContextT ctx os) where
     lift = ContextT . lift . lift
 
@@ -181,7 +177,7 @@ runContextT chp (ContextT m) = do
        mapM_ snd cds' -- Delete all windows not explicitly deleted
        contextHandlerDelete ctx
      )
-     (\ctx -> evalStateT (runReaderT m (ContextEnv ctx cds)) (ContextState 1 IMap.empty 0))
+     (\ctx -> evalStateT (runReaderT m (ContextEnv ctx cds)) (ContextState 1 IMap.empty (-1)))
 
 data Window os c ds = Window { getWinName :: Name }
 
@@ -195,7 +191,7 @@ createHiddenWin = ContextT $ do
   w <- liftIO $ createContext ctx Nothing
   cd <- liftIO $ addContextData (contextDelete ctx w) cds
   let ws = WindowState cd IMap.empty IMap.empty (-1)
-  lift $ put $ ContextState wid (IMap.singleton wid (ws,w)) 0
+  lift $ put $ ContextState wid (IMap.singleton 0 (ws,w)) 0
   liftIO $ contextDoAsync ctx (Just w) initGlState
   return w
 
@@ -224,7 +220,7 @@ deleteWindow (Window wid) = ContextT $ do
       n' <- if (IMap.null wmap')
               then do
                 void $ let ContextT m = createHiddenWin in m -- Create a hidden window before we delete last window
-                return 0 -- The hidden window is now Concurrent
+                return 0 -- The hidden window is now Current
               else if n /= wid then return n
                                else return (fst (head (IMap.toList wmap'))) -- always at least one elem
       liftIO $ do removeContextData cds (windowContextData ws)
@@ -306,13 +302,6 @@ withContextWindow :: MonadIO m => Window os c ds -> (Maybe (ContextWindow ctx) -
 withContextWindow (Window wid) m = ContextT $ do
   wmap <- lift $ gets perWindowState
   liftIO $ m (snd <$> IMap.lookup wid wmap)
-
-{-}
--- | This is only used to finalize nonShared objects such as VBOs and FBOs
-getRenderContextFinalizerAdder  :: Render os (IORef a -> IO () -> IO ())
-getRenderContextFinalizerAdder = do f <- Render (lift $ lift $ asks fst)
-                                    return $ \k m -> void $ mkWeakIORef k (f True m)
--}
 
 -- | This kind of exception may be thrown from GPipe when a GPU hardware limit is reached (for instance, too many textures are drawn to from the same 'FragmentStream')
 data GPipeException = GPipeException String

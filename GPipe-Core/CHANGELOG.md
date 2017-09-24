@@ -1,3 +1,7 @@
+### 2.2.3
+
+- Removing an unnecessary optimization that was broken since 2.2
+
 ### 2.2.2
 
 - Support for GHC 8.2.1 (#52)

@@ -137,10 +137,7 @@ type ContextDoAsync = IO () -> IO ()
 type PerWindowState ctx = IMap.IntMap (WindowState, ContextWindow ctx) -- -1 is no window. 0 is the hidden window. 1.. are visible windows
 type PerWindowRenderState = IMap.IntMap (WindowState, ContextDoAsync)
 data WindowState = WindowState {
-    windowContextData :: !ContextData,
-    boundUniforms :: !(IMap.IntMap Int),
-    boundSamplers :: !(IMap.IntMap Int),
-    boundRasterizerN :: !Int
+    windowContextData :: !ContextData
   }
 
 -- | Run a 'Render' monad, that may have the effect of windows or textures being drawn to.
@@ -190,7 +187,7 @@ createHiddenWin = ContextT $ do
   ContextState wid _ _ <- lift get -- We need to keep next window id and not start over at 1
   w <- liftIO $ createContext ctx Nothing
   cd <- liftIO $ addContextData (contextDelete ctx w) cds
-  let ws = WindowState cd IMap.empty IMap.empty (-1)
+  let ws = WindowState cd
   lift $ put $ ContextState wid (IMap.singleton 0 (ws,w)) 0
   liftIO $ contextDoAsync ctx (Just w) initGlState
   return w
@@ -203,7 +200,7 @@ newWindow wf wp = ContextT $ do
   w <- liftIO $ createContext ctx (Just (windowBits wf, wp))
   cd <- liftIO $ addContextData (contextDelete ctx w) cds
   let wid' = wid+1
-  let ws = WindowState cd IMap.empty IMap.empty (-1)
+  let ws = WindowState cd
   lift $ put $ ContextState wid' (IMap.insert wid (ws,w) wmap) wid
   liftIO $ contextDoAsync ctx (Just w) initGlState
   return $ Window wid

@@ -29,7 +29,6 @@ import Data.List (zip5)
 import Data.Word
 import Data.Monoid ((<>))
 
-
 type WinId = Int
 data Drawcall s = Drawcall {
                     drawcallFBO :: s -> (Either WinId (IO FBOKeys, IO ()), IO ()),
@@ -177,17 +176,13 @@ compile dcs s = do
                                                                      case Map.lookup wid (perWindowRenderState rs) of
                                                                        Nothing -> return () -- Window deleted
                                                                        Just (ws, doAsync) -> do
-                                                                         let (bindUni, uniState') = makeBind (boundUniforms ws :: Map.IntMap Int) uNameToRenderIOmap' (zip unis ubinds)
-                                                                         let (bindSamp, sampState') = makeBind (boundSamplers ws :: Map.IntMap Int) (samplerNameToRenderIO s) $ zip samps sbinds
-                                                                         let bindRast = if rastN == boundRasterizerN ws then const $ return () else rasterizationNameToRenderIO s ! rastN
-                                                                             wmap' = Map.insert wid (ws { boundUniforms = uniState', boundSamplers = sampState', boundRasterizerN = rastN }, doAsync) (perWindowRenderState rs)
-                                                                         lift $ lift $ put (rs {perWindowRenderState = wmap', renderLastUsedWin = wid })
+                                                                         lift $ lift $ put (rs {renderLastUsedWin = wid })
                                                                          mErr <- liftIO $ asSync doAsync $ do
                                                                              pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
                                                                              glUseProgram pName'
-                                                                             _ <- bindUni x (const $ return True :: () -> IO Bool)
-                                                                             isOk <- bindSamp x (return . not . (`Set.member` renderWriteTextures rs)  :: Int -> IO Bool)
-                                                                             bindRast x
+                                                                             _ <- bind uNameToRenderIOmap' (zip unis ubinds) x (const $ return True :: () -> IO Bool)
+                                                                             isOk <- bind (samplerNameToRenderIO s) (zip samps sbinds) x (return . not . (`Set.member` renderWriteTextures rs)  :: Int -> IO Bool)
+                                                                             (rasterizationNameToRenderIO s ! rastN) x
                                                                              blendio
                                                                              mErr2 <- m
                                                                              let mErr = if isOk then Nothing else Just "Running shader that samples from texture that currently has an image borrowed from it. Try run this shader from a separate render call where no images from the same texture are drawn to or cleared.\n"
@@ -276,19 +271,12 @@ compile dcs s = do
     addPstrUniform _ 0 = id
     addPstrUniform bname uSize = Map.insert 0 $ \_ bind -> glBindBufferRange GL_UNIFORM_BUFFER (fromIntegral bind) bname 0 (fromIntegral uSize)
 
-
-
-makeBind :: Map.IntMap Int -> Map.IntMap (s -> Binding -> IO x) -> [(Int, Int)] -> (s -> Asserter x -> IO Bool, Map.IntMap Int)
-makeBind m iom ((n,b):xs) = (g, m'')
-   where
-       (f, m') = makeBind m iom xs
-       (io, m'') = case Map.lookup b m' of
-                           Just x | x == n -> (\_ _ -> return True, m') -- Optimization, save gl calls to already bound buffers/samplers
-                           _               -> (\s asserter -> (iom ! n) s b >>= asserter, Map.insert b n m')
-       g s a = do ok1 <- f s a
-                  ok2 <- io s a
-                  return $ ok1 && ok2
-makeBind m _ [] = (\_ _ -> return True, m)
+bind ::  Map.IntMap (s -> Binding -> IO x) -> [(Int, Int)] -> s -> Asserter x -> IO Bool
+bind iom ((n,b):xs) s a = do
+    ok1 <- bind iom xs s a
+    ok2 <- (iom ! n) s b >>= a
+    return $ ok1 && ok2
+bind _ [] _ _ = return True
 
 orderedUnion :: Ord a => [a] -> [a] -> [a]
 orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys

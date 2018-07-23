@@ -21,7 +21,7 @@ data-files:     CHANGELOG.md
 
 library
   hs-source-dirs:   src
-  build-depends:    base >= 4.9 && < 4.11,
+  build-depends:    base >= 4.9 && < 5,
                     transformers >= 0.5.2 && < 0.6,
                     exception-transformers >= 0.3 && < 0.5,
                     containers >= 0.5 && < 0.6,

@@ -33,7 +33,7 @@ data FragmentStreamData = FragmentStreamData RasterizationName ExprPos Primitive
 
 -- | A @'FragmentStream' a @ is a stream of fragments of type @a@. You may append 'FragmentStream's using the 'Monoid' instance, and you
 --   can operate a stream's values using the 'Functor' instance (this will result in a shader running on the GPU).
-newtype FragmentStream a = FragmentStream [(a, FragmentStreamData)] deriving Monoid
+newtype FragmentStream a = FragmentStream [(a, FragmentStreamData)] deriving (Semigroup, Monoid)
 
 instance Functor FragmentStream where
         fmap f (FragmentStream xs) = FragmentStream $ map (first f) xs

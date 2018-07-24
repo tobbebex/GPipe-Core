@@ -46,7 +46,7 @@ data PrimitiveStreamData = PrimitiveStreamData DrawCallName USize
 --   can operate a stream's vertex values using the 'Functor' instance (this will result in a shader running on the GPU).
 --   You may also append 'PrimitiveStream's using the 'Monoid' instance, but if possible append the origin 'PrimitiveArray's instead, as this will create more optimized
 --   draw calls.
-newtype PrimitiveStream t a = PrimitiveStream [(a, (Maybe PointSize, PrimitiveStreamData))] deriving Monoid
+newtype PrimitiveStream t a = PrimitiveStream [(a, (Maybe PointSize, PrimitiveStreamData))] deriving (Semigroup, Monoid)
 
 instance Functor (PrimitiveStream t) where
         fmap f (PrimitiveStream xs) = PrimitiveStream $ map (first f) xs

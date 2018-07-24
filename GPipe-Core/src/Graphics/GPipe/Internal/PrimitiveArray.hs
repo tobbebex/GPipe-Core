@@ -139,9 +139,11 @@ data PrimitiveArrayInt p a = PrimitiveArraySimple (PrimitiveTopology p) Int Base
 -- | An array of primitives
 newtype PrimitiveArray p a = PrimitiveArray {getPrimitiveArray :: [PrimitiveArrayInt p a]}
 
+instance Semigroup (PrimitiveArray p a) where
+    PrimitiveArray a <> PrimitiveArray b = PrimitiveArray (a ++ b)
+
 instance Monoid (PrimitiveArray p a) where
     mempty = PrimitiveArray []
-    mappend (PrimitiveArray a) (PrimitiveArray b) = PrimitiveArray (a ++ b)
 
 instance Functor (PrimitiveArray p) where
     fmap f (PrimitiveArray xs) = PrimitiveArray  $ fmap g xs

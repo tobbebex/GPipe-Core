@@ -1134,7 +1134,7 @@ sampleFunc s proj lod off coord vToS lvToS civToS pvToS = do
 fetchFunc s off coord lod vToS civToS = do
     c <- vToS coord
     l <- unS lod
-    return $ "fetch" ++ offName off ++ '(' : s ++ ',' : c ++ ',': l ++ o ++ ")"
+    return $ "texelFetch" ++ offName off ++ '(' : s ++ ',' : c ++ ',': l ++ o ++ ")"
   where
     o = offParam off civToS
 

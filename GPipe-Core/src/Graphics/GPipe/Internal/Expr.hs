@@ -267,7 +267,10 @@ shaderbaseDeclareDef styp = do var <- T.lift $ T.lift $ T.lift $ T.lift getNext
                                return $ S $ return root
 
 shaderbaseAssignDef  (S shaderM) = do ul <- T.lift shaderM
-                                      x:xs <- get
+                                      e <- get
+                                      let (x:xs) = case e of
+                                                     (y:ys) -> e
+                                                     _      -> error "Pattern match failed"
                                       put xs
                                       T.lift $ tellAssignment' x ul
                                       return ()

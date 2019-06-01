@@ -267,9 +267,9 @@ shaderbaseDeclareDef styp = do var <- T.lift $ T.lift $ T.lift $ T.lift getNext
                                return $ S $ return root
 
 shaderbaseAssignDef  (S shaderM) = do ul <- T.lift shaderM
-                                      x:xs <- get
-                                      put xs
-                                      T.lift $ tellAssignment' x ul
+                                      xs <- get
+                                      put $ tail xs
+                                      T.lift $ tellAssignment' (head xs) ul
                                       return ()
 shaderbaseReturnDef :: ReaderT (ExprM [String]) (State Int) (S x a)
 shaderbaseReturnDef = do i <- T.lift getNext

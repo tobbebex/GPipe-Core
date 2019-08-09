@@ -33,7 +33,7 @@ where
 import Graphics.GPipe.Internal.Format
 import Control.Monad.Exception (MonadException, Exception, MonadAsyncException,bracket)
 import Control.Monad.Trans.Reader
-import Control.Monad.Fail (MonadFail, fail)
+import qualified Control.Monad.Fail as MF
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Applicative (Applicative, (<$>))
@@ -163,8 +163,8 @@ registerRenderWriteTexture n = Render $ lift $ lift $ modify $ \ rs -> rs { rend
 instance MonadTrans (ContextT ctx os) where
     lift = ContextT . lift . lift
 
-instance MonadIO m => MonadFail (ContextT ctx os m) where
-    fail = liftIO . throwIO . GPipeException
+instance MonadIO m => MF.MonadFail (ContextT ctx os m) where
+    fail = liftIO . MF.fail
 
 -- | Run a 'ContextT' monad transformer that encapsulates an object space.
 --   You need an implementation of a 'ContextHandler', which is provided by an auxillary package, such as @GPipe-GLFW@.

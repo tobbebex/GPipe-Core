@@ -1,9 +1,13 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, ScopedTypeVariables, EmptyDataDecls, TypeFamilies, GADTs #-}
 module Graphics.GPipe.Internal.PrimitiveArray where
 
 import Graphics.GPipe.Internal.Buffer
 import Graphics.GPipe.Internal.Shader
-import Data.Monoid
+#if __GLASGOW_HASKELL__ < 804
+import Data.Semigroup
+#endif
+import Data.Monoid hiding ((<>))
 import Data.IORef
 
 import Data.Word
@@ -144,6 +148,9 @@ instance Semigroup (PrimitiveArray p a) where
 
 instance Monoid (PrimitiveArray p a) where
     mempty = PrimitiveArray []
+#if __GLASGOW_HASKELL__ < 804
+    mappend = (<>)
+#endif
 
 instance Functor (PrimitiveArray p) where
     fmap f (PrimitiveArray xs) = PrimitiveArray  $ fmap g xs

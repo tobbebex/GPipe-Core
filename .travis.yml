@@ -1,0 +1,19 @@
+dist: xenial
+language: haskell
+cabal: "2.4"
+cache:
+  directories:
+    - $HOME/.cabal
+addons:
+  apt:
+    packages:
+      - libglfw3-dev
+ghc:
+  - "8.0"
+  - "8.2"
+  - "8.4"
+  - "8.6"
+install:
+  - cabal v2-build all --only-dependencies
+script:
+  - cabal v2-build all

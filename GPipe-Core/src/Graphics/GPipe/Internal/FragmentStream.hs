@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies, ScopedTypeVariables, TypeSynonymInstances, FlexibleInstances, GeneralizedNewtypeDeriving, Arrows, FlexibleContexts  #-}
 module Graphics.GPipe.Internal.FragmentStream where
 
@@ -10,6 +11,9 @@ import Graphics.GPipe.Internal.PrimitiveStream
 import Graphics.GPipe.Internal.PrimitiveArray
 import Control.Monad.Trans.State.Lazy
 import Data.Monoid (Monoid)
+#if __GLASGOW_HASKELL__ < 804
+import Data.Semigroup (Semigroup(..))
+#endif
 import Data.Boolean
 import Data.IntMap.Lazy (insert)
 import Linear.V4

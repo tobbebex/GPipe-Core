@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies, TypeSynonymInstances, FlexibleContexts, FlexibleInstances, ScopedTypeVariables, Arrows, GeneralizedNewtypeDeriving, PatternSynonyms #-}
 
 module Graphics.GPipe.Internal.PrimitiveStream where
@@ -17,6 +18,9 @@ import Control.Category
 import Control.Arrow
 import Control.Monad (void)
 import Data.Monoid (Monoid(..))
+#if __GLASGOW_HASKELL__ < 804
+import Data.Semigroup (Semigroup(..))
+#endif
 import Data.IntMap.Lazy (insert)
 import Data.Word
 import Data.Int
@@ -461,5 +465,3 @@ instance VertexInput a => VertexInput (Plucker a) where
                 e' <- toVertex -< e
                 f' <- toVertex -< f
                 returnA -< Plucker a' b' c' d' e' f'
-
-

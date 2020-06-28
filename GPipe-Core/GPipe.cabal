@@ -28,7 +28,7 @@ library
                     Boolean >= 0.2 && <0.3,
                     hashtables >= 1.2 && < 1.3,
                     gl >= 0.8 && <= 0.9,
-                    linear >= 1.18 && < 1.21
+                    linear >= 1.18 && < 1.22
   exposed-modules:
                     Graphics.GPipe,
                     Graphics.GPipe.Buffer,

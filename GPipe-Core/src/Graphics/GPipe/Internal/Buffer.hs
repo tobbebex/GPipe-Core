@@ -15,6 +15,7 @@ module Graphics.GPipe.Internal.Buffer
     newBuffer,
     writeBuffer,
     copyBuffer,
+    resizeBuffer,
     BufferStartPos,
     bufSize, bufName, bufElementSize, bufferLength, bufBElement, bufferWriteInternal, makeBuffer, getUniformAlignment, UniformAlignment
 ) where
@@ -372,6 +373,24 @@ copyBuffer bFrom from bTo to len | from < 0 || from >= bufferLength bFrom = erro
                                                   glBindBuffer GL_COPY_WRITE_BUFFER bnamet
                                                   let elemSize = bufElementSize bFrom -- same as for bTo
                                                   glCopyBufferSubData GL_COPY_READ_BUFFER GL_COPY_WRITE_BUFFER (fromIntegral $ from * elemSize) (fromIntegral $ to * elemSize) (fromIntegral $ len * elemSize)
+
+-- | Resize a buffer
+--
+-- Returns new buffer that needs to be used instead.
+-- OpenGL transparently reallocates the buffer and gives
+-- us new buffer with correct length.
+resizeBuffer :: (MonadIO m, BufferFormat b, ContextHandler ctx) => Buffer os b -> Int -> ContextT ctx os m (Buffer os b)
+resizeBuffer buffer newLength | newLength < 0 = error "resizeBuffer, length negative"
+                              | otherwise = do
+    let elemSize = bufElementSize buffer
+
+    liftNonWinContextIO $ do
+      bname <- readIORef $ bufName buffer
+      glBindBuffer GL_COPY_WRITE_BUFFER bname
+      glBufferData GL_COPY_WRITE_BUFFER (fromIntegral $ elemSize * newLength) nullPtr GL_STREAM_DRAW
+      void $ glUnmapBuffer GL_COPY_WRITE_BUFFER
+
+    return $ buffer { bufferLength = newLength }
 
 ----------------------------------------------
 

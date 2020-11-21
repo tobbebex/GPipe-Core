@@ -40,6 +40,7 @@ module Graphics.GPipe.Buffer (
     bufferLength,
     writeBuffer,
     copyBuffer,
+    resizeBuffer,
     BufferStartPos,        
     
     -- * Buffer colors

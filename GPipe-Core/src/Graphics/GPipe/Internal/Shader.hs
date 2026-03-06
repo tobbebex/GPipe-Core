@@ -30,11 +30,10 @@ import Control.Monad.IO.Class
 import qualified Data.IntSet as Set
 import Control.Monad.Trans.Writer.Lazy (tell, WriterT(..), execWriterT)
 import Control.Monad.Exception (MonadException)
-import Control.Applicative (Applicative, Alternative, (<|>))
-import Control.Monad.Trans.Class (lift)
+import Control.Applicative (Alternative(..))
+import Control.Monad.Trans.Class (MonadTrans(..), lift)
 import Data.Maybe (fromJust, isJust, isNothing)
-import Control.Monad (MonadPlus, when)
-import Control.Monad.Trans.List (ListT(..))
+import Control.Monad (MonadPlus(..), when)
 import Data.Monoid (All(..), mempty)
 import Data.Either
 import Control.Monad.Trans.Reader
@@ -116,3 +115,37 @@ compileShader (Shader (ShaderM m)) = do
         return $ \ s -> case find (\(_,disc) -> getAll (disc s)) xs of
                           Nothing -> error "render: Shader evaluated to mzero"
                           Just (rf,_) -> rf s
+
+-- | Inlined ListT since it was removed from transformers 0.6
+newtype ListT m a = ListT { runListT :: m [a] }
+
+instance Functor m => Functor (ListT m) where
+    fmap f (ListT mas) = ListT (fmap (map f) mas)
+
+instance (Applicative m, Monad m) => Applicative (ListT m) where
+    pure a = ListT (pure [a])
+    ListT mfs <*> ListT mas = ListT $ do
+        fs <- mfs
+        as <- mas
+        return [f a | f <- fs, a <- as]
+
+instance Monad m => Monad (ListT m) where
+    return a = ListT (return [a])
+    ListT mas >>= f = ListT $ do
+        as <- mas
+        bss <- mapM (runListT . f) as
+        return (concat bss)
+
+instance Monad m => Alternative (ListT m) where
+    empty = ListT (return [])
+    ListT mas <|> ListT mbs = ListT $ do
+        as <- mas
+        bs <- mbs
+        return (as ++ bs)
+
+instance Monad m => MonadPlus (ListT m) where
+    mzero = empty
+    mplus = (<|>)
+
+instance MonadTrans ListT where
+    lift m = ListT (fmap (:[]) m)

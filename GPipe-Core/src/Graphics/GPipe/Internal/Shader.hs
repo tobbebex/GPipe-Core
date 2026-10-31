@@ -29,18 +29,51 @@ import qualified Control.Monad.Trans.State.Strict as StrictState
 import Control.Monad.IO.Class
 import qualified Data.IntSet as Set
 import Control.Monad.Trans.Writer.Lazy (tell, WriterT(..), execWriterT)
+import Control.Applicative (Applicative, Alternative(..))
+import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.Exception (MonadException)
-import Control.Applicative (Applicative, Alternative, (<|>))
-import Control.Monad.Trans.Class (lift)
 import Data.Maybe (fromJust, isJust, isNothing)
-import Control.Monad (MonadPlus, when)
-import Control.Monad.Trans.List (ListT(..))
+import Control.Monad (MonadPlus(..), when)
 import Data.Monoid (All(..), mempty)
 import Data.Either
 import Control.Monad.Trans.Reader
 import Data.List (find)
 
 data ShaderState s = ShaderState Int (RenderIOState s)
+
+-- transformers-0.6 removed ListT used by GPipe but we only needs finite
+-- nondeterministic branching, so we keep the old representation
+newtype ListT m a = ListT { runListT :: m [a] }
+
+instance Functor m => Functor (ListT m) where
+    fmap f (ListT xs) = ListT (fmap (map f) xs)
+
+instance Monad m => Applicative (ListT m) where
+    pure x = ListT (pure [x])
+    ListT fs <*> ListT xs = ListT $ do
+        fs' <- fs
+        xs' <- xs
+        pure [f x | f <- fs', x <- xs']
+
+instance Monad m => Alternative (ListT m) where
+    empty = ListT (pure [])
+    ListT xs <|> ListT ys = ListT $ do
+        xs' <- xs
+        ys' <- ys
+        pure (xs' ++ ys')
+
+instance Monad m => Monad (ListT m) where
+    ListT xs >>= f = ListT $ do
+        xs' <- xs
+        xss <- mapM (runListT . f) xs'
+        pure (concat xss)
+
+instance Monad m => MonadPlus (ListT m) where
+    mzero = empty
+    mplus = (<|>)
+
+instance MonadTrans ListT where
+    lift m = ListT ((: []) <$> m)
 
 newShaderState :: ShaderState s
 newShaderState = ShaderState 1 newRenderIOState

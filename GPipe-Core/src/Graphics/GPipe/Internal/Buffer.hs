@@ -264,32 +264,38 @@ instance BufferFormat () where
     toBuffer = arr (const ())
 instance (BufferFormat a, BufferFormat b) => BufferFormat (a, b) where
     type HostFormat (a,b) = (HostFormat a, HostFormat b)
+    {-# INLINE toBuffer #-}
     toBuffer = proc ~(a, b) -> do
                 a' <- toBuffer -< a
                 b' <- toBuffer -< b
                 returnA -< (a', b')
 instance (BufferFormat a, BufferFormat b, BufferFormat c) => BufferFormat (a, b, c) where
     type HostFormat (a,b,c) = (HostFormat a, HostFormat b, HostFormat c)
+    {-# INLINE toBuffer #-}
     toBuffer = proc ~(a, b, c) -> do
                 ((a', b'), c') <- toBuffer -< ((a, b), c)
                 returnA -< (a', b', c')
 instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d) => BufferFormat (a, b, c, d) where
     type HostFormat (a,b,c,d) = (HostFormat a, HostFormat b, HostFormat c, HostFormat d)
+    {-# INLINE toBuffer #-}
     toBuffer = proc ~(a, b, c, d) -> do
                 ((a', b', c'), d') <- toBuffer -< ((a, b, c), d)
                 returnA -< (a', b', c', d')
 instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d, BufferFormat e) => BufferFormat (a, b, c, d, e) where
     type HostFormat (a,b,c,d,e) = (HostFormat a, HostFormat b, HostFormat c, HostFormat d, HostFormat e)
+    {-# INLINE toBuffer #-}
     toBuffer = proc ~(a, b, c, d, e) -> do
                 ((a', b', c', d'), e') <- toBuffer -< ((a, b, c, d), e)
                 returnA -< (a', b', c', d', e')
 instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d, BufferFormat e, BufferFormat f) => BufferFormat (a, b, c, d, e, f) where
     type HostFormat (a,b,c,d,e,f) = (HostFormat a, HostFormat b, HostFormat c, HostFormat d, HostFormat e, HostFormat f)
+    {-# INLINE toBuffer #-}
     toBuffer = proc ~(a, b, c, d, e, f) -> do
                 ((a', b', c', d', e'), f') <- toBuffer -< ((a, b, c, d, e), f)
                 returnA -< (a', b', c', d', e', f')
 instance (BufferFormat a, BufferFormat b, BufferFormat c, BufferFormat d, BufferFormat e, BufferFormat f, BufferFormat g) => BufferFormat (a, b, c, d, e, f, g) where
     type HostFormat (a,b,c,d,e,f,g) = (HostFormat a, HostFormat b, HostFormat c, HostFormat d, HostFormat e, HostFormat f, HostFormat g)
+    {-# INLINE toBuffer #-}
     toBuffer = proc ~(a, b, c, d, e, f, g) -> do
                 ((a', b', c', d', e', f'), g') <- toBuffer -< ((a, b, c, d, e, f), g)
                 returnA -< (a', b', c', d', e', f', g')
